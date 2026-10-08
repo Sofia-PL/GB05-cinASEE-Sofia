@@ -1,0 +1,284 @@
+openapi: 3.0.3
+
+info:
+  title: API de Reservas - CinAsee
+  version: 1.0.0
+  description: >
+    API responsable del Componente 2: gestión de reservas, bloqueo de butacas y pagos.
+
+    El microservicio de Reservas es propietario del flujo de compra de entradas. 
+    Para realizar estas operaciones, se comunica con otros microservicios de la arquitectura:
+
+    - Cartelera (Componente 1): consulta si una sesión existe, está "A la venta" y no se solapa.
+    - Usuarios (Componente 3): consulta el rol del usuario y sus puntos de fidelización.
+    - Pasarelas externas: procesa cobros (Redsýs).
+    - También emite el evento asíncrono 'TicketsGenerated' tras la confirmación de compra.
+
+servers:
+  - url: http://api.cinasee.com/v1/reservations
+    description: Entorno de producción
+
+# ============================================================
+# TAGS
+# ============================================================
+tags:
+  - name: Reservations
+    description: Operaciones relacionadas con el proceso de compra y bloqueo de butacas
+
+paths:
+
+  # ==========================================================
+  # PATH 1: CREACIÓN DE UNA RESERVA (BLOQUEO DE BUTACAS)
+  # ==========================================================
+  # Aquí se refleja la necesidad de bloquear concurrentemente
+  # las butacas y de comunicarse con el Componente 1 (Cartelera)
+  # y el Componente 3 (Usuarios)
+  # ==========================================================
+
+  /reservations:
+    post:
+      tags:
+        - Reservations
+
+      summary: Iniciar reserva y bloquear butacas
+
+      description: >
+        Crea un nuevo intento de reserva, aplicando un bloqueo concurrente 
+        de butacas con un TTL (Time To Live) de 10 minutos para evitar la doble compra.
+
+        Antes de bloquear las butacas, este servicio interactúa con:
+        
+        1. Microservicio de Cartelera: COMUNICACIÓN SÍNCRONA DE TIPO CONSULTA
+           Reservas -> Cartelera -> GET /shows/{showId}
+           (Verifica que el pase está en estado "A la venta" y su aforo disponible).
+           
+        2. Microservicio de Usuarios: COMUNICACIÓN SÍNCRONA DE TIPO CONSULTA
+           Reservas -> Usuarios -> GET /users/{userId}
+           (Verifica perfil de fidelización para descuentos o si es cliente/invitado).
+
+      operationId: createReservation
+
+      requestBody:
+        required: true
+        description: Datos necesarios para iniciar el bloqueo de asientos.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateReservationRequest'
+            example:
+              showId: 1024
+              userId: 5590
+              seats:
+                - row: 8
+                  column: 12
+                - row: 8
+                  column: 13
+
+      responses:
+        '201':
+          description: >
+            Reserva iniciada y butacas bloqueadas temporalmente (10 min).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Reservation'
+              example:
+                id: 8901
+                showId: 1024
+                userId: 5590
+                totalAmount: 18.50
+                status: PENDING_PAYMENT
+                expiresAt: "2026-10-08T12:04:36Z"
+
+        '400':
+          description: >
+            Petición incorrecta. Ej: alguna de las butacas indicadas no 
+            existe en el mapa de esta sala.
+
+        '404':
+          description: >
+            El identificador de la sesión (showId) o el usuario (userId) no existen. 
+            Error derivado de las consultas a Cartelera o Usuarios.
+
+        '409':
+          description: >
+            Conflicto de concurrencia: una o varias de las butacas solicitadas 
+            ya están bloqueadas o vendidas a otro usuario.
+
+        '503':
+          description: >
+            Los microservicios dependientes (Cartelera o Usuarios) no 
+            están disponibles para validar la operación.
+
+
+  # ==========================================================
+  # PATH 2: PAGO DE LA RESERVA Y EMISIÓN DE ENTRADAS
+  # ==========================================================
+  # Este endpoint demuestra una comunicación de tipo COMANDO
+  # hacia la pasarela, y la generación asíncrona de recursos.
+  # ==========================================================
+
+  /reservations/{reservationId}/payment:
+    post:
+      tags:
+        - Reservations
+
+      summary: Procesar pago y confirmar reserva
+
+      description: >
+        Inicia el cobro seguro de una reserva previamente bloqueada.
+
+        El microservicio invoca la pasarela externa configurada (Redsýs).
+        Se trata de una COMUNICACIÓN SÍNCRONA de tipo COMANDO:
+        
+        Reservas -> PasarelaExterna -> POST /charge
+
+        Una vez que el pago se procesa exitosamente:
+        1. Se actualiza el estado de la reserva a CONFIRMED.
+        2. Se emiten las entradas con identificador único y QR/PKPass.
+        3. Se emite el EVENTO DE DOMINIO asíncrono 'PaymentCompleted' para 
+           que el Componente 4 (Métricas) actualice la recaudación diaria y 
+           el Componente 3 (Usuarios) sume puntos al monedero de fidelidad del cliente.
+
+      operationId: payReservation
+
+      parameters:
+        - name: reservationId
+          in: path
+          required: true
+          description: Identificador único de la reserva a pagar.
+          schema:
+            type: integer
+            format: int64
+          example: 8901
+
+      requestBody:
+        required: true
+        description: Método de pago seleccionado (RedSýs) y token seguro.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentRequest'
+
+      responses:
+        '200':
+          description: Pago procesado correctamente y entradas emitidas.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TicketConfirmation'
+
+        '400':
+          description: El TTL de 10 minutos del bloqueo ha expirado.
+          
+        '402':
+          description: Pago rechazado por la entidad bancaria o fondos insuficientes.
+
+        '404':
+          description: La reserva indicada no existe.
+
+components:
+
+  schemas:
+
+    # ========================================================
+    # SCHEMA PARA CREAR RESERVA
+    # ========================================================
+    CreateReservationRequest:
+      type: object
+      required:
+        - showId
+        - seats
+      properties:
+        showId:
+          type: integer
+          format: int64
+          description: >
+            Identificador del pase/sesión. Pertenece al Componente 1 (Cartelera) 
+            y es utilizado por Reservas para verificar vigencia y tarifas base 
+            (día del espectador, 3D, IMAX).
+          example: 1024
+
+        userId:
+          type: integer
+          format: int64
+          description: >
+            Identificador del cliente autenticado. Pertenece al Componente 3 (Usuarios).
+            Si es nulo, se asume el rol de "visitante no autenticado".
+          example: 5590
+
+        seats:
+          type: array
+          minItems: 1
+          maxItems: 10
+          description: Listado de butacas seleccionadas en el mapa interactivo.
+          items:
+            $ref: '#/components/schemas/SeatSelection'
+
+    SeatSelection:
+      type: object
+      required:
+        - row
+        - column
+      properties:
+        row:
+          type: integer
+          description: Fila de la butaca elegida.
+          example: 8
+        column:
+          type: integer
+          description: Columna de la butaca elegida.
+          example: 12
+
+    PaymentRequest:
+      type: object
+      required:
+        - gateway
+        - paymentToken
+      properties:
+        gateway:
+          type: string
+          enum: [REDSYS]
+          description: Pasarela externa para que el cliente pueda procesar la transacción.
+        paymentToken:
+          type: string
+          description: Token de pago generado por el frontend tras la tokenización de la tarjeta.
+
+    Reservation:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        showId:
+          type: integer
+          format: int64
+        userId:
+          type: integer
+          format: int64
+        totalAmount:
+          type: number
+          format: float
+        status:
+          type: string
+          enum: [PENDING_PAYMENT, CONFIRMED, CANCELLED]
+        expiresAt:
+          type: string
+          format: date-time
+          description: Marca de tiempo exacta (TTL de 10 min) en la que el bloqueo caduca.
+
+    TicketConfirmation:
+      type: object
+      properties:
+        reservationId:
+          type: integer
+          format: int64
+        status:
+          type: string
+          example: CONFIRMED
+        tickets:
+          type: array
+          description: Listado de entradas generadas, incluyendo el identificador para el código QR/PKPass.
+          items:
+            type: string
+            example: "QR-8901-8-12-XYZ"
