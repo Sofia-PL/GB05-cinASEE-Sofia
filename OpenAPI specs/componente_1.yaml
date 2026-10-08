@@ -1,0 +1,579 @@
+openapi: 3.0.3
+
+info:
+  title: API de CineASEE - Componente 1 (Catálogo, Salas y Cartelera/Sesiones)
+  version: 1.0.0
+  description: >
+    API responsable de la gestión del catálogo de películas, la configuración
+    de salas/espacios físicos y la planificación de la cartelera y sesiones de proyección.
+
+    Este microservicio es propietario de las entidades Película, Sala y Sesión. 
+    Para garantizar la coherencia del negocio, realiza validaciones internas 
+    (solapamientos horarios entre sesiones) y expone endpoints para ser consultado 
+    por otros microservicios:
+
+    - Reservas y pagos: consulta disponibilidad de sesiones, salas y precios base.
+    - Métricas y recomendaciones: consulta información de películas, géneros y aforos.
+
+servers:
+  - url: http://localhost:8081/api/v1
+    description: Servidor de desarrollo CineASEE
+
+
+# ============================================================
+# TAGS
+# ============================================================
+tags:
+  - name: Movies
+    description: Gestión del catálogo de películas (CRUD, sinopsis, duración, clasificación)
+  - name: Rooms
+    description: Gestión de salas y espacios de proyección (aforo, tipos 2D/3D/IMAX, distribuciones)
+  - name: Sessions
+    description: Planificación y gestión de la cartelera y sesiones de proyección
+
+
+paths:
+
+  # ==========================================================
+  # RECURSO: PELÍCULAS (/movies)
+  # ==========================================================
+
+  /movies:
+    get:
+      tags:
+        - Movies
+      summary: Listar películas del catálogo
+      description: >
+        Devuelve el catálogo de películas registradas en el sistema. 
+        Permite filtrar por género o estado en cartelera.
+      operationId: getMovies
+      parameters:
+        - name: genre
+          in: query
+          required: false
+          description: Filtrar por género cinematográfico.
+          schema:
+            type: string
+          example: DRAMA_ROMANTICO
+        - name: inShowcase
+          in: query
+          required: false
+          description: Filtrar solo películas activas actualmente en cartelera.
+          schema:
+            type: boolean
+          example: true
+      responses:
+        '200':
+          description: Lista de películas recuperada con éxito.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Movie'
+
+    post:
+      tags:
+        - Movies
+      summary: Registrar una nueva película
+      description: >
+        Permite al administrador/gestor dar de alta una nueva película en el catálogo.
+        No requiere comunicación con otros microservicios.
+      operationId: createMovie
+      requestBody:
+        required: true
+        description: Datos necesarios para el alta de la película.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateMovieRequest'
+            example:
+              title: "Orgullo y prejuicio"
+              synopsis: "Las cinco hermanas Bennet han sido criadas por una madre obsesionada por encontrarles marido. Pero Elizabeth, inteligente e independiente, desea una vida con mayores horizontes."
+              durationMinutes: 127
+              genre: "DRAMA_ROMANTICO"
+              ageRating: "TP"
+              distributor: "Focus Features / Universal Pictures"
+              posterUrl: "https://cineasee.es/posters/orgullo_y_prejuicio_2005.jpg"
+              trailerUrl: "https://youtube.com/watch?v=1dYv5u6v72g"
+      responses:
+        '201':
+          description: Película creada correctamente.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Movie'
+        '400':
+          description: Petición incorrecta (campos obligatorios ausentes o duración inválida).
+
+
+  /movies/{movieId}:
+    get:
+      tags:
+        - Movies
+      summary: Obtener detalle de una película
+      description: Devuelve la información detallada de una película según su identificador único.
+      operationId: getMovieById
+      parameters:
+        - name: movieId
+          in: path
+          required: true
+          description: Identificador único de la película.
+          schema:
+            type: integer
+            format: int64
+          example: 101
+      responses:
+        '200':
+          description: Película encontrada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Movie'
+        '404':
+          description: No existe ninguna película con el ID indicado.
+
+
+  # ==========================================================
+  # RECURSO: SALAS (/rooms)
+  # ==========================================================
+
+  /rooms:
+    get:
+      tags:
+        - Rooms
+      summary: Listar salas del cine
+      description: Devuelve la lista completa de salas y sus características técnicas (IMAX, 3D, aforo).
+      operationId: getRooms
+      responses:
+        '200':
+          description: Lista de salas obtenida con éxito.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Room'
+
+    post:
+      tags:
+        - Rooms
+      summary: Crear una nueva sala
+      description: Registra una nueva sala con su configuración de filas, columnas y tipo de proyección.
+      operationId: createRoom
+      requestBody:
+        required: true
+        description: Información técnica y de distribución de la sala.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateRoomRequest'
+            example:
+              name: "Sala 1 - Principal"
+              roomType: "ESTANDAR_2D"
+              rowsCount: 10
+              columnsCount: 12
+              wheelchairAccessible: true
+              basePrice: 8.50
+      responses:
+        '201':
+          description: Sala configurada correctamente.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Room'
+        '400':
+          description: Datos de la sala no válidos.
+
+
+  /rooms/{roomId}:
+    get:
+      tags:
+        - Rooms
+      summary: Obtener detalle de una sala
+      description: Consulta las características específicas de una sala, incluyendo su aforo total y distribución.
+      operationId: getRoomById
+      parameters:
+        - name: roomId
+          in: path
+          required: true
+          description: Identificador único de la sala.
+          schema:
+            type: integer
+            format: int64
+          example: 1
+      responses:
+        '200':
+          description: Sala encontrada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Room'
+        '404':
+          description: Sala no encontrada.
+
+
+  # ==========================================================
+  # RECURSO: SESIONES Y CARTELERA (/sessions)
+  # ==========================================================
+
+  /sessions:
+    get:
+      tags:
+        - Sessions
+      summary: Consultar la cartelera / sesiones programadas
+      description: >
+        Devuelve el listado de sesiones de proyección filtradas por fecha, película o sala. 
+        Utilizado principalmente por la Web Pública y Taquilla para mostrar la cartelera.
+      operationId: getSessions
+      parameters:
+        - name: date
+          in: query
+          required: false
+          description: Fecha de la proyección en formato YYYY-MM-DD.
+          schema:
+            type: string
+            format: date
+          example: "2026-10-15"
+        - name: movieId
+          in: query
+          required: false
+          description: Filtrar sesiones por ID de película.
+          schema:
+            type: integer
+            format: int64
+          example: 101
+      responses:
+        '200':
+          description: Lista de sesiones programadas.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Session'
+
+    post:
+      tags:
+        - Sessions
+      summary: Programar una nueva sesión de proyección
+      description: >
+        Crea una nueva sesión asignando una película a una sala en un horario determinado.
+
+        **VALIDACIÓN INTERNA Y COMUNICACIÓN:**
+        1. Consulta interna de existencia de la Película y la Sala.
+        2. Control de **solapamiento horario**: Este microservicio calcula automáticamente
+           la hora de fin sumando la duración de la película más un tiempo estimado de 
+           limpieza y trailers (ej. 20 min) para garantizar que la sala no esté ocupada.
+      operationId: createSession
+      requestBody:
+        required: true
+        description: Datos para la programación del pase.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSessionRequest'
+            example:
+              movieId: 101
+              roomId: 1
+              startTime: "2026-10-15T18:30:00Z"
+              ticketPrice: 8.50
+      responses:
+        '201':
+          description: Sesión programada exitosamente.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Session'
+        '400':
+          description: Error en la solicitud o datos incompletos.
+        '404':
+          description: La película o la sala indicada no existe.
+        '409':
+          description: >
+            Conflict: Solapamiento horario detectado. La sala seleccionada ya está ocupada
+            en ese intervalo de tiempo (duración de la película + tiempo de preparación).
+
+
+  /sessions/{sessionId}:
+    get:
+      tags:
+        - Sessions
+      summary: Obtener información de una sesión
+      description: >
+        Obtiene la información de la sesión. Operación consumida síncronamente por el
+        microservicio de **Reservas, Asientos y Pagos** para verificar el precio base, 
+        estado del pase y la sala asignada antes de bloquear butacas.
+      operationId: getSessionById
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          description: Identificador único de la sesión.
+          schema:
+            type: integer
+            format: int64
+          example: 5001
+      responses:
+        '200':
+          description: Detalles de la sesión recuperados.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Session'
+        '404':
+          description: Sesión no encontrada.
+
+
+# ============================================================
+# COMPONENTS & SCHEMAS
+# ============================================================
+components:
+
+  schemas:
+
+    # --------------------------------------------------------
+    # SCHEMA: PELÍCULA
+    # --------------------------------------------------------
+    Movie:
+      type: object
+      required:
+        - id
+        - title
+        - durationMinutes
+        - genre
+        - ageRating
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: Identificador único de la película.
+          example: 101
+        title:
+          type: string
+          description: Título de la película.
+          example: "Orgullo y prejuicio"
+        synopsis:
+          type: string
+          description: Resumen o sinopsis argumental de la película.
+          example: "Las cinco hermanas Bennet han sido criadas por una madre obsesionada por encontrarles marido. Pero Elizabeth, inteligente e independiente, desea una vida con mayores horizontes."
+        durationMinutes:
+          type: integer
+          description: Duración de la cinta expresada en minutos.
+          example: 127
+        genre:
+          type: string
+          description: Género cinematográfico principal.
+          example: "DRAMA_ROMANTICO"
+        ageRating:
+          type: string
+          description: Clasificación por edades recomendada.
+          example: "TP"
+        distributor:
+          type: string
+          description: Empresa distribuidora.
+          example: "Focus Features / Universal Pictures"
+        posterUrl:
+          type: string
+          format: uri
+          description: URL con la imagen promocional o póster.
+          example: "https://cineasee.es/posters/orgullo_y_prejuicio_2005.jpg"
+        trailerUrl:
+          type: string
+          format: uri
+          description: Enlace al vídeo del tráiler.
+          example: "https://youtube.com/watch?v=1dYv5u6v72g"
+
+    CreateMovieRequest:
+      type: object
+      required:
+        - title
+        - durationMinutes
+        - genre
+        - ageRating
+      properties:
+        title:
+          type: string
+          example: "Orgullo y prejuicio"
+        synopsis:
+          type: string
+          example: "Las cinco hermanas Bennet han sido criadas por una madre obsesionada por encontrarles marido. Pero Elizabeth, inteligente e independiente, desea una vida con mayores horizontes."
+        durationMinutes:
+          type: integer
+          example: 127
+        genre:
+          type: string
+          example: "DRAMA_ROMANTICO"
+        ageRating:
+          type: string
+          example: "TP"
+        distributor:
+          type: string
+          example: "Focus Features / Universal Pictures"
+        posterUrl:
+          type: string
+          format: uri
+          example: "https://cineasee.es/posters/orgullo_y_prejuicio_2005.jpg"
+        trailerUrl:
+          type: string
+          format: uri
+          example: "https://youtube.com/watch?v=1dYv5u6v72g"
+
+
+    # --------------------------------------------------------
+    # SCHEMA: SALA
+    # --------------------------------------------------------
+    Room:
+      type: object
+      required:
+        - id
+        - name
+        - roomType
+        - capacity
+        - rowsCount
+        - columnsCount
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: Identificador único de la sala.
+          example: 1
+        name:
+          type: string
+          description: Nombre o código de la sala.
+          example: "Sala 1 - Principal"
+        roomType:
+          type: string
+          enum: [ESTANDAR_2D, DIGITAL_3D, IMAX, VIP, 4DX]
+          description: Tipo de tecnología/experiencia disponible en la sala.
+          example: "ESTANDAR_2D"
+        capacity:
+          type: integer
+          description: Aforo total calculado (filas x columnas).
+          example: 120
+        rowsCount:
+          type: integer
+          description: Número de filas de butacas.
+          example: 10
+        columnsCount:
+          type: integer
+          description: Número de columnas/asientos por fila.
+          example: 12
+        wheelchairAccessible:
+          type: boolean
+          description: Indica si la sala dispone de espacios adaptados para PMR.
+          example: true
+        basePrice:
+          type: number
+          format: float
+          description: Tarifa base aplicable a la sala.
+          example: 8.50
+
+    CreateRoomRequest:
+      type: object
+      required:
+        - name
+        - roomType
+        - rowsCount
+        - columnsCount
+      properties:
+        name:
+          type: string
+          example: "Sala 1 - Principal"
+        roomType:
+          type: string
+          enum: [ESTANDAR_2D, DIGITAL_3D, IMAX, VIP, 4DX]
+          example: "ESTANDAR_2D"
+        rowsCount:
+          type: integer
+          example: 10
+        columnsCount:
+          type: integer
+          example: 12
+        wheelchairAccessible:
+          type: boolean
+          example: true
+        basePrice:
+          type: number
+          format: float
+          example: 8.50
+
+
+    # --------------------------------------------------------
+    # SCHEMA: SESIÓN / PROYECCIÓN
+    # --------------------------------------------------------
+    Session:
+      type: object
+      required:
+        - id
+        - movieId
+        - roomId
+        - startTime
+        - endTime
+        - status
+        - ticketPrice
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: Identificador único de la sesión.
+          example: 5001
+        movieId:
+          type: integer
+          format: int64
+          description: Identificador de la película proyectada (Orgullo y Prejuicio).
+          example: 101
+        roomId:
+          type: integer
+          format: int64
+          description: Identificador de la sala donde se proyecta.
+          example: 1
+        startTime:
+          type: string
+          format: date-time
+          description: Hora de inicio programada para la sesión.
+          example: "2026-10-15T18:30:00Z"
+        endTime:
+          type: string
+          format: date-time
+          description: Hora estimada de finalización (duración 127 min + margen de preparación).
+          example: "2026-10-15T20:57:00Z"
+        status:
+          type: string
+          enum: [PROGRAMADA, A_LA_VENTA, EN_CURSO, FINALIZADA, CANCELADA]
+          description: Estado actual del pase para control de cartelera.
+          example: "A_LA_VENTA"
+        ticketPrice:
+          type: number
+          format: float
+          description: Precio base de la entrada para esta sesión específica.
+          example: 8.50
+
+    CreateSessionRequest:
+      type: object
+      required:
+        - movieId
+        - roomId
+        - startTime
+        - ticketPrice
+      properties:
+        movieId:
+          type: integer
+          format: int64
+          description: ID de la película que se va a proyectar.
+          example: 101
+        roomId:
+          type: integer
+          format: int64
+          description: ID de la sala asignada.
+          example: 1
+        startTime:
+          type: string
+          format: date-time
+          description: Hora proyectada de inicio.
+          example: "2026-10-15T18:30:00Z"
+        ticketPrice:
+          type: number
+          format: float
+          description: Precio fijado para la sesión.
+          example: 8.50
