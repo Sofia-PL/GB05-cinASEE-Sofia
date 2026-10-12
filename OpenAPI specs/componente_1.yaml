@@ -17,7 +17,7 @@ info:
 
 servers:
   - url: http://localhost:8081/api/v1
-    description: Servidor de desarrollo CineASEE
+    description: Servidor de desarrollo CineAsee
 
 
 # ============================================================
@@ -394,29 +394,37 @@ components:
       properties:
         title:
           type: string
+          description: Título comercial de la película.
           example: "Orgullo y prejuicio"
         synopsis:
           type: string
-          example: "Las cinco hermanas Bennet han sido criadas por una madre obsesionada por encontrarles marido. Pero Elizabeth, inteligente e independiente, desea una vida con mayores horizontes."
+          description: Resumen descriptivo del argumento.
+          example: "Las cinco hermanas Bennet han sido criadas por una madre..."
         durationMinutes:
           type: integer
+          description: Tiempo de duración en minutos (debe ser mayor a 0).
           example: 127
         genre:
           type: string
+          description: Género principal de la cinta.
           example: "DRAMA_ROMANTICO"
         ageRating:
           type: string
+          description: Calificación legal por edad recomendada.
           example: "TP"
         distributor:
           type: string
+          description: Compañía que posee los derechos de distribución.
           example: "Focus Features / Universal Pictures"
         posterUrl:
           type: string
           format: uri
+          description: Enlace CDN donde está alojada la carátula.
           example: "https://cineasee.es/posters/orgullo_y_prejuicio_2005.jpg"
         trailerUrl:
           type: string
           format: uri
+          description: Enlace a plataforma de video con el tráiler promocional.
           example: "https://youtube.com/watch?v=1dYv5u6v72g"
 
 

@@ -2,7 +2,7 @@ openapi: 3.0.3
 
 info:
   title: API de Reservas - CinAsee
-  version: 1.0.0
+  version: 1.0.1
   description: >
     API responsable del Componente 2: gestión de reservas, bloqueo de butacas y pagos.
 
@@ -12,7 +12,7 @@ info:
     - Cartelera (Componente 1): consulta si una sesión existe, está "A la venta" y no se solapa.
     - Usuarios (Componente 3): consulta el rol del usuario y sus puntos de fidelización.
     - Pasarelas externas: procesa cobros (Redsýs).
-    - También emite el evento asíncrono 'TicketsGenerated' tras la confirmación de compra.
+    - También emite el evento asíncrono 'PaymentCompleted' tras la confirmación de compra exitosa.
 
 servers:
   - url: http://api.cinasee.com/v1/reservations
@@ -177,6 +177,11 @@ paths:
         '404':
           description: La reserva indicada no existe.
 
+        '503':
+          description: 
+            La pasarela de pagos externa (Redsýs) no está disponible en este momento.
+            El pago no ha podido ser procesado.   
+
 components:
 
   schemas:
@@ -250,22 +255,33 @@ components:
         id:
           type: integer
           format: int64
+          description: Identificador único de la reserva. Pertenece a este microservicio.
+          example: 8901
         showId:
           type: integer
           format: int64
+          description: Identificador de la sesión. Pertenece al Componente 1 (Cartelera).
+          example: 1024
         userId:
           type: integer
           format: int64
+          description: Identificador del cliente. Pertenece al Componente 3 (Usuarios).
+          example: 5590
         totalAmount:
           type: number
           format: float
+          description: Importe total de la reserva a cobrar.
+          example: 18.50
         status:
           type: string
           enum: [PENDING_PAYMENT, CONFIRMED, CANCELLED]
+          description: Estado actual del ciclo de vida de la reserva.
+          example: "PENDING_PAYMENT"
         expiresAt:
           type: string
           format: date-time
           description: Marca de tiempo exacta (TTL de 10 min) en la que el bloqueo caduca.
+          example: "2026-10-08T12:04:36Z"
 
     TicketConfirmation:
       type: object
@@ -273,8 +289,11 @@ components:
         reservationId:
           type: integer
           format: int64
+          description: Identificador de la reserva pagada.
+          example: 8901
         status:
           type: string
+          description: Estado final del proceso.
           example: CONFIRMED
         tickets:
           type: array

@@ -59,12 +59,11 @@ paths:
 
         Para calcular dicho porcentaje, este microservicio realiza una COMUNICACIÓN
         SÍNCRONA de tipo CONSULTA con los microservicios de Cartelera (para conocer
-        la capacidad máxima/aforo) y Venta de Entradas (para obtener el total de
-        asientos vendidos en ese período):
+        la capacidad máxima/aforo) y Reservas (para obtener el total de butacas vendidas):
 
-        Analytics -> Cartelera -> GET /cinemas/{cinemaId}/screens/{screenId}
-        Analytics -> VentaEntradas -> GET /tickets/stats
-
+        Analytics -> Cartelera -> GET /rooms/{roomId}
+        Analytics -> Reservas -> GET /reservations/stats
+      
       operationId: getOccupancyRates
 
       parameters:
@@ -164,7 +163,7 @@ paths:
 
         Esta operación realiza una COMUNICACIÓN SÍNCRONA de tipo CONSULTA:
 
-        Analytics -> VentaEntradas -> GET /sales/box-office-data
+        Analytics -> Reservas -> GET /reservations/box-office-data
 
       operationId: getBoxOfficeReport
 
