@@ -487,23 +487,29 @@ components:
       properties:
         name:
           type: string
+          description: Nombre identificativo o código alfanumérico de la sala.
           example: "Sala 1 - Principal"
         roomType:
           type: string
           enum: [ESTANDAR_2D, DIGITAL_3D, IMAX, VIP, 4DX]
+          description: Tipo de tecnología de proyección y experiencia que ofrece el espacio.
           example: "ESTANDAR_2D"
         rowsCount:
           type: integer
+          description: Número total de filas de butacas que componen la sala.
           example: 10
         columnsCount:
           type: integer
+          description: Número máximo de columnas o asientos por fila en el plano de la sala.
           example: 12
         wheelchairAccessible:
           type: boolean
+          description: Indica si la sala cuenta con accesos y espacios habilitados para personas con movilidad reducida (PMR).
           example: true
         basePrice:
           type: number
           format: float
+          description: Precio base por defecto para las entradas de esta sala, previo a cualquier descuento de sesión.
           example: 8.50
 
 
