@@ -1,7 +1,7 @@
 openapi: 3.0.3
 
 info:
-  title: API de IAM y Fidelización - Componente 3
+  title: API de IAM (Identity and Access Management) y Fidelización - Componente 3
   version: 1.0.0
   description: >
     API responsable de la gestión de identidades, autenticación mediante JWT, 
