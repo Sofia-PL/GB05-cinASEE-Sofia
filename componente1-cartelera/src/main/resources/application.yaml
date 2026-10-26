@@ -1,3 +1,11 @@
+server:
+  port: 8081
+  servlet:
+    context-path: /api/v1
+
 spring:
   application:
     name: componente1-cartelera
+  data:
+    mongodb:
+      uri: mongodb://localhost:27017/cine_catalog_db
