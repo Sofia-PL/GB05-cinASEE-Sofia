@@ -40,7 +40,7 @@ flowchart TD
     C3 --> DB3
 
     %% Bus de Eventos
-    BUS["<b>Bus de Eventos (Event Broker) - Desacoplamiento Asíncrono</b><br/><b>[ Apache Kafka / RabbitMQ ]</b>"]
+    BUS["<b>Bus de Eventos (Event Broker) - Desacoplamiento Asíncrono</b><br/><b>[RabbitMQ ]</b>"]
 
     %% Conexiones Asíncronas desde Microservicios al Bus de Eventos
     C1 -.-|Eventos publicados| BUS
