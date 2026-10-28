@@ -19,6 +19,9 @@ servers:
   - url: http://localhost:8081/api/v1
     description: Servidor de desarrollo CineAsee
 
+# --- Definición de seguridad global para proteger toda la API por defecto exigiendo un token JWT ---
+security:
+  - bearerAuth: []
 
 # ============================================================
 # TAGS
@@ -46,6 +49,7 @@ paths:
       description: >
         Devuelve el catálogo de películas registradas en el sistema. 
         Permite filtrar por género o estado en cartelera.
+      security: [] # Excepción de seguridad para permitir que el listado de películas sea público (sin token)
       operationId: getMovies
       parameters:
         - name: genre
@@ -132,6 +136,47 @@ paths:
                 $ref: '#/components/schemas/Movie'
         '404':
           description: No existe ninguna película con el ID indicado.
+
+# --- Operaciones PUT y DELETE para completar el CRUD permitiendo modificar y eliminar películas existentes ---
+    put:
+      tags:
+        - Movies
+      summary: Actualizar datos de una película
+      operationId: updateMovie
+      parameters:
+        - name: movieId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateMovieRequest'
+      responses:
+        '200':
+          description: Película actualizada.
+        '404':
+          description: Película no encontrada.
+    delete:
+      tags:
+        - Movies
+      summary: Eliminar una película
+      operationId: deleteMovie
+      parameters:
+        - name: movieId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '204':
+          description: Película eliminada correctamente.
+# -----------------------------------------------------------------------------
 
 
   # ==========================================================
@@ -226,6 +271,7 @@ paths:
         Devuelve el listado de sesiones de proyección filtradas por fecha, película o sala. 
         Utilizado principalmente por la Web Pública y Taquilla para mostrar la cartelera.
       operationId: getSessions
+      security: [] # Excepción de seguridad para la consulta de cartelera 
       parameters:
         - name: date
           in: query
@@ -324,6 +370,42 @@ paths:
         '404':
           description: Sesión no encontrada.
 
+# --- Operación PATCH para modificar horarios, salas o cancelar (status) una sesión sin borrarla ---
+    patch:
+      tags:
+        - Sessions
+      summary: Modificar o cancelar una sesión programada
+      description: Permite cambiar el horario, sala o estado (ej. CANCELADA) de una sesión. Dispara validaciones de solapamiento.
+      operationId: updateSession
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                roomId:
+                  type: integer
+                  format: int64
+                startTime:
+                  type: string
+                  format: date-time
+                status:
+                  type: string
+                  enum: [PROGRAMADA, A_LA_VENTA, EN_CURSO, FINALIZADA, CANCELADA]
+      responses:
+        '200':
+          description: Sesión actualizada.
+        '409':
+          description: Conflicto de solapamiento con el nuevo horario/sala.
+
 
 # ============================================================
 # COMPONENTS & SCHEMAS
@@ -359,6 +441,7 @@ components:
           example: "Las cinco hermanas Bennet han sido criadas por una madre obsesionada por encontrarles marido. Pero Elizabeth, inteligente e independiente, desea una vida con mayores horizontes."
         durationMinutes:
           type: integer
+          minimum: 1 # Restricción para evitar duraciones negativas o cero
           description: Duración de la cinta expresada en minutos.
           example: 127
         genre:
@@ -402,6 +485,9 @@ components:
           example: "Las cinco hermanas Bennet han sido criadas por una madre..."
         durationMinutes:
           type: integer
+# --- NUEVO: Restricción para evitar duraciones negativas o cero ---
+          minimum: 1
+# -----------------------------------------------------------------------------
           description: Tiempo de duración en minutos (debe ser mayor a 0).
           example: 127
         genre:
@@ -461,10 +547,12 @@ components:
           example: 120
         rowsCount:
           type: integer
+          minimum: 1 # Restricción para asegurar que haya al menos 1 fila
           description: Número de filas de butacas.
           example: 10
         columnsCount:
           type: integer
+          minimum: 1 # Restricción para asegurar que haya al menos 1 columna
           description: Número de columnas/asientos por fila.
           example: 12
         wheelchairAccessible:
@@ -474,6 +562,7 @@ components:
         basePrice:
           type: number
           format: float
+          minimum: 0 # Restricción para evitar que el precio base sea negativo
           description: Tarifa base aplicable a la sala.
           example: 8.50
 
@@ -496,10 +585,12 @@ components:
           example: "ESTANDAR_2D"
         rowsCount:
           type: integer
+          minimum: 1 # Restricción para asegurar que haya al menos 1 fila
           description: Número total de filas de butacas que componen la sala.
           example: 10
         columnsCount:
           type: integer
+          minimum: 1 #Restricción para asegurar que haya al menos 1 columna
           description: Número máximo de columnas o asientos por fila en el plano de la sala.
           example: 12
         wheelchairAccessible:
@@ -509,6 +600,7 @@ components:
         basePrice:
           type: number
           format: float
+          minimum: 0 #Restricción para evitar que el precio base sea negativo
           description: Precio base por defecto para las entradas de esta sala, previo a cualquier descuento de sesión.
           example: 8.50
 
@@ -560,6 +652,7 @@ components:
         ticketPrice:
           type: number
           format: float
+          minimum: 0
           description: Precio base de la entrada para esta sesión específica.
           example: 8.50
 
@@ -589,5 +682,12 @@ components:
         ticketPrice:
           type: number
           format: float
+          minimum: 0 # Restricción para evitar que las entradas tengan precio negativo 
           description: Precio fijado para la sesión.
           example: 8.50
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

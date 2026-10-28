@@ -20,6 +20,9 @@ servers:
   - url: http://localhost:8084/api
     description: Servidor de desarrollo
 
+# --- Definición de seguridad global para proteger la API de analítica exigiendo un token JWT ---
+security:
+  - bearerAuth: []
 
 # ============================================================
 # TAGS
@@ -340,15 +343,20 @@ components:
           example: "18:00-22:00"
         totalCapacity:
           type: integer
+          minimum: 0 # Restricción para evitar aforos negativos
           description: Suma total del aforo disponible en las proyecciones.
           example: 200
         totalTicketsSold:
           type: integer
+          minimum: 0 # Restricción para evitar contabilizar entradas negativas
           description: Cantidad total de entradas vendidas para esas proyecciones.
           example: 160
         occupancyPercentage:
           type: number
           format: float
+# Restricción para asegurar que el porcentaje esté siempre entre 0 y 100 ---
+          minimum: 0.0
+          maximum: 100.0
           description: Porcentaje de ocupación calculado ((entradas/capacidad)*100).
           example: 80.0
 
@@ -394,11 +402,13 @@ components:
               example: "2026-10-07"
         totalTicketsSold:
           type: integer
+          minimum: 0 # Restricción para evitar un conteo negativo de espectadores
           description: Total de espectadores / entradas vendidas en taquilla.
           example: 1250
         grossRevenue:
           type: number
           format: double
+          minimum: 0 # Restricción para evitar recaudaciones negativas
           description: Recaudación bruta total acumulada en el período.
           example: 11250.50
         currency:
@@ -429,6 +439,9 @@ components:
         matchScore:
           type: number
           format: float
+# Restricción para limitar la puntuación de recomendación (entre 0 y 1) 
+          minimum: 0.0
+          maximum: 1.0
           description: Puntuación de afinidad calculada por el motor (0.0 a 1.0).
           example: 0.95
         reason:
@@ -453,3 +466,10 @@ components:
           description: Lista de películas sugeridas.
           items:
             $ref: '#/components/schemas/RecommendationItem'
+
+# --- Configuración del esquema de seguridad JWT ---
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

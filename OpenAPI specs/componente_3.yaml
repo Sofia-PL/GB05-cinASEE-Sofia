@@ -23,6 +23,10 @@ servers:
   - url: http://api.cinasee.com/v1/iam
     description: Entorno de producción (API Gateway Routing)
 
+# --- Definición de seguridad global para proteger la API por defecto con token JWT ---
+security:
+  - bearerAuth: []
+
 
 # ============================================================
 # TAGS
@@ -39,7 +43,7 @@ tags:
 paths:
 
   # ==========================================================
-  # PATH 1: AUTENTICACIÓN / LOGIN
+  # PATH 1: AUTENTICACIÓN / LOGIN Y REGISTRO
   # ==========================================================
   
   /auth/login:
@@ -56,6 +60,9 @@ paths:
         Esta operación es interna de este microservicio y no requiere comunicación 
         con otros componentes. El token generado será utilizado por el API Gateway 
         (Componente 5) para autorizar peticiones futuras.
+
+# --- Excepción de seguridad para permitir que el login sea público ---
+      security: []
 
       operationId: loginUser
 
@@ -88,9 +95,40 @@ paths:
             Credenciales inválidas. El correo electrónico o la contraseña 
             no coinciden con los registros.
 
+# --- Operación POST para registrar un nuevo usuario en el sistema ---
+  /auth/register:
+    post:
+      tags:
+        - Authentication
+      summary: Registrar un nuevo usuario
+      description: Permite dar de alta a un nuevo cliente en la plataforma.
+      security: []
+      operationId: registerUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password, fullName]
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  format: password
+                  minLength: 8
+                fullName:
+                  type: string
+      responses:
+        '201':
+          description: Usuario registrado exitosamente.
+        '409':
+          description: El correo electrónico ya está en uso.
 
   # ==========================================================
-  # PATH 2: CONSULTA DE PERFIL DE USUARIO
+  # PATH 2: CONSULTA Y MODIFICACIÓN DE PERFIL DE USUARIO
   # ==========================================================
   
   /users/{userId}:
@@ -138,6 +176,38 @@ paths:
             No existe ningún usuario con el identificador indicado. (Puede 
             ocurrir si Reservas intenta consultar un usuario eliminado).
 
+# --- Operación PUT para modificar los datos del perfil y las preferencias de fidelización ---
+    put:
+      tags:
+        - Users
+      summary: Modificar perfil y preferencias de fidelización
+      description: Permite al usuario o a un administrador actualizar los datos personales y géneros favoritos.
+      operationId: updateUserProfile
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                fullName:
+                  type: string
+                preferredGenres:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '200':
+          description: Perfil actualizado correctamente.
+        '404':
+          description: Usuario no encontrado.
 
   # ==========================================================
   # PATH 3: HISTORIAL DE COMPRAS
@@ -209,6 +279,7 @@ components:
         password:
           type: string
           format: password
+          minLength: 8 # Validación para exigir contraseñas con un mínimo de longitud
           description: Contraseña en texto plano (será hasheada internamente por seguridad).
           example: "PasswordSegura123!"
 
@@ -273,6 +344,7 @@ components:
           example: "CLIENTE_REGISTRADO"
         loyaltyPoints:
           type: integer
+          minimum: 0 # Restricción para evitar saldos de puntos de fidelización negativos 
           description: >
             Saldo actual en el monedero de fidelización. Se incrementa de forma 
             asíncrona cuando se consumen eventos de venta completada desde Reservas.
@@ -312,5 +384,13 @@ components:
         amount:
           type: number
           format: float
+          minimum: 0 # Restricción para asegurar que el gasto reportado en el historial no sea negativo 
           description: Gasto total asociado a esa transacción.
           example: 18.50
+
+# --- Configuración del esquema de seguridad JWT ---
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

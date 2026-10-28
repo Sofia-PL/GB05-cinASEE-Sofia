@@ -18,6 +18,10 @@ servers:
   - url: http://api.cinasee.com/v1/reservations
     description: Entorno de producción
 
+# --- Definición de seguridad global para proteger la API de reservas con token JWT ---
+security:
+  - bearerAuth: []
+
 # ============================================================
 # TAGS
 # ============================================================
@@ -228,10 +232,12 @@ components:
       properties:
         row:
           type: integer
+          minimum: 1 # Restricción para evitar números de fila negativos o cero 
           description: Fila de la butaca elegida.
           example: 8
         column:
           type: integer
+          minimum: 1 # Restricción para evitar números de columna negativos o cero
           description: Columna de la butaca elegida.
           example: 12
 
@@ -270,6 +276,7 @@ components:
         totalAmount:
           type: number
           format: float
+          minimum: 0 # Restricción para asegurar que el importe total de la reserva no sea negativo 
           description: Importe total de la reserva a cobrar.
           example: 18.50
         status:
@@ -301,3 +308,10 @@ components:
           items:
             type: string
             example: "QR-8901-8-12-XYZ"
+
+# --- Configuración del esquema de seguridad JWT para el componente de Reservas ---
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
