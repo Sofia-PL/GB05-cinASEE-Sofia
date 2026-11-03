@@ -6,8 +6,9 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 @SpringBootApplication
 public class Componente1CarteleraApplication {
 
-	public static void main(String[] args) {
-		SpringApplication.run(Componente1CarteleraApplication.class, args);
-	}
+    public static void main(String[] args) {
+        SpringApplication.run(Componente1CarteleraApplication.class, args);
+    }
 
 }
+

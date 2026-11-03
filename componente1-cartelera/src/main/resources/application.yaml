@@ -1,7 +1,7 @@
 server:
-  port: 8081
+  port: 8081 # Servidor de desarrollo CineAsee
   servlet:
-    context-path: /api/v1
+    context-path: /api/v1 # Ruta base de la API
 
 spring:
   application:
@@ -9,3 +9,11 @@ spring:
   data:
     mongodb:
       uri: mongodb://localhost:27017/cine_catalog_db
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # Aquí debes definir la URL del proveedor de identidad (Componente 3)
+          # o la clave secreta compartida usada para verificar la firma del token JWT
+          issuer-uri: http://localhost:8083/v1/iam
+
