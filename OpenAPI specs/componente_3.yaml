@@ -127,6 +127,45 @@ paths:
         '409':
           description: El correo electrónico ya está en uso.
 
+# --- Operación POST para emitir un token anónimo de corta duración ---
+  /auth/guest:
+    post:
+      tags:
+        - Authentication
+      summary: Emitir token anónimo para invitado
+      description: >
+        Emite un token JWT de corta duración para usuarios no registrados
+        (rol VISITANTE). Permite trazabilidad y control de acceso en compras
+        de invitados sin obligar a crear una cuenta.
+
+        En producción, este endpoint debe protegerse con CAPTCHA y rate limiting
+        en el API Gateway para evitar abusos automatizados.
+      security: []
+      operationId: createGuestToken
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GuestTokenRequest'
+            example:
+              deviceId: "web-9f2c7a1e-4b3d-4c8a-9f1e-2a6b7c8d9e0f"
+              captchaToken: "captcha-token-opcional"
+      responses:
+        '200':
+          description: Token anónimo emitido correctamente.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+              example:
+                accessToken: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                tokenType: "Bearer"
+                expiresIn: 900
+                role: "VISITANTE"
+        '429':
+          description: Demasiadas solicitudes. Rate limit excedido.
+
   # ==========================================================
   # PATH 2: CONSULTA Y MODIFICACIÓN DE PERFIL DE USUARIO
   # ==========================================================
@@ -283,6 +322,25 @@ components:
           description: Contraseña en texto plano (será hasheada internamente por seguridad).
           example: "PasswordSegura123!"
 
+    GuestTokenRequest:
+      type: object
+      required:
+        - deviceId
+      properties:
+        deviceId:
+          type: string
+          minLength: 8
+          description: >
+            Identificador del dispositivo o navegador del invitado. Se usa para
+            trazabilidad y para aplicar límites por dispositivo.
+          example: "web-9f2c7a1e-4b3d-4c8a-9f1e-2a6b7c8d9e0f"
+        captchaToken:
+          type: string
+          description: >
+            Token del CAPTCHA resuelto por el cliente. Su validación contra el
+            proveedor de CAPTCHA se integrará en el servicio.
+          example: "captcha-token-opcional"
+
     TokenResponse:
       type: object
       required:
@@ -394,3 +452,7 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
+      description: >
+        Token JWT firmado con RS256. La clave pública para validar la firma
+        se publica en /.well-known/jwks.json y los metadatos OIDC en
+        /.well-known/openid-configuration.

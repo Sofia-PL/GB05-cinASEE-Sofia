@@ -1,3 +1,80 @@
+server:
+  port: ${SERVER_PORT:8083}
+  servlet:
+    context-path: /v1/iam
+
 spring:
   application:
     name: componente3-usuarios
+
+  # @PreAuthorize en los controllers requiere proxies CGLIB: con proxies JDK
+  # el bean deja de exponer las anotaciones @RestController y Spring MVC no
+  # registra sus rutas. Spring Boot ya usa CGLIB por defecto; lo hacemos explícito.
+  aop:
+    proxy-target-class: true
+
+  datasource:
+    url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/${MYSQL_DATABASE:cinasee_users_db}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+    username: ${MYSQL_USER:root}
+    password: ${MYSQL_PASSWORD:}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
+        jdbc:
+          time_zone: UTC
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: 2s
+
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USER:guest}
+    password: ${RABBITMQ_PASSWORD:guest}
+    listener:
+      simple:
+        default-requeue-rejected: false
+        retry:
+          enabled: true
+          initial-interval: 1s
+          max-attempts: 3
+          multiplier: 2
+
+  jackson:
+    datatype:
+      datetime:
+        # En Spring Boot 4 / Jackson 3 las fechas viven en DateTimeFeature
+        WRITE_DATES_AS_TIMESTAMPS: false
+
+app:
+  jwt:
+    # Firma asimétrica RS256: la clave privada se genera al arrancar y nunca se commitea.
+    # Los demás servicios validan con la clave pública publicada en /.well-known/jwks.json
+    expiration-seconds: ${JWT_EXPIRATION_SECONDS:3600}
+    guest-expiration-seconds: ${JWT_GUEST_EXPIRATION_SECONDS:900}
+    issuer: ${JWT_ISSUER:http://localhost:8083/v1/iam}
+  rabbitmq:
+    exchange: ${PAYMENT_EXCHANGE:payment.exchange}
+    queue: ${PAYMENT_COMPLETED_QUEUE:user.payment.completed}
+    routing-key: ${PAYMENT_COMPLETED_ROUTING_KEY:payment.completed}
+    dead-letter-exchange: ${PAYMENT_DLX:payment.exchange.dlx}
+    dead-letter-queue: ${PAYMENT_COMPLETED_DLQ:user.payment.completed.dlq}
+    dead-letter-routing-key: ${PAYMENT_COMPLETED_DLQ_ROUTING_KEY:payment.completed.dlq}
+  loyalty:
+    points-per-euro: ${LOYALTY_POINTS_PER_EURO:1}
+
+logging:
+  level:
+    org.springframework.security: INFO
+    com.cinasee.componente3_usuarios: INFO

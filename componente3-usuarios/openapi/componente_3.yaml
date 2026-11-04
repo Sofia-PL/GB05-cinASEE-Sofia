@@ -1,0 +1,458 @@
+openapi: 3.0.3
+
+info:
+  title: API de IAM (Identity and Access Management) y Fidelización - Componente 3
+  version: 1.0.0
+  description: >
+    API responsable de la gestión de identidades, autenticación mediante JWT, 
+    control de acceso basado en roles (RBAC) y el programa de fidelización de la cadena de cines.
+
+    El microservicio de Usuarios es propietario de los perfiles (registrados, staff, admin), 
+    credenciales y del monedero virtual de puntos. Actúa como proveedor de identidad para el resto
+    de la arquitectura.
+
+    Interacciones principales con otros microservicios:
+    - Reservas y Pagos (Componente 2): realiza consultas síncronas a esta API para validar el rol 
+      del usuario y sus puntos disponibles antes de cobrar.
+    - Analítica (Componente 4): realiza consultas síncronas para extraer preferencias y 
+      compras previas para el motor de recomendaciones.
+    - Eventos Asíncronos: consume el evento 'PaymentCompleted' emitido por el Componente 2 
+      para sumar puntos automáticamente al monedero del cliente.
+
+servers:
+  - url: http://api.cinasee.com/v1/iam
+    description: Entorno de producción (API Gateway Routing)
+
+# --- Definición de seguridad global para proteger la API por defecto con token JWT ---
+security:
+  - bearerAuth: []
+
+
+# ============================================================
+# TAGS
+# ============================================================
+tags:
+  - name: Authentication
+    description: Operaciones de registro, login y emisión de tokens (JWT)
+  - name: Users
+    description: Gestión de perfiles de usuario y roles (RBAC)
+  - name: Loyalty
+    description: Historial de compras y monedero de puntos
+
+
+paths:
+
+  # ==========================================================
+  # PATH 1: AUTENTICACIÓN / LOGIN Y REGISTRO
+  # ==========================================================
+  
+  /auth/login:
+    post:
+      tags:
+        - Authentication
+
+      summary: Autenticar usuario y generar token
+
+      description: >
+        Valida las credenciales del usuario (email y contraseña) y, si son correctas, 
+        emite un token de sesión (JWT) firmado. 
+
+        Esta operación es interna de este microservicio y no requiere comunicación 
+        con otros componentes. El token generado será utilizado por el API Gateway 
+        (Componente 5) para autorizar peticiones futuras.
+
+# --- Excepción de seguridad para permitir que el login sea público ---
+      security: []
+
+      operationId: loginUser
+
+      requestBody:
+        required: true
+        description: Credenciales de acceso del usuario.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+            example:
+              email: "cliente.vip@email.com"
+              password: "PasswordSegura123!"
+
+      responses:
+        '200':
+          description: Autenticación exitosa. Se devuelve el JWT.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+              example:
+                accessToken: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                tokenType: "Bearer"
+                expiresIn: 3600
+                role: "CLIENTE_REGISTRADO"
+
+        '401':
+          description: >
+            Credenciales inválidas. El correo electrónico o la contraseña 
+            no coinciden con los registros.
+
+# --- Operación POST para registrar un nuevo usuario en el sistema ---
+  /auth/register:
+    post:
+      tags:
+        - Authentication
+      summary: Registrar un nuevo usuario
+      description: Permite dar de alta a un nuevo cliente en la plataforma.
+      security: []
+      operationId: registerUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password, fullName]
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  format: password
+                  minLength: 8
+                fullName:
+                  type: string
+      responses:
+        '201':
+          description: Usuario registrado exitosamente.
+        '409':
+          description: El correo electrónico ya está en uso.
+
+# --- Operación POST para emitir un token anónimo de corta duración ---
+  /auth/guest:
+    post:
+      tags:
+        - Authentication
+      summary: Emitir token anónimo para invitado
+      description: >
+        Emite un token JWT de corta duración para usuarios no registrados
+        (rol VISITANTE). Permite trazabilidad y control de acceso en compras
+        de invitados sin obligar a crear una cuenta.
+
+        En producción, este endpoint debe protegerse con CAPTCHA y rate limiting
+        en el API Gateway para evitar abusos automatizados.
+      security: []
+      operationId: createGuestToken
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GuestTokenRequest'
+            example:
+              deviceId: "web-9f2c7a1e-4b3d-4c8a-9f1e-2a6b7c8d9e0f"
+              captchaToken: "captcha-token-opcional"
+      responses:
+        '200':
+          description: Token anónimo emitido correctamente.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+              example:
+                accessToken: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                tokenType: "Bearer"
+                expiresIn: 900
+                role: "VISITANTE"
+        '429':
+          description: Demasiadas solicitudes. Rate limit excedido.
+
+  # ==========================================================
+  # PATH 2: CONSULTA Y MODIFICACIÓN DE PERFIL DE USUARIO
+  # ==========================================================
+  
+  /users/{userId}:
+    get:
+      tags:
+        - Users
+
+      summary: Obtener perfil y datos de fidelización del usuario
+
+      description: >
+        Devuelve la información pública del usuario, su rol y el saldo de su 
+        monedero de puntos.
+
+        Esta operación es fundamental en la arquitectura ya que **es consumida 
+        mediante una COMUNICACIÓN SÍNCRONA de tipo CONSULTA por el Componente 2 
+        (Reservas y Pagos)**:
+
+        Reservas -> Usuarios -> GET /users/{userId}
+
+        Reservas utiliza esta información para aplicar descuentos automáticos 
+        si el cliente pertenece al programa de fidelidad.
+
+      operationId: getUserProfile
+
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          description: Identificador único del usuario registrado.
+          schema:
+            type: integer
+            format: int64
+          example: 5590
+
+      responses:
+        '200':
+          description: Perfil de usuario recuperado con éxito.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfile'
+
+        '404':
+          description: >
+            No existe ningún usuario con el identificador indicado. (Puede 
+            ocurrir si Reservas intenta consultar un usuario eliminado).
+
+# --- Operación PUT para modificar los datos del perfil y las preferencias de fidelización ---
+    put:
+      tags:
+        - Users
+      summary: Modificar perfil y preferencias de fidelización
+      description: Permite al usuario o a un administrador actualizar los datos personales y géneros favoritos.
+      operationId: updateUserProfile
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                fullName:
+                  type: string
+                preferredGenres:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '200':
+          description: Perfil actualizado correctamente.
+        '404':
+          description: Usuario no encontrado.
+
+  # ==========================================================
+  # PATH 3: HISTORIAL DE COMPRAS
+  # ==========================================================
+
+  /users/{userId}/history:
+    get:
+      tags:
+        - Loyalty
+
+      summary: Obtener el historial de compras del cliente
+
+      description: >
+        Devuelve un listado con el registro histórico de las reservas y 
+        películas visualizadas por el usuario.
+
+        Esta operación **es consumida mediante una COMUNICACIÓN SÍNCRONA de 
+        tipo CONSULTA por el Componente 4 (Analítica y Recomendaciones)**:
+
+        Analítica -> Usuarios -> GET /users/{userId}/history
+
+        El motor de recomendaciones procesa estos datos para sugerir 
+        nuevas películas basadas en los géneros previamente consumidos.
+
+      operationId: getUserHistory
+
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          description: Identificador único del usuario a consultar.
+          schema:
+            type: integer
+            format: int64
+          example: 5590
+
+      responses:
+        '200':
+          description: Historial de compras recuperado correctamente.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PurchaseHistoryItem'
+
+        '404':
+          description: El usuario indicado no existe.
+
+
+components:
+  schemas:
+
+    # ========================================================
+    # SCHEMAS DE AUTENTICACIÓN
+    # ========================================================
+    
+    LoginRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+          description: Correo electrónico registrado en la plataforma.
+          example: "cliente.vip@email.com"
+        password:
+          type: string
+          format: password
+          minLength: 8 # Validación para exigir contraseñas con un mínimo de longitud
+          description: Contraseña en texto plano (será hasheada internamente por seguridad).
+          example: "PasswordSegura123!"
+
+    GuestTokenRequest:
+      type: object
+      required:
+        - deviceId
+      properties:
+        deviceId:
+          type: string
+          minLength: 8
+          description: >
+            Identificador del dispositivo o navegador del invitado. Se usa para
+            trazabilidad y para aplicar límites por dispositivo.
+          example: "web-9f2c7a1e-4b3d-4c8a-9f1e-2a6b7c8d9e0f"
+        captchaToken:
+          type: string
+          description: >
+            Token del CAPTCHA resuelto por el cliente. Su validación contra el
+            proveedor de CAPTCHA se integrará en el servicio.
+          example: "captcha-token-opcional"
+
+    TokenResponse:
+      type: object
+      required:
+        - accessToken
+        - tokenType
+        - expiresIn
+        - role
+      properties:
+        accessToken:
+          type: string
+          description: Token JWT codificado para autorización en los distintos microservicios.
+          example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        tokenType:
+          type: string
+          description: Tipo de token devuelto (estándar OAuth2).
+          example: "Bearer"
+        expiresIn:
+          type: integer
+          description: Tiempo de vida útil del token expresado en segundos (TTL).
+          example: 3600
+        role:
+          type: string
+          enum: [VISITANTE, CLIENTE_REGISTRADO, STAFF_TAQUILLA, ADMIN]
+          description: Rol principal del usuario para control de accesos (RBAC).
+          example: "CLIENTE_REGISTRADO"
+
+    # ========================================================
+    # SCHEMAS DE USUARIO Y FIDELIZACIÓN
+    # ========================================================
+    
+    UserProfile:
+      type: object
+      required:
+        - id
+        - email
+        - fullName
+        - role
+        - loyaltyPoints
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: >
+            Identificador único del usuario. Pertenece a este microservicio (Usuarios) 
+            y es propagado como referencia al resto de componentes.
+          example: 5590
+        email:
+          type: string
+          format: email
+          description: Correo electrónico de contacto y nombre de usuario.
+          example: "cliente.vip@email.com"
+        fullName:
+          type: string
+          description: Nombre completo del usuario.
+          example: "María Gómez"
+        role:
+          type: string
+          description: Nivel de acceso otorgado dentro del sistema.
+          example: "CLIENTE_REGISTRADO"
+        loyaltyPoints:
+          type: integer
+          minimum: 0 # Restricción para evitar saldos de puntos de fidelización negativos 
+          description: >
+            Saldo actual en el monedero de fidelización. Se incrementa de forma 
+            asíncrona cuando se consumen eventos de venta completada desde Reservas.
+          example: 1250
+        preferredGenres:
+          type: array
+          description: Lista de géneros cinematográficos marcados como favoritos por el usuario.
+          items:
+            type: string
+            example: "CIENCIA_FICCION"
+
+    PurchaseHistoryItem:
+      type: object
+      required:
+        - reservationId
+        - movieId
+        - purchaseDate
+        - amount
+      properties:
+        reservationId:
+          type: integer
+          format: int64
+          description: >
+            Identificador de la reserva pagada. Pertenece al Componente 2 (Reservas y Pagos).
+          example: 8901
+        movieId:
+          type: integer
+          format: int64
+          description: >
+            Identificador de la película visionada. Pertenece al Componente 1 (Cartelera).
+          example: 1024
+        purchaseDate:
+          type: string
+          format: date-time
+          description: Fecha y hora en la que se completó el pago de la reserva.
+          example: "2026-09-20T18:30:00Z"
+        amount:
+          type: number
+          format: float
+          minimum: 0 # Restricción para asegurar que el gasto reportado en el historial no sea negativo 
+          description: Gasto total asociado a esa transacción.
+          example: 18.50
+
+# --- Configuración del esquema de seguridad JWT ---
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: >
+        Token JWT firmado con RS256. La clave pública para validar la firma
+        se publica en /.well-known/jwks.json y los metadatos OIDC en
+        /.well-known/openid-configuration.
