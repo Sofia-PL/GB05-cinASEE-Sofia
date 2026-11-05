@@ -3,6 +3,21 @@ version: '3.8'
 services:
 
 # ==========================================
+# INFRAESTRUCTURA COMPARTIDA / MENSAJERÍA
+# ==========================================
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+
+# ==========================================
 # COMPONENTE 3: USUARIOS
 # ==========================================
 
@@ -40,6 +55,44 @@ services:
 # ==========================================
 # COMPONENTE 4: ANALÍTICA
 # ==========================================
+  # Contenedor 1: Base de datos aislada (PostgreSQL)
+  postgres-analitica:
+    image: postgres:16-alpine
+    container_name: postgres-analitica
+    ports:
+      - "5434:5432"
+    environment:
+      POSTGRES_DB: cine_analytics_dw
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - postgres_analitica_data:/var/lib/postgresql/data
+
+  # Contenedor 2: Microservicio Spring Boot
+  componente4-analitica:
+    build:
+      context: ./componente4-analitica
+    container_name: app-analitica
+    ports:
+      - "8084:8084"
+    depends_on:
+      - postgres-analitica
+      - rabbitmq
+    environment:
+      # Configuración de base de datos apuntando al contenedor PostgreSQL
+      DB_HOST: postgres-analitica
+      DB_PORT: 5432
+      DB_USERNAME: postgres
+      DB_PASSWORD: postgres
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-analitica:5432/cine_analytics_dw
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+      # Configuración de RabbitMQ apuntando al broker
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      # URLs para comunicación con otros microservicios en la red de Docker
+      CARTELERA_SERVICE_URL: http://componente1-cartelera:8081/api/v1
+      USUARIOS_SERVICE_URL: http://componente3-usuarios:8083/api/v1
 
 # ==========================================
 # COMPONENTE 5: GATEWAY
@@ -49,3 +102,5 @@ services:
 # ==========================================
 volumes:
   mongo_data:
+  postgres_analitica_data:
+  rabbitmq_data:
