@@ -1,0 +1,51 @@
+version: '3.8'
+
+services:
+
+# ==========================================
+# COMPONENTE 3: USUARIOS
+# ==========================================
+
+# ==========================================
+# COMPONENTE 1: CARTELERA
+# ==========================================
+  # Contenedor 1: Base de datos aislada
+  mongodb-cartelera:
+    image: mongo:7.0
+    container_name: mongodb-cartelera
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_DATABASE: cine_catalog_db
+    volumes:
+      - mongo_data:/data/db
+
+  # Contenedor 2: Microservicio Spring Boot
+  componente1-cartelera:
+    build:
+      context: ./componente1-cartelera
+    container_name: app-cartelera
+    ports:
+      - "8081:8081"
+    depends_on:
+      - mongodb-cartelera
+    environment:
+      # Sobrescribimos la URI para que apunte al nombre del contenedor de Mongo, no a localhost
+      SPRING_DATA_MONGODB_URI: mongodb://mongodb-cartelera:27017/cine_catalog_db
+
+# ==========================================
+# COMPONENTE 2: RESERVAS
+# ==========================================
+
+# ==========================================
+# COMPONENTE 4: ANALÍTICA
+# ==========================================
+
+# ==========================================
+# COMPONENTE 5: GATEWAY
+# ==========================================
+
+
+# ==========================================
+volumes:
+  mongo_data:
