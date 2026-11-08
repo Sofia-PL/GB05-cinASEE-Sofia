@@ -1,0 +1,37 @@
+[
+  {
+    "id": 5001,
+    "movieId": 101,
+    "roomName": "Sala 1 (2D)",
+    "startTime": "17:30",
+    "ticketPrice": 5
+  },
+  {
+    "id": 5002,
+    "movieId": 101,
+    "roomName": "Sala 2 (VIP)",
+    "startTime": "20:15",
+    "ticketPrice": 5
+  },
+  {
+    "id": 5003,
+    "movieId": 102,
+    "roomName": "Sala 3 (IMAX)",
+    "startTime": "18:00",
+    "ticketPrice": 5
+  },
+  {
+    "id": 5004,
+    "movieId": 102,
+    "roomName": "Sala 1 (2D)",
+    "startTime": "21:30",
+    "ticketPrice": 5
+  },
+  {
+    "id": 5005,
+    "movieId": 103,
+    "roomName": "Sala 4 (3D)",
+    "startTime": "19:00",
+    "ticketPrice": 5
+  }
+]

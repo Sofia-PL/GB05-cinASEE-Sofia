@@ -1,0 +1,12 @@
+{
+  "id": 5590,
+  "email": "usuario@example.com",
+  "fullName": "usr",
+  "role": "CLIENTE_REGISTRADO",
+  "loyaltyPoints": 1250,
+  "preferredGenres": [
+    "CIENCIA_FICCION",
+    "ACCION",
+    "DRAMA"
+  ]
+}
