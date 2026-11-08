@@ -20,6 +20,75 @@ services:
 # ==========================================
 # COMPONENTE 3: USUARIOS
 # ==========================================
+  # Contenedor 1: Base de datos aislada (MySQL propio)
+  mysql-usuarios:
+    image: mysql:8.4
+    container_name: cinasee-mysql-usuarios
+    ports:
+      - "127.0.0.1:3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: cinasee_users_db
+      MYSQL_USER: cinasee
+      MYSQL_PASSWORD: cinasee
+    volumes:
+      # Reutiliza el volumen creado con docker run (mismos datos)
+      - mysql_usuarios_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -ucinasee -pcinasee --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+    restart: unless-stopped
+
+  # Contenedor 2: Caché / sesiones (Redis)
+  redis-usuarios:
+    image: redis:7-alpine
+    container_name: cinasee-redis-usuarios
+    ports:
+      - "127.0.0.1:6379:6379"
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_usuarios_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  # Contenedor 3: Microservicio Spring Boot (IAM y fidelización)
+  componente3-usuarios:
+    build:
+      context: ./componente3-usuarios
+    container_name: componente3-usuarios
+    ports:
+      - "127.0.0.1:8083:8083"
+    depends_on:
+      mysql-usuarios:
+        condition: service_healthy
+      redis-usuarios:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_started
+    environment:
+      # Dentro de la red de Docker se usan nombres de servicio, no localhost
+      MYSQL_HOST: mysql-usuarios
+      MYSQL_PORT: 3306
+      MYSQL_DATABASE: cinasee_users_db
+      MYSQL_USER: cinasee
+      MYSQL_PASSWORD: cinasee
+      REDIS_HOST: redis-usuarios
+      REDIS_PORT: 6379
+      # Mismo broker que los Componentes 2 y 4
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: guest
+      RABBITMQ_PASSWORD: guest
+      # El "iss" del token sigue siendo localhost para que lo validen los demás
+      JWT_ISSUER: http://localhost:8083/v1/iam
+    restart: unless-stopped
 
 # ==========================================
 # COMPONENTE 1: CARTELERA
@@ -156,3 +225,8 @@ volumes:
   postgres_reservas_data:
   postgres_analitica_data:
   rabbitmq_data:
+  # Reutilizan los volúmenes creados manualmente con docker run
+  mysql_usuarios_data:
+    name: cinasee-mysql-data
+  redis_usuarios_data:
+    name: cinasee-redis-data

@@ -1,0 +1,709 @@
+# Despliegue en Docker del stack CinAsee
+
+> Documento del **Componente 3 (Usuarios / IAM y Fidelización)**.
+> Fecha: 2026-11-08.
+>
+> Alcance: se han implementado **solo** los cambios del Componente 3 y se ha
+> añadido su bloque al `docker-compose.yml` global de forma **aditiva**. No se ha
+> modificado código, Dockerfile ni configuración de los Componentes 1, 2, 4 ni 5.
+> Todo lo que falla en esos componentes queda documentado aquí para que lo
+> corrijan sus responsables.
+
+---
+
+## 1. Resumen
+
+### Lo que ya funciona
+
+- El Componente 3 tiene `Dockerfile` multi-stage y `.dockerignore`.
+- El compose global incluye:
+  - `mysql-usuarios` (MySQL 8.4)
+  - `redis-usuarios` (Redis 7)
+  - `componente3-usuarios` (Spring Boot 4.1.2 / Java 21)
+- Los volúmenes creados manualmente se reutilizan:
+  - `cinasee-mysql-data`
+  - `cinasee-redis-data`
+- La imagen se construye correctamente:
+  - `docker compose build componente3-usuarios` → OK
+  - Imagen resultante: `cinasee-componente3-usuarios`
+
+### Lo que NO se ha tocado
+
+- `componente1-cartelera/**`
+- `componente2-reservas/**` (incluido su `docker-compose.yml` aislado)
+- `componente4-analitica/**`
+- `componente5-gateway/**`
+- `frontend-ui/**`
+- Los servicios `rabbitmq`, `mongodb-cartelera`, `componente1-cartelera`,
+  `postgres-reservas`, `componente2-reservas`, `postgres-analitica` y
+  `componente4-analitica` del compose global.
+
+### Consecuencia
+
+El Componente 3 funciona de forma aislada. **El stack completo no estará 100 %
+operativo** hasta que se apliquen las correcciones de la sección 6 en los
+Componentes 1, 2 y 4.
+
+---
+
+## 2. Arquitectura en Docker
+
+```text
+                         Red del compose (cinasee_default)
+┌─────────────────────────────────────────────────────────────────────────┐
+│                                                                         │
+│  componente3-usuarios :8083                                             │
+│      ├── mysql-usuarios:3306 ──► volumen cinasee-mysql-data            │
+│      ├── redis-usuarios:6379 ──► volumen cinasee-redis-data            │
+│      └── rabbitmq:5672        ──► exchange payment.exchange             │
+│                                                                         │
+│  componente2-reservas :8082 ──publica──► rabbitmq                       │
+│  componente4-analitica :8084 ──consume──► rabbitmq                      │
+│  componente1-cartelera :8081 ──MongoDB──► mongodb-cartelera             │
+│                                                                         │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+| Servicio | Imagen | Puerto host | Volumen |
+|---|---|---|---|
+| `mysql-usuarios` | `mysql:8.4` | `127.0.0.1:3306` | `cinasee-mysql-data` |
+| `redis-usuarios` | `redis:7-alpine` | `127.0.0.1:6379` | `cinasee-redis-data` |
+| `componente3-usuarios` | build local | `127.0.0.1:8083` | — |
+| `rabbitmq` | `rabbitmq:3-management-alpine` | `5672`, `15672` | `rabbitmq_data` |
+
+> Los puertos se publican solo en `127.0.0.1` para no exponer las bases de datos
+> a la red local.
+
+---
+
+## 3. Cambios realizados en el Componente 3
+
+### 3.1. `componente3-usuarios/Dockerfile`
+
+Build en dos etapas:
+
+1. **build**: `eclipse-temurin:21-jdk`, descarga dependencias con
+   `dependency:go-offline`, copia `openapi/` (necesario para el generador) y
+   `src/`, y empaqueta con `-DskipTests`.
+2. **run**: `eclipse-temurin:21-jre`, usuario no root `cinasee`,
+   `-XX:MaxRAMPercentage=75`.
+
+Detalles importantes:
+
+- Se copia `openapi/` **antes** de `src/` porque el plugin
+  `openapi-generator-maven-plugin` lee `openapi/componente_3.yaml` en
+  `generate-sources`.
+- Se normaliza `mvnw` de CRLF a LF (`sed -i 's/\r$//'`) para que funcione en
+  Linux aunque el repositorio se haya clonado en Windows.
+- Los tests no se ejecutan dentro de la imagen; se ejecutan aparte con
+  `.\mvnw.cmd test`.
+
+### 3.2. `componente3-usuarios/.dockerignore`
+
+Excluye `target/`, `docs/` y archivos de IDE. **No excluye `openapi/`**, porque
+el build lo necesita.
+
+### 3.3. `docker-compose.yml` global
+
+Se ha añadido, bajo el comentario `COMPONENTE 3: USUARIOS`:
+
+- `mysql-usuarios`
+- `redis-usuarios`
+- `componente3-usuarios`
+
+Y en `volumes:`:
+
+```yaml
+  mysql_usuarios_data:
+    name: cinasee-mysql-data
+  redis_usuarios_data:
+    name: cinasee-redis-data
+```
+
+El `name:` hace que Compose use exactamente los volúmenes creados con
+`docker run`, por lo que **los datos actuales se conservan**.
+
+Variables del Componente 3:
+
+| Variable | Valor en Docker | Uso |
+|---|---|---|
+| `MYSQL_HOST` | `mysql-usuarios` | Host interno de MySQL |
+| `MYSQL_PORT` | `3306` | Puerto interno |
+| `MYSQL_DATABASE` | `cinasee_users_db` | Base de datos |
+| `MYSQL_USER` | `cinasee` | Usuario de la app |
+| `MYSQL_PASSWORD` | `cinasee` | Contraseña |
+| `REDIS_HOST` | `redis-usuarios` | Host interno de Redis |
+| `REDIS_PORT` | `6379` | Puerto interno |
+| `RABBITMQ_HOST` | `rabbitmq` | Broker compartido |
+| `RABBITMQ_USER` / `RABBITMQ_PASSWORD` | `guest` / `guest` | Credenciales actuales del broker |
+| `JWT_ISSUER` | `http://localhost:8083/v1/iam` | Claim `iss` de los tokens |
+
+> `JWT_ISSUER` se mantiene en `localhost` a propósito: es el valor que validan
+> los Componentes 1, 2 y 4. El JWKS se descarga por la red interna con
+> `http://componente3-usuarios:8083/v1/iam/.well-known/jwks.json`.
+
+---
+
+## 4. Cómo arrancar solo el Componente 3
+
+### 4.1. Liberar los puertos de los contenedores manuales
+
+Los contenedores `cinasee-mysql` y `cinasee-redis` que creaste con `docker run`
+siguen ocupando `3306` y `6379`. Hay que pararlos y eliminarlos, pero **no** sus
+volúmenes:
+
+```powershell
+docker stop cinasee-mysql cinasee-redis
+docker rm cinasee-mysql cinasee-redis
+```
+
+Comprobar que los volúmenes siguen ahí:
+
+```powershell
+docker volume ls | Select-String "cinasee"
+```
+
+### 4.2. Construir y levantar
+
+```powershell
+docker compose config
+docker compose build componente3-usuarios
+docker compose up -d componente3-usuarios
+```
+
+`docker compose up -d componente3-usuarios` arranca también sus dependencias:
+
+- `mysql-usuarios`
+- `redis-usuarios`
+- `rabbitmq`
+
+No arranca los Componentes 1, 2 ni 4.
+
+### 4.3. Comprobar
+
+```powershell
+docker compose ps
+docker compose logs -f componente3-usuarios
+```
+
+Espera a ver algo como:
+
+```text
+Started Componente3UsuariosApplication
+Tomcat started on port 8083
+```
+
+Para salir del log: `Ctrl+C` (no para el contenedor).
+
+---
+
+## 5. Verificación funcional
+
+### 5.1. JWKS
+
+```powershell
+Invoke-RestMethod http://localhost:8083/v1/iam/.well-known/jwks.json
+```
+
+### 5.2. Registro y login
+
+```powershell
+$body = @{
+  email = "cliente@cinasee.com"
+  password = "Password123!"
+  fullName = "María Gómez"
+} | ConvertTo-Json
+
+Invoke-RestMethod -Method Post `
+  -Uri "http://localhost:8083/v1/iam/auth/register" `
+  -ContentType "application/json" -Body $body
+
+$login = @{
+  email = "cliente@cinasee.com"
+  password = "Password123!"
+} | ConvertTo-Json
+
+$token = (Invoke-RestMethod -Method Post `
+  -Uri "http://localhost:8083/v1/iam/auth/login" `
+  -ContentType "application/json" -Body $login).accessToken
+```
+
+### 5.3. MySQL
+
+```powershell
+docker exec -it cinasee-mysql-usuarios mysql -ucinasee -pcinasee cinasee_users_db `
+  -e "SHOW TABLES;"
+
+docker exec -it cinasee-mysql-usuarios mysql -ucinasee -pcinasee cinasee_users_db `
+  -e "SELECT id, email, full_name, role, loyalty_points FROM users;"
+```
+
+Deben existir:
+
+- `users`
+- `user_preferred_genres`
+- `purchase_history`
+
+### 5.4. Redis
+
+```powershell
+docker exec -it cinasee-redis-usuarios redis-cli ping
+# PONG
+```
+
+Ahora mismo no habrá claves: el código todavía no usa Redis.
+
+### 5.5. RabbitMQ
+
+Consola web: <http://localhost:15672> (`guest` / `guest`).
+
+Deben existir:
+
+- exchange `payment.exchange`
+- cola `user.payment.completed`
+- DLQ `user.payment.completed.dlq`
+- exchange `payment.exchange.dlx`
+
+Si el Componente 3 no puede autenticarse contra RabbitMQ, ver la sección 6.3.
+
+### 5.6. Perfil con JWT
+
+```powershell
+Invoke-RestMethod -Uri "http://localhost:8083/v1/iam/users/1" `
+  -Headers @{ Authorization = "Bearer $token" }
+```
+
+---
+
+## 6. Revisión del resto del proyecto
+
+### 6.1. Componente 1 — Cartelera
+
+#### 6.1.1. `issuer-uri` apunta a `localhost` dentro del contenedor
+
+**Archivo:** `componente1-cartelera/src/main/resources/application.yaml`
+
+```yaml
+spring:
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: http://localhost:8083/v1/iam
+```
+
+**Problema:** `issuer-uri` hace que Spring Security descargue la configuración
+OIDC al arrancar. Dentro del contenedor, `localhost:8083` es el propio
+Componente 1, no el Componente 3. El contenedor falla al iniciar.
+
+**Solución recomendada:** usar `jwk-set-uri` para descargar la clave pública por
+la red de Docker y mantener `issuer-uri` con el valor del claim `iss`.
+
+```yaml
+spring:
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          jwk-set-uri: ${JWT_JWK_SET_URI:http://localhost:8083/v1/iam/.well-known/jwks.json}
+          issuer-uri: ${JWT_ISSUER:http://localhost:8083/v1/iam}
+```
+
+Y en el compose:
+
+```yaml
+  componente1-cartelera:
+    environment:
+      SPRING_DATA_MONGODB_URI: mongodb://mongodb-cartelera:27017/cine_catalog_db
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://componente3-usuarios:8083/v1/iam/.well-known/jwks.json
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: http://localhost:8083/v1/iam
+```
+
+Con `jwk-set-uri` presente, Spring Boot no hace discovery al arrancar: descarga
+el JWKS de forma perezosa cuando llega el primer token.
+
+#### 6.1.2. El Dockerfile depende de un JAR ya compilado
+
+**Archivo:** `componente1-cartelera/Dockerfile`
+
+```dockerfile
+COPY target/*.jar app.jar
+```
+
+**Problema:** en un clon limpio, `target/` no existe y
+`docker compose build` falla.
+
+**Solución:** convertir a multi-stage como el Componente 2 o compilar antes:
+
+```powershell
+cd componente1-cartelera
+.\mvnw.cmd -DskipTests package
+```
+
+Se recomienda multi-stage:
+
+```dockerfile
+FROM eclipse-temurin:21-jdk AS build
+WORKDIR /workspace
+COPY .mvn/ .mvn/
+COPY mvnw pom.xml ./
+RUN sed -i 's/\r$//' mvnw && chmod +x mvnw && ./mvnw -B -q dependency:go-offline
+COPY src/ src/
+RUN ./mvnw -B -q -DskipTests package
+
+FROM eclipse-temurin:21-jre
+WORKDIR /app
+RUN groupadd --system cinasee && useradd --system --gid cinasee cinasee
+COPY --from=build /workspace/target/componente1-cartelera-*.jar /app/app.jar
+USER cinasee
+EXPOSE 8081
+ENTRYPOINT ["java", "-XX:MaxRAMPercentage=75", "-jar", "/app/app.jar"]
+```
+
+#### 6.1.3. Endpoints protegidos que consume el Componente 4
+
+`GET /movies/{id}`, `GET /rooms` y `GET /rooms/{id}` requieren JWT. El
+Componente 2 lo reenvía con `ForwardJwtFeignConfig`, pero el Componente 4 no.
+Ver sección 6.2.3.
+
+---
+
+### 6.2. Componente 4 — Analítica
+
+#### 6.2.1. URL de Usuarios incorrecta
+
+**Archivo:** `componente4-analitica/src/main/java/es/cineasee/analitica/clients/UsuariosClient.java`
+
+```java
+@FeignClient(name = "usuarios-service",
+             url = "${services.usuarios.url:http://localhost:8083/api/v1}")
+```
+
+**Problema:** el context-path del Componente 3 es `/v1/iam`, no `/api/v1`.
+
+**Solución:**
+
+```java
+@FeignClient(name = "usuarios-service",
+             url = "${services.usuarios.url:http://localhost:8083/v1/iam}")
+```
+
+Y en el compose:
+
+```yaml
+      USUARIOS_SERVICE_URL: http://componente3-usuarios:8083/v1/iam
+```
+
+#### 6.2.2. Variable de RabbitMQ distinta
+
+**Archivo:** `componente4-analitica/src/main/resources/application.yml`
+
+```yaml
+  rabbitmq:
+    username: ${RABBITMQ_USERNAME:guest}
+```
+
+Los Componentes 2 y 3 usan `RABBITMQ_USER`. Si se cambia el usuario del broker,
+el Componente 4 seguirá intentando `guest`.
+
+**Solución:** unificar en `RABBITMQ_USER` o definir ambas variables en el
+compose:
+
+```yaml
+      RABBITMQ_USERNAME: cinasee
+      RABBITMQ_PASSWORD: cinasee
+```
+
+#### 6.2.3. Llamadas al Componente 1 y al Componente 3 sin JWT
+
+**Problema:** `CarteleraClient` y `UsuariosClient` del Componente 4 no tienen
+interceptor Feign. Los endpoints de Cartelera y Usuarios exigen JWT, así que
+responden `401`. `AnalyticsService` captura la excepción y devuelve datos de
+respaldo o un `404` en `/recommendations`.
+
+**Solución:** copiar el patrón del Componente 2.
+
+1. Añadir dependencias al `pom.xml`:
+
+```xml
+<dependency>
+  <groupId>org.springframework.boot</groupId>
+  <artifactId>spring-boot-starter-security</artifactId>
+</dependency>
+<dependency>
+  <groupId>org.springframework.boot</groupId>
+  <artifactId>spring-boot-starter-oauth2-resource-server</artifactId>
+</dependency>
+```
+
+2. Crear `ForwardJwtFeignConfig` (igual que en el Componente 2) y aplicarlo:
+
+```java
+@FeignClient(name = "cartelera-service",
+             url = "${services.cartelera.url}",
+             configuration = ForwardJwtFeignConfig.class)
+public interface CarteleraClient { ... }
+
+@FeignClient(name = "usuarios-service",
+             url = "${services.usuarios.url}",
+             configuration = ForwardJwtFeignConfig.class)
+public interface UsuariosClient { ... }
+```
+
+3. Añadir un `SecurityConfig` con `oauth2ResourceServer(jwt)` y proteger los
+   endpoints que correspondan. Como mínimo:
+
+```yaml
+spring:
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          jwk-set-uri: ${JWT_JWK_SET_URI:http://localhost:8083/v1/iam/.well-known/jwks.json}
+          issuer-uri: ${JWT_ISSUER:http://localhost:8083/v1/iam}
+```
+
+Y en el compose:
+
+```yaml
+      JWT_JWK_SET_URI: http://componente3-usuarios:8083/v1/iam/.well-known/jwks.json
+      JWT_ISSUER: http://localhost:8083/v1/iam
+```
+
+> Sin este cambio, `/recommendations/users/{id}` no funcionará aunque el
+> Componente 3 esté levantado.
+
+#### 6.2.4. Dockerfile dependiente de `target/*.jar`
+
+Igual que el Componente 1: convertir a multi-stage o compilar antes.
+
+#### 6.2.5. PostgreSQL sin healthcheck
+
+**Archivo:** `docker-compose.yml` (servicio `postgres-analitica`)
+
+**Solución:**
+
+```yaml
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d cine_analytics_dw"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+```
+
+Y en `componente4-analitica`:
+
+```yaml
+    depends_on:
+      postgres-analitica:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      componente3-usuarios:
+        condition: service_started
+```
+
+#### 6.2.6. Contrato del evento
+
+El Componente 2 publica `totalAmount` como `BigDecimal` y el Componente 4 lo
+espera como `Double`. Jackson lo convierte sin problema, pero conviene
+homologarlo para evitar sorpresas si se activa una validación estricta.
+
+---
+
+### 6.3. RabbitMQ
+
+#### 6.3.1. `guest` restringido a loopback
+
+RabbitMQ limita el usuario `guest` a conexiones desde `localhost`. Dentro de
+Docker, los demás contenedores no llegan como `localhost`, así que puede
+aparecer:
+
+```text
+ACCESS_REFUSED - Login was refused using authentication mechanism PLAIN
+```
+
+**Solución recomendada:** crear un usuario dedicado en el servicio compartido:
+
+```yaml
+  rabbitmq:
+    environment:
+      RABBITMQ_DEFAULT_USER: cinasee
+      RABBITMQ_DEFAULT_PASS: cinasee
+```
+
+Y actualizar los tres consumidores/productores:
+
+- Componente 2: `RABBITMQ_USER` / `RABBITMQ_PASSWORD`
+- Componente 3: `RABBITMQ_USER` / `RABBITMQ_PASSWORD`
+- Componente 4: `RABBITMQ_USERNAME` / `RABBITMQ_PASSWORD`
+
+Si no se puede cambiar el broker, la alternativa es desactivar la restricción:
+
+```yaml
+      RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS: "-rabbitmq loopback_users.guest false"
+```
+
+No se recomienda en producción.
+
+#### 6.3.2. Versiones distintas
+
+- Compose global: `rabbitmq:3-management-alpine`
+- Compose aislado del Componente 2: `rabbitmq:4-management`
+
+**Solución:** unificar en `rabbitmq:4-management` (o en la misma versión que
+use el equipo) para que las colas, argumentos y consola se comporten igual.
+
+#### 6.3.3. Dos brokers a la vez
+
+El compose global y el compose aislado del Componente 2 publican los mismos
+puertos (`5672`, `15672`, `8082`, `5433`). No deben ejecutarse a la vez.
+
+- Stack completo: `docker compose up -d` en la raíz.
+- Pruebas aisladas del Componente 2: `docker compose up -d` en
+  `componente2-reservas/`.
+
+---
+
+### 6.4. Compose global: mejoras generales
+
+| Problema | Corrección |
+|---|---|
+| `version: '3.8'` obsoleto | Eliminar la línea |
+| Puertos en `0.0.0.0` | Usar `127.0.0.1:puerto:puerto` |
+| `depends_on` solo con `service_started` | Añadir healthchecks y `condition: service_healthy` |
+| Sin `restart` | Añadir `restart: unless-stopped` |
+| Mongo sin healthcheck | `mongosh --quiet --eval "db.adminCommand('ping')"` |
+| RabbitMQ sin healthcheck | `rabbitmq-diagnostics -q ping` |
+| PostgreSQL de analítica sin healthcheck | `pg_isready -U postgres -d cine_analytics_dw` |
+
+Ejemplo de healthcheck de Mongo:
+
+```yaml
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+```
+
+---
+
+### 6.5. Pendientes del Componente 3
+
+| Tema | Estado | Recomendación |
+|---|---|---|
+| Actuator | `SecurityConfig` permite `/actuator/health`, pero no está la dependencia | Añadir `spring-boot-starter-actuator` y usarlo en el healthcheck |
+| Clave RSA | Se genera en cada arranque | Persistir en keystore/KMS; si no, reiniciar invalida los tokens |
+| `ddl-auto` | `update` | Migrar a Flyway con `validate` para despliegues reproducibles |
+| Redis | Configurado pero sin uso | Implementar revocación de JWT por `jti`, caché o sesiones |
+| Discovery OIDC | `jwks_uri` apunta a `localhost` | Usar `jwk-set-uri` en los demás servicios; no usar discovery dentro de Docker |
+| Tests en imagen | Se compilan con `-DskipTests` | Ejecutar `.\mvnw.cmd test` en CI antes de construir |
+
+---
+
+### 6.6. Fuera de alcance
+
+- **Frontend:** se está desarrollando en otra rama. No tiene Dockerfile ni
+  llamadas reales a la API en esta rama.
+- **API Gateway (Componente 5):** solo tiene `spring.application.name`; no hay
+  rutas ni seguridad implementadas. No se containeriza todavía.
+
+---
+
+## 7. Matriz de responsabilidades
+
+| Elemento | Responsable | Estado |
+|---|---|---|
+| MySQL, Redis, Comp. 3, Dockerfile y compose del Comp. 3 | Nosotros | Hecho |
+| Comp. 1: JWT, Dockerfile, healthcheck de Mongo | Compañero/a de Cartelera | Pendiente |
+| Comp. 2: usuario RabbitMQ, healthcheck de RabbitMQ | Compañero/a de Reservas | Pendiente |
+| Comp. 4: URL de Usuarios, JWT, Dockerfile, healthcheck | Compañero/a de Analítica | Pendiente |
+| RabbitMQ compartido: usuario dedicado y versión | Equipo | Pendiente |
+| Frontend | Otra rama | Fuera de alcance |
+| Gateway | Sin implementar | Fuera de alcance |
+
+---
+
+## 8. Orden recomendado para completar el stack
+
+1. Aplicar las correcciones del Componente 1 (sección 6.1).
+2. Aplicar las correcciones del Componente 4 (sección 6.2).
+3. Unificar el usuario y la versión de RabbitMQ (sección 6.3).
+4. Añadir healthchecks y `depends_on` en el compose (sección 6.4).
+5. Ejecutar:
+
+```powershell
+docker compose config
+docker compose build
+docker compose up -d
+docker compose ps
+```
+
+6. Revisar logs de cada servicio:
+
+```powershell
+docker compose logs -f componente1-cartelera
+docker compose logs -f componente2-reservas
+docker compose logs -f componente3-usuarios
+docker compose logs -f componente4-analitica
+```
+
+---
+
+## 9. Pruebas de integración finales
+
+### 9.1. Flujo de usuario
+
+1. Registrar un usuario en el Componente 3.
+2. Hacer login y obtener el JWT.
+3. Consultar el perfil con el JWT.
+4. Crear una reserva en el Componente 2 (con el JWT).
+5. Pagar la reserva.
+6. Comprobar:
+   - puntos actualizados en el Componente 3,
+   - fila en `purchase_history`,
+   - fila en la tabla de analítica del Componente 4,
+   - mensajes en las colas de RabbitMQ.
+
+### 9.2. Evento `PaymentCompleted` manual
+
+Publicar en `payment.exchange`, routing key `payment.completed`:
+
+```json
+{
+  "eventId": "prueba-1",
+  "reservationId": 999001,
+  "userId": 1,
+  "movieId": 1024,
+  "amount": 18.50,
+  "currency": "EUR",
+  "purchaseDate": "2026-09-20T18:30:00Z",
+  "occurredAt": "2026-09-20T18:30:05Z"
+}
+```
+
+Comprobar en los logs del Componente 3:
+
+```text
+Reserva 999001: +18 puntos al usuario 1 (total 18)
+```
+
+Y en MySQL:
+
+```powershell
+docker exec -it cinasee-mysql-usuarios mysql -ucinasee -pcinasee cinasee_users_db `
+  -e "SELECT * FROM purchase_history;"
+```
+
+---
+
+## 10. Limitaciones conocidas
+
+- El Componente 3 no usa Redis todavía; está preparado para el futuro.
+- La clave RSA se regenera en cada arranque.
+- `ddl-auto: update` no es apto para producción.
+- La DLQ no tiene reintento automático ni alerta.
+- El stack completo depende de las correcciones pendientes de los Componentes
+  1 y 4.
+- El frontend y el gateway quedan fuera de este despliegue.
