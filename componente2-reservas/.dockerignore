@@ -1,0 +1,9 @@
+target/
+.idea/
+.vscode/
+*.iml
+docs/
+wiremock/
+scripts/
+http/
+docker-compose.yml

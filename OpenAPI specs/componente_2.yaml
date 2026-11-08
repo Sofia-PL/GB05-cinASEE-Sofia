@@ -2,66 +2,78 @@ openapi: 3.0.3
 
 info:
   title: API de Reservas - CinAsee
-  version: 1.0.1
+  version: 1.1.0
   description: >
     API responsable del Componente 2: gestión de reservas, bloqueo de butacas y pagos.
 
-    El microservicio de Reservas es propietario del flujo de compra de entradas. 
-    Para realizar estas operaciones, se comunica con otros microservicios de la arquitectura:
+    El microservicio de Reservas es propietario del flujo de compra de entradas.
+    Para realizar estas operaciones, se comunica con otros microservicios de la arquitectura
+    (nunca accede a sus bases de datos):
 
-    - Cartelera (Componente 1): consulta si una sesión existe, está "A la venta" y no se solapa.
+    - Cartelera (Componente 1): consulta si una sesión existe, está "A la venta" y las dimensiones de la sala.
     - Usuarios (Componente 3): consulta el rol del usuario y sus puntos de fidelización.
-    - Pasarelas externas: procesa cobros (Redsýs).
-    - También emite el evento asíncrono 'PaymentCompleted' tras la confirmación de compra exitosa.
+    - Pasarelas externas: procesa cobros y devoluciones (Redsýs).
+    - Emite el evento asíncrono 'PaymentCompleted' (RabbitMQ) tras una compra confirmada
+      y 'PaymentRefunded' tras una devolución.
+    - Expone datos agregados de ventas que consume el Componente 4 (Analítica).
+
+    Cambios respecto a la versión 1.0.1: se añaden GET/DELETE de una reserva, el listado
+    "mis reservas", el mapa de butacas ocupadas, la validación de entradas en puerta y los
+    endpoints /reservations/stats y /reservations/box-office-data que ya referenciaba la
+    especificación del Componente 4. Se añaden los estados EXPIRED y REFUNDED.
 
 servers:
-  - url: http://api.cinasee.com/v1/reservations
-    description: Entorno de producción
+  - url: http://localhost:8082/v1
+    description: Servidor de desarrollo (context-path /v1)
+  - url: http://api.cinasee.com/v1
+    description: Entorno de producción (a través del API Gateway)
 
 # --- Definición de seguridad global para proteger la API de reservas con token JWT ---
+# Los tokens los emite el Componente 3 (RS256) y aquí se validan con su JWKS.
+# Roles (claim "role"): VISITANTE, CLIENTE_REGISTRADO, STAFF_TAQUILLA, ADMIN.
 security:
   - bearerAuth: []
 
-# ============================================================
-# TAGS
-# ============================================================
 tags:
   - name: Reservations
     description: Operaciones relacionadas con el proceso de compra y bloqueo de butacas
+  - name: Tickets
+    description: Validación de entradas en la puerta de sala
+  - name: Analytics
+    description: Datos agregados de ventas consumidos por el Componente 4
 
 paths:
 
   # ==========================================================
-  # PATH 1: CREACIÓN DE UNA RESERVA (BLOQUEO DE BUTACAS)
+  # PATH 1: CREACIÓN DE UNA RESERVA (BLOQUEO DE BUTACAS) Y LISTADO
   # ==========================================================
-  # Aquí se refleja la necesidad de bloquear concurrentemente
-  # las butacas y de comunicarse con el Componente 1 (Cartelera)
-  # y el Componente 3 (Usuarios)
-  # ==========================================================
-
   /reservations:
     post:
-      tags:
-        - Reservations
-
+      tags: [Reservations]
       summary: Iniciar reserva y bloquear butacas
-
       description: >
-        Crea un nuevo intento de reserva, aplicando un bloqueo concurrente 
+        Crea un nuevo intento de reserva, aplicando un bloqueo concurrente
         de butacas con un TTL (Time To Live) de 10 minutos para evitar la doble compra.
 
         Antes de bloquear las butacas, este servicio interactúa con:
-        
+
         1. Microservicio de Cartelera: COMUNICACIÓN SÍNCRONA DE TIPO CONSULTA
-           Reservas -> Cartelera -> GET /shows/{showId}
-           (Verifica que el pase está en estado "A la venta" y su aforo disponible).
-           
+           Reservas -> Cartelera -> GET /sessions/{showId}
+           (Verifica que el pase está en estado "A_LA_VENTA", que no ha empezado y su precio base).
+           Reservas -> Cartelera -> GET /rooms/{roomId}
+           (Verifica que las butacas existen en el mapa de la sala).
+
         2. Microservicio de Usuarios: COMUNICACIÓN SÍNCRONA DE TIPO CONSULTA
            Reservas -> Usuarios -> GET /users/{userId}
-           (Verifica perfil de fidelización para descuentos o si es cliente/invitado).
+           (Verifica perfil de fidelización para descuentos). No se llama en compras de invitado.
 
+        Reglas de identidad: un VISITANTE no puede indicar userId y debe indicar guestEmail;
+        un CLIENTE_REGISTRADO solo puede reservar para sí mismo (si omite userId se usa el de su
+        token); STAFF_TAQUILLA/ADMIN pueden reservar para cualquier usuario o como venta anónima.
+
+        Tarifas: precio de la sesión; 20 % de descuento el día del espectador (miércoles) o 10 %
+        para clientes con 500 puntos o más. Los descuentos no se acumulan (se aplica el mayor).
       operationId: createReservation
-
       requestBody:
         required: true
         description: Datos necesarios para iniciar el bloqueo de asientos.
@@ -77,85 +89,168 @@ paths:
                   column: 12
                 - row: 8
                   column: 13
-
       responses:
         '201':
-          description: >
-            Reserva iniciada y butacas bloqueadas temporalmente (10 min).
+          description: Reserva iniciada y butacas bloqueadas temporalmente (10 min).
+          headers:
+            Location:
+              description: URL de la reserva creada.
+              schema:
+                type: string
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Reservation'
-              example:
-                id: 8901
-                showId: 1024
-                userId: 5590
-                totalAmount: 18.50
-                status: PENDING_PAYMENT
-                expiresAt: "2026-10-08T12:04:36Z"
-
         '400':
           description: >
-            Petición incorrecta. Ej: alguna de las butacas indicadas no 
-            existe en el mapa de esta sala.
-
+            Petición incorrecta. Ej: alguna de las butacas indicadas no existe en el mapa
+            de esta sala, está repetida, hay más de 10, o falta guestEmail en una compra de invitado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: Falta el token JWT o no es válido.
+        '403':
+          description: Se intenta reservar a nombre de otro usuario.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
         '404':
           description: >
-            El identificador de la sesión (showId) o el usuario (userId) no existen. 
+            El identificador de la sesión (showId) o el usuario (userId) no existen.
             Error derivado de las consultas a Cartelera o Usuarios.
-
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
         '409':
           description: >
-            Conflicto de concurrencia: una o varias de las butacas solicitadas 
-            ya están bloqueadas o vendidas a otro usuario.
-
+            Conflicto: una o varias de las butacas solicitadas ya están bloqueadas o vendidas
+            a otro usuario (code SEATS_UNAVAILABLE, details con las butacas "fila-columna"),
+            o la sesión no está a la venta / ya ha comenzado (SHOW_NOT_ON_SALE, SHOW_ALREADY_STARTED).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+              example:
+                timestamp: "2026-10-08T12:00:00Z"
+                status: 409
+                code: SEATS_UNAVAILABLE
+                message: "Butacas no disponibles: 8-12"
+                details: ["8-12"]
+                path: /v1/reservations
         '503':
           description: >
-            Los microservicios dependientes (Cartelera o Usuarios) no 
+            Los microservicios dependientes (Cartelera o Usuarios) no
             están disponibles para validar la operación.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
 
+    get:
+      tags: [Reservations]
+      summary: Listar mis reservas ("mis entradas")
+      description: >
+        Cliente registrado: sus reservas. Invitado: las creadas con su token.
+        STAFF_TAQUILLA/ADMIN: las del usuario indicado en userId (o las que ha creado).
+      operationId: listReservations
+      parameters:
+        - name: userId
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Listado de reservas, de la más reciente a la más antigua.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Reservation'
+        '403':
+          description: Un cliente intenta consultar las reservas de otro usuario.
 
   # ==========================================================
-  # PATH 2: PAGO DE LA RESERVA Y EMISIÓN DE ENTRADAS
+  # PATH 2: CONSULTA Y CANCELACIÓN DE UNA RESERVA
   # ==========================================================
-  # Este endpoint demuestra una comunicación de tipo COMANDO
-  # hacia la pasarela, y la generación asíncrona de recursos.
-  # ==========================================================
+  /reservations/{reservationId}:
+    parameters:
+      - $ref: '#/components/parameters/ReservationId'
+    get:
+      tags: [Reservations]
+      summary: Consultar una reserva
+      description: Solo el propietario o STAFF_TAQUILLA/ADMIN.
+      operationId: getReservation
+      responses:
+        '200':
+          description: Detalle de la reserva (estado, caducidad y entradas si está pagada).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Reservation'
+        '403':
+          description: La reserva pertenece a otro usuario.
+        '404':
+          description: La reserva indicada no existe.
+    delete:
+      tags: [Reservations]
+      summary: Cancelar o devolver una reserva
+      description: >
+        - PENDING_PAYMENT → CANCELLED: libera las butacas al instante.
 
+        - CONFIRMED → REFUNDED: solo si la sesión no ha comenzado y ninguna entrada se ha
+          validado. Se ordena la devolución a la pasarela (COMUNICACIÓN SÍNCRONA tipo COMANDO
+          Reservas -> PasarelaExterna -> POST /refund), se liberan las butacas y se emite el
+          evento asíncrono 'PaymentRefunded'.
+      operationId: cancelReservation
+      responses:
+        '200':
+          description: Reserva cancelada o devuelta.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Reservation'
+        '403':
+          description: La reserva pertenece a otro usuario.
+        '404':
+          description: La reserva indicada no existe.
+        '409':
+          description: La reserva ya está cerrada, la sesión ha comenzado o hay entradas usadas.
+        '503':
+          description: La pasarela de pagos no está disponible para la devolución.
+
+  # ==========================================================
+  # PATH 3: PAGO DE LA RESERVA Y EMISIÓN DE ENTRADAS
+  # ==========================================================
   /reservations/{reservationId}/payment:
     post:
-      tags:
-        - Reservations
-
+      tags: [Reservations]
       summary: Procesar pago y confirmar reserva
-
       description: >
         Inicia el cobro seguro de una reserva previamente bloqueada.
 
         El microservicio invoca la pasarela externa configurada (Redsýs).
         Se trata de una COMUNICACIÓN SÍNCRONA de tipo COMANDO:
-        
+
         Reservas -> PasarelaExterna -> POST /charge
 
         Una vez que el pago se procesa exitosamente:
         1. Se actualiza el estado de la reserva a CONFIRMED.
-        2. Se emiten las entradas con identificador único y QR/PKPass.
-        3. Se emite el EVENTO DE DOMINIO asíncrono 'PaymentCompleted' para 
-           que el Componente 4 (Métricas) actualice la recaudación diaria y 
-           el Componente 3 (Usuarios) sume puntos al monedero de fidelidad del cliente.
-
+        2. Se emiten las entradas con identificador único (contenido del QR/PKPass).
+        3. Se emite el EVENTO DE DOMINIO asíncrono 'PaymentCompleted' (RabbitMQ,
+           exchange payment.exchange, routing key payment.completed) para que el
+           Componente 4 (Métricas) actualice la recaudación y el Componente 3 (Usuarios)
+           sume puntos al monedero. Se usa el patrón Transactional Outbox: el evento se
+           guarda en la misma transacción que la confirmación y se publica después.
       operationId: payReservation
-
       parameters:
-        - name: reservationId
-          in: path
-          required: true
-          description: Identificador único de la reserva a pagar.
-          schema:
-            type: integer
-            format: int64
-          example: 8901
-
+        - $ref: '#/components/parameters/ReservationId'
       requestBody:
         required: true
         description: Método de pago seleccionado (RedSýs) y token seguro.
@@ -163,7 +258,9 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/PaymentRequest'
-
+            example:
+              gateway: REDSYS
+              paymentToken: tok_visa_4242
       responses:
         '200':
           description: Pago procesado correctamente y entradas emitidas.
@@ -171,51 +268,175 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TicketConfirmation'
-
         '400':
-          description: El TTL de 10 minutos del bloqueo ha expirado.
-          
+          description: El TTL de 10 minutos del bloqueo ha expirado (code RESERVATION_EXPIRED).
         '402':
-          description: Pago rechazado por la entidad bancaria o fondos insuficientes.
-
+          description: Pago rechazado por la entidad bancaria o fondos insuficientes. La reserva sigue pendiente.
+        '403':
+          description: La reserva pertenece a otro usuario.
         '404':
           description: La reserva indicada no existe.
-
+        '409':
+          description: La reserva ya está pagada, cancelada o devuelta.
         '503':
-          description: 
+          description: >
             La pasarela de pagos externa (Redsýs) no está disponible en este momento.
-            El pago no ha podido ser procesado.   
+            El pago no ha podido ser procesado.
+
+  # ==========================================================
+  # PATH 4: MAPA DE BUTACAS OCUPADAS (público)
+  # ==========================================================
+  /reservations/shows/{showId}/seats:
+    get:
+      tags: [Reservations]
+      summary: Butacas ocupadas de una sesión
+      description: >
+        Devuelve las butacas bloqueadas (HELD) o vendidas (SOLD) de una sesión para pintar
+        el mapa interactivo. Las dimensiones de la sala se obtienen del Componente 1.
+      operationId: getSeatMap
+      security: []
+      parameters:
+        - name: showId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Butacas ocupadas (lo que no aparece está libre).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SeatMap'
+
+  # ==========================================================
+  # PATH 5: VALIDACIÓN DE ENTRADAS EN PUERTA
+  # ==========================================================
+  /reservations/tickets/{ticketCode}/check-in:
+    post:
+      tags: [Tickets]
+      summary: Validar una entrada en la puerta de sala
+      description: Solo STAFF_TAQUILLA y ADMIN. Cada entrada solo puede validarse una vez.
+      operationId: checkInTicket
+      parameters:
+        - name: ticketCode
+          in: path
+          required: true
+          schema:
+            type: string
+          example: QR-8901-8-12-K7M2QX9P
+      responses:
+        '200':
+          description: Entrada válida; se registra el acceso.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CheckIn'
+        '403':
+          description: El rol no permite validar entradas.
+        '404':
+          description: La entrada no existe.
+        '409':
+          description: La entrada ya se usó o su reserva no está confirmada.
+
+  # ==========================================================
+  # PATH 6: DATOS PARA ANALÍTICA (Componente 4)
+  # ==========================================================
+  /reservations/stats:
+    get:
+      tags: [Analytics]
+      summary: Entradas vendidas por sesión
+      description: >
+        Consumido de forma síncrona por el Componente 4:
+        Analytics -> Reservas -> GET /reservations/stats.
+        Solo cuenta reservas CONFIRMED. Analítica calcula la ocupación dividiendo
+        ticketsSold entre el aforo de la sala (Componente 1). Solo STAFF_TAQUILLA/ADMIN.
+      operationId: getReservationStats
+      parameters:
+        - { name: showId, in: query, required: false, schema: { type: integer, format: int64 } }
+        - { name: roomId, in: query, required: false, schema: { type: integer, format: int64 } }
+        - { name: from, in: query, required: false, description: "Fecha mínima de la sesión (YYYY-MM-DD, UTC, inclusiva)", schema: { type: string, format: date } }
+        - { name: to, in: query, required: false, description: "Fecha máxima de la sesión (YYYY-MM-DD, UTC, inclusiva)", schema: { type: string, format: date } }
+      responses:
+        '200':
+          description: Una fila por sesión.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ShowStats'
+        '400':
+          description: Rango de fechas inválido.
+        '403':
+          description: Rol no autorizado.
+
+  /reservations/box-office-data:
+    get:
+      tags: [Analytics]
+      summary: Datos de taquilla por película
+      description: >
+        Consumido de forma síncrona por el Componente 4:
+        Analytics -> Reservas -> GET /reservations/box-office-data.
+        Agrupa por película las reservas CONFIRMED pagadas en el periodo. El filtrado por
+        distribuidora lo hace Analítica con los datos del Componente 1. Solo STAFF_TAQUILLA/ADMIN.
+      operationId: getBoxOfficeData
+      parameters:
+        - { name: startDate, in: query, required: true, schema: { type: string, format: date }, example: "2026-10-01" }
+        - { name: endDate, in: query, required: true, schema: { type: string, format: date }, example: "2026-10-07" }
+        - { name: movieId, in: query, required: false, schema: { type: integer, format: int64 } }
+      responses:
+        '200':
+          description: Ventas por película en el periodo.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BoxOfficeData'
+        '400':
+          description: Fechas inválidas o rango superior a 366 días.
+        '403':
+          description: Rol no autorizado.
 
 components:
 
+  parameters:
+    ReservationId:
+      name: reservationId
+      in: path
+      required: true
+      description: Identificador único de la reserva.
+      schema:
+        type: integer
+        format: int64
+      example: 8901
+
   schemas:
 
-    # ========================================================
-    # SCHEMA PARA CREAR RESERVA
-    # ========================================================
     CreateReservationRequest:
       type: object
-      required:
-        - showId
-        - seats
+      required: [showId, seats]
       properties:
         showId:
           type: integer
           format: int64
           description: >
-            Identificador del pase/sesión. Pertenece al Componente 1 (Cartelera) 
-            y es utilizado por Reservas para verificar vigencia y tarifas base 
-            (día del espectador, 3D, IMAX).
+            Identificador del pase/sesión. Pertenece al Componente 1 (Cartelera)
+            y es utilizado por Reservas para verificar vigencia y tarifa base.
           example: 1024
-
         userId:
           type: integer
           format: int64
           description: >
             Identificador del cliente autenticado. Pertenece al Componente 3 (Usuarios).
-            Si es nulo, se asume el rol de "visitante no autenticado".
+            Si es nulo, se usa el del token (cliente registrado) o se asume compra de invitado.
           example: 5590
-
+        guestEmail:
+          type: string
+          format: email
+          maxLength: 150
+          description: Correo al que se vincula una compra de invitado (obligatorio con rol VISITANTE).
+          example: invitado@email.com
         seats:
           type: array
           minItems: 1
@@ -226,26 +447,22 @@ components:
 
     SeatSelection:
       type: object
-      required:
-        - row
-        - column
+      required: [row, column]
       properties:
         row:
           type: integer
-          minimum: 1 # Restricción para evitar números de fila negativos o cero 
+          minimum: 1
           description: Fila de la butaca elegida.
           example: 8
         column:
           type: integer
-          minimum: 1 # Restricción para evitar números de columna negativos o cero
+          minimum: 1
           description: Columna de la butaca elegida.
           example: 12
 
     PaymentRequest:
       type: object
-      required:
-        - gateway
-        - paymentToken
+      required: [gateway, paymentToken]
       properties:
         gateway:
           type: string
@@ -253,6 +470,7 @@ components:
           description: Pasarela externa para que el cliente pueda procesar la transacción.
         paymentToken:
           type: string
+          maxLength: 255
           description: Token de pago generado por el frontend tras la tokenización de la tarjeta.
 
     Reservation:
@@ -268,27 +486,76 @@ components:
           format: int64
           description: Identificador de la sesión. Pertenece al Componente 1 (Cartelera).
           example: 1024
+        movieId:
+          type: integer
+          format: int64
+          description: Película de la sesión (copia del dato de Cartelera).
+          example: 101
+        roomId:
+          type: integer
+          format: int64
+          description: Sala de la sesión (copia del dato de Cartelera).
+          example: 1
+        showStartTime:
+          type: string
+          format: date-time
+          example: "2026-10-16T18:30:00Z"
         userId:
           type: integer
           format: int64
-          description: Identificador del cliente. Pertenece al Componente 3 (Usuarios).
+          nullable: true
+          description: Identificador del cliente. Pertenece al Componente 3 (Usuarios). Nulo en compras de invitado.
           example: 5590
+        guestEmail:
+          type: string
+          nullable: true
+        unitPrice:
+          type: number
+          format: float
+          minimum: 0
+          example: 9.25
         totalAmount:
           type: number
           format: float
-          minimum: 0 # Restricción para asegurar que el importe total de la reserva no sea negativo 
+          minimum: 0
           description: Importe total de la reserva a cobrar.
           example: 18.50
+        currency:
+          type: string
+          example: EUR
+        discountApplied:
+          type: string
+          enum: [NONE, SPECTATOR_DAY, LOYALTY]
         status:
           type: string
-          enum: [PENDING_PAYMENT, CONFIRMED, CANCELLED]
+          enum: [PENDING_PAYMENT, CONFIRMED, CANCELLED, EXPIRED, REFUNDED]
           description: Estado actual del ciclo de vida de la reserva.
-          example: "PENDING_PAYMENT"
+          example: PENDING_PAYMENT
+        createdAt:
+          type: string
+          format: date-time
         expiresAt:
           type: string
           format: date-time
           description: Marca de tiempo exacta (TTL de 10 min) en la que el bloqueo caduca.
           example: "2026-10-08T12:04:36Z"
+        paidAt:
+          type: string
+          format: date-time
+          nullable: true
+        seatCount:
+          type: integer
+          example: 2
+        seats:
+          type: array
+          description: Butacas de la reserva (vacío si la reserva está cerrada).
+          items:
+            type: object
+            properties:
+              row: { type: integer, example: 8 }
+              column: { type: integer, example: 12 }
+              price: { type: number, format: float, example: 9.25 }
+              ticketCode: { type: string, nullable: true, example: "QR-8901-8-12-K7M2QX9P" }
 
     TicketConfirmation:
       type: object
@@ -296,20 +563,93 @@ components:
         reservationId:
           type: integer
           format: int64
-          description: Identificador de la reserva pagada.
           example: 8901
         status:
           type: string
-          description: Estado final del proceso.
           example: CONFIRMED
+        totalAmount:
+          type: number
+          format: float
+          example: 18.50
+        currency:
+          type: string
+          example: EUR
+        paymentReference:
+          type: string
+          description: Identificador de la transacción en la pasarela.
         tickets:
           type: array
-          description: Listado de entradas generadas, incluyendo el identificador para el código QR/PKPass.
+          description: Entradas generadas (una por butaca), contenido del código QR/PKPass.
           items:
             type: string
-            example: "QR-8901-8-12-XYZ"
+            example: "QR-8901-8-12-K7M2QX9P"
 
-# --- Configuración del esquema de seguridad JWT para el componente de Reservas ---
+    SeatMap:
+      type: object
+      properties:
+        showId: { type: integer, format: int64 }
+        occupiedSeats:
+          type: array
+          items:
+            type: object
+            properties:
+              row: { type: integer }
+              column: { type: integer }
+              status: { type: string, enum: [HELD, SOLD] }
+
+    CheckIn:
+      type: object
+      properties:
+        ticketCode: { type: string }
+        reservationId: { type: integer, format: int64 }
+        showId: { type: integer, format: int64 }
+        roomId: { type: integer, format: int64 }
+        row: { type: integer }
+        column: { type: integer }
+        showStartTime: { type: string, format: date-time }
+        checkedInAt: { type: string, format: date-time }
+
+    ShowStats:
+      type: object
+      properties:
+        showId: { type: integer, format: int64 }
+        movieId: { type: integer, format: int64 }
+        roomId: { type: integer, format: int64 }
+        showStartTime: { type: string, format: date-time }
+        ticketsSold: { type: integer, example: 160 }
+        reservations: { type: integer, example: 75 }
+        revenue: { type: number, format: float, example: 1360.00 }
+        currency: { type: string, example: EUR }
+
+    BoxOfficeData:
+      type: object
+      properties:
+        startDate: { type: string, format: date }
+        endDate: { type: string, format: date }
+        currency: { type: string, example: EUR }
+        movies:
+          type: array
+          items:
+            type: object
+            properties:
+              movieId: { type: integer, format: int64, example: 1004 }
+              totalTicketsSold: { type: integer, example: 1250 }
+              reservations: { type: integer, example: 600 }
+              grossRevenue: { type: number, format: float, example: 11250.50 }
+
+    ApiError:
+      type: object
+      properties:
+        timestamp: { type: string, format: date-time }
+        status: { type: integer, example: 409 }
+        code: { type: string, example: SEATS_UNAVAILABLE }
+        message: { type: string }
+        details:
+          type: array
+          items: { type: string }
+        path: { type: string, example: /v1/reservations }
+
+  # --- Configuración del esquema de seguridad JWT para el componente de Reservas ---
   securitySchemes:
     bearerAuth:
       type: http

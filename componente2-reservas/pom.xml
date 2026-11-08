@@ -51,6 +51,20 @@
 			<groupId>org.springframework.cloud</groupId>
 			<artifactId>spring-cloud-starter-openfeign</artifactId>
 		</dependency>
+		<!--
+			Seguridad: igual que los componentes 1 y 3, este servicio actúa como
+			OAuth2 Resource Server y valida los JWT (RS256) emitidos por el
+			Componente 3 usando su JWKS público. Sin estas dependencias no se podría
+			cumplir el "bearerAuth" global definido en la especificación OpenAPI.
+		-->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-security</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-oauth2-resource-server</artifactId>
+		</dependency>
 
 		<dependency>
 			<groupId>org.postgresql</groupId>
@@ -80,6 +94,22 @@
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-webmvc-test</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<!-- Utilidades de test de Spring Security (jwt() en MockMvc) -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-security-test</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<!--
+			Base de datos en memoria SOLO para los tests (modo compatibilidad
+			PostgreSQL). Permite probar las restricciones UNIQUE y el bloqueo
+			concurrente de butacas sin necesitar Docker.
+		-->
+		<dependency>
+			<groupId>com.h2database</groupId>
+			<artifactId>h2</artifactId>
 			<scope>test</scope>
 		</dependency>
 	</dependencies>

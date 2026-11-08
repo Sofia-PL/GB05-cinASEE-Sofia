@@ -1,0 +1,88 @@
+# =====================================================================
+# Entorno AISLADO del Componente 2 (Reservas).
+#
+# Levanta solo lo que necesita este microservicio para probarse sin los demás:
+#   - postgres-reservas: su base de datos propia (Database per Service)
+#   - rabbitmq:          el bus de eventos (para ver PaymentCompleted)
+#   - wiremock:          simula las APIs de Cartelera (Comp. 1) y Usuarios (Comp. 3)
+#   - reservas:          el propio microservicio (opcional, perfil "app")
+#
+# Uso (desde componente2-reservas/):
+#   docker compose up -d                      → solo infraestructura (app con mvnw)
+#   docker compose --profile app up -d --build → infraestructura + microservicio
+#   docker compose down                       → parar (añade -v para borrar datos)
+#
+# Este fichero NO sustituye al docker-compose.yml global del proyecto: es solo
+# para desarrollar y probar el Componente 2 por separado.
+# =====================================================================
+name: cinasee-reservas
+
+services:
+
+  postgres-reservas:
+    image: postgres:16-alpine
+    container_name: cinasee-postgres-reservas
+    environment:
+      POSTGRES_DB: cine_reservas_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      # Puerto 5433 en el equipo para no chocar con un PostgreSQL instalado en local (5432)
+      - "5433:5432"
+    volumes:
+      - reservas-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d cine_reservas_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  rabbitmq:
+    image: rabbitmq:4-management
+    container_name: cinasee-rabbitmq-reservas
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    ports:
+      - "5672:5672"     # AMQP
+      - "15672:15672"   # Consola web http://localhost:15672 (guest/guest)
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  wiremock:
+    image: wiremock/wiremock:3.9.2
+    container_name: cinasee-wiremock-reservas
+    ports:
+      - "8089:8080"
+    volumes:
+      # mappings/*.json: respuestas simuladas de Cartelera, Usuarios y la pasarela
+      - ./wiremock:/home/wiremock
+    command: ["--verbose"]
+
+  reservas:
+    profiles: ["app"]
+    build: .
+    container_name: cinasee-reservas
+    depends_on:
+      postgres-reservas:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      wiremock:
+        condition: service_started
+    environment:
+      SPRING_PROFILES_ACTIVE: isolated
+      # Dentro de la red de Docker se usan los nombres de servicio, no localhost
+      POSTGRES_HOST: postgres-reservas
+      POSTGRES_PORT: "5432"
+      RABBITMQ_HOST: rabbitmq
+      CARTELERA_URL: http://wiremock:8080/api/v1
+      USUARIOS_URL: http://wiremock:8080/v1/iam
+    ports:
+      - "8082:8082"
+
+volumes:
+  reservas-pgdata:
