@@ -1,0 +1,29 @@
+# Perfil de tests: base de datos H2 en memoria (modo PostgreSQL), sin tareas
+# programadas (se invocan a mano para que los tests sean deterministas) y con
+# URLs ficticias, porque los clientes Feign se sustituyen por mocks.
+spring:
+  datasource:
+    url: jdbc:h2:mem:reservas_test;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1;LOCK_TIMEOUT=5000
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          jwk-set-uri: http://localhost:0/no-usado-en-tests/jwks.json
+          issuer-uri: http://localhost:8083/v1/iam
+
+app:
+  scheduling:
+    enabled: false
+  clients:
+    cartelera:
+      url: http://localhost:0/cartelera
+    usuarios:
+      url: http://localhost:0/usuarios
+  payment:
+    mode: simulated

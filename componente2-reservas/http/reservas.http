@@ -1,0 +1,134 @@
+### =====================================================================
+### Peticiones de prueba del Componente 2 (perfil "isolated" + WireMock)
+###
+### Se ejecutan desde VS Code con la extensión "REST Client" (humao.rest-client)
+### o desde IntelliJ. Antes:
+###   1) docker compose up -d                (en componente2-reservas/)
+###   2) arrancar la app con el perfil isolated
+###   3) generar tokens y pegarlos abajo:
+###        .\scripts\generate-dev-token.ps1 -Subject 5590 -Role CLIENTE_REGISTRADO
+###        .\scripts\generate-dev-token.ps1 -Subject "guest:demo-1" -Role VISITANTE
+###        .\scripts\generate-dev-token.ps1 -Subject 1 -Role STAFF_TAQUILLA
+### =====================================================================
+
+@base = http://localhost:8082/v1
+@clientToken = PEGA_AQUI_EL_TOKEN_DE_CLIENTE
+@guestToken = PEGA_AQUI_EL_TOKEN_DE_INVITADO
+@staffToken = PEGA_AQUI_EL_TOKEN_DE_TAQUILLA
+
+### 1. Mapa de butacas ocupadas (público, sin token) → 200
+GET {{base}}/reservations/shows/1024/seats
+
+### 2. Cliente 5590 reserva 2 butacas (1250 puntos → 10 % fidelización) → 201
+# @name reserva
+POST {{base}}/reservations
+Authorization: Bearer {{clientToken}}
+Content-Type: application/json
+
+{ "showId": 1024, "seats": [ { "row": 8, "column": 12 }, { "row": 8, "column": 13 } ] }
+
+### 3. Otra persona intenta la MISMA butaca → 409 SEATS_UNAVAILABLE
+POST {{base}}/reservations
+Authorization: Bearer {{guestToken}}
+Content-Type: application/json
+
+{ "showId": 1024, "guestEmail": "invitado@email.com", "seats": [ { "row": 8, "column": 12 } ] }
+
+### 4. Consultar la reserva (estado y expiresAt) → 200
+GET {{base}}/reservations/{{reserva.response.body.id}}
+Authorization: Bearer {{clientToken}}
+
+### 5. Pago rechazado (token tok_declined...) → 402, la reserva sigue pendiente
+POST {{base}}/reservations/{{reserva.response.body.id}}/payment
+Authorization: Bearer {{clientToken}}
+Content-Type: application/json
+
+{ "gateway": "REDSYS", "paymentToken": "tok_declined_card" }
+
+### 6. Pago aprobado → 200 con los códigos QR; se publica PaymentCompleted
+# @name pago
+POST {{base}}/reservations/{{reserva.response.body.id}}/payment
+Authorization: Bearer {{clientToken}}
+Content-Type: application/json
+
+{ "gateway": "REDSYS", "paymentToken": "tok_visa_4242" }
+
+### 7. Pagar otra vez → 409 ALREADY_PAID
+POST {{base}}/reservations/{{reserva.response.body.id}}/payment
+Authorization: Bearer {{clientToken}}
+Content-Type: application/json
+
+{ "gateway": "REDSYS", "paymentToken": "tok_visa_4242" }
+
+### 8. Validar la primera entrada en puerta (taquilla) → 200; repetir → 409
+POST {{base}}/reservations/tickets/{{pago.response.body.tickets[0]}}/check-in
+Authorization: Bearer {{staffToken}}
+
+### 9. Mis reservas → 200
+GET {{base}}/reservations
+Authorization: Bearer {{clientToken}}
+
+### 10. Invitado en día del espectador (sesión 1025, miércoles → 20 %) → 201
+# @name reservaInvitado
+POST {{base}}/reservations
+Authorization: Bearer {{guestToken}}
+Content-Type: application/json
+
+{ "showId": 1025, "guestEmail": "invitado@email.com", "seats": [ { "row": 1, "column": 1 } ] }
+
+### 11. El invitado cancela antes de pagar → 200 CANCELLED (butaca liberada)
+DELETE {{base}}/reservations/{{reservaInvitado.response.body.id}}
+Authorization: Bearer {{guestToken}}
+
+### 12. Errores de validación → 400 (fila 0, más de 10 butacas, showId ausente...)
+POST {{base}}/reservations
+Authorization: Bearer {{clientToken}}
+Content-Type: application/json
+
+{ "seats": [ { "row": 0, "column": 1 } ] }
+
+### 13. Butaca fuera del mapa (la sala 1 tiene 10x15) → 400
+POST {{base}}/reservations
+Authorization: Bearer {{clientToken}}
+Content-Type: application/json
+
+{ "showId": 1024, "seats": [ { "row": 11, "column": 1 } ] }
+
+### 14. Sesión no a la venta (PROGRAMADA) → 409 SHOW_NOT_ON_SALE
+POST {{base}}/reservations
+Authorization: Bearer {{clientToken}}
+Content-Type: application/json
+
+{ "showId": 2048, "seats": [ { "row": 1, "column": 1 } ] }
+
+### 15. Sesión inexistente → 404
+POST {{base}}/reservations
+Authorization: Bearer {{clientToken}}
+Content-Type: application/json
+
+{ "showId": 9999, "seats": [ { "row": 1, "column": 1 } ] }
+
+### 16. Cartelera responde 500 → Reservas responde 503
+POST {{base}}/reservations
+Authorization: Bearer {{clientToken}}
+Content-Type: application/json
+
+{ "showId": 5030, "seats": [ { "row": 1, "column": 1 } ] }
+
+### 17. Cliente reservando a nombre de otro usuario → 403
+POST {{base}}/reservations
+Authorization: Bearer {{clientToken}}
+Content-Type: application/json
+
+{ "showId": 1024, "userId": 42, "seats": [ { "row": 2, "column": 2 } ] }
+
+### 18. Estadísticas para Analítica (staff) → 200; con token de cliente → 403
+GET {{base}}/reservations/stats
+Authorization: Bearer {{staffToken}}
+
+### 19. Box Office para Analítica (staff) → 200
+GET {{base}}/reservations/box-office-data?startDate=2026-01-01&endDate=2026-12-31
+Authorization: Bearer {{staffToken}}
+
+### 20. Sin token → 401
+GET {{base}}/reservations

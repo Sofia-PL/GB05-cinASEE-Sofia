@@ -1,0 +1,70 @@
+{
+  "mappings": [
+    {
+      "name": "Cartelera - sesión 1024 a la venta (viernes, sin descuento)",
+      "request": { "method": "GET", "url": "/api/v1/sessions/1024" },
+      "response": {
+        "status": 200,
+        "headers": { "Content-Type": "application/json" },
+        "jsonBody": {
+          "id": 1024, "movieId": 101, "roomId": 1,
+          "startTime": "2030-01-18T18:30:00", "endTime": "2030-01-18T20:57:00",
+          "status": "A_LA_VENTA", "ticketPrice": 8.50
+        }
+      }
+    },
+    {
+      "name": "Cartelera - sesión 1025 a la venta (miércoles: día del espectador)",
+      "request": { "method": "GET", "url": "/api/v1/sessions/1025" },
+      "response": {
+        "status": 200,
+        "headers": { "Content-Type": "application/json" },
+        "jsonBody": {
+          "id": 1025, "movieId": 102, "roomId": 1,
+          "startTime": "2030-01-16T20:00:00", "endTime": "2030-01-16T22:10:00",
+          "status": "A_LA_VENTA", "ticketPrice": 8.50
+        }
+      }
+    },
+    {
+      "name": "Cartelera - sesión 2048 programada pero NO a la venta (409)",
+      "request": { "method": "GET", "url": "/api/v1/sessions/2048" },
+      "response": {
+        "status": 200,
+        "headers": { "Content-Type": "application/json" },
+        "jsonBody": {
+          "id": 2048, "movieId": 101, "roomId": 1,
+          "startTime": "2030-02-01T18:30:00", "endTime": "2030-02-01T20:57:00",
+          "status": "PROGRAMADA", "ticketPrice": 8.50
+        }
+      }
+    },
+    {
+      "name": "Cartelera - sesión 5030 provoca un error interno (Reservas responde 503)",
+      "request": { "method": "GET", "url": "/api/v1/sessions/5030" },
+      "response": { "status": 500, "body": "Internal Server Error" }
+    },
+    {
+      "name": "Cartelera - sesión inexistente (Reservas responde 404)",
+      "priority": 10,
+      "request": { "method": "GET", "urlPathPattern": "/api/v1/sessions/[0-9]+" },
+      "response": {
+        "status": 404,
+        "headers": { "Content-Type": "application/json" },
+        "jsonBody": { "message": "Sesión no encontrada" }
+      }
+    },
+    {
+      "name": "Cartelera - sala 1 (10 filas x 15 columnas)",
+      "request": { "method": "GET", "url": "/api/v1/rooms/1" },
+      "response": {
+        "status": 200,
+        "headers": { "Content-Type": "application/json" },
+        "jsonBody": {
+          "id": 1, "name": "Sala 1", "roomType": "ESTANDAR_2D", "capacity": 150,
+          "rowsCount": 10, "columnsCount": 15, "wheelchairAccessible": true, "basePrice": 7.50
+        }
+      }
+    }
+  ]
+}

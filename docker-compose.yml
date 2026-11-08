@@ -51,6 +51,57 @@ services:
 # ==========================================
 # COMPONENTE 2: RESERVAS
 # ==========================================
+  # Contenedor 1: Base de datos aislada (PostgreSQL propio, distinto del de Analítica)
+  postgres-reservas:
+    image: postgres:16-alpine
+    container_name: postgres-reservas
+    ports:
+      - "5433:5432"   # 5432 suele estar ocupado por un PostgreSQL local; 5434 lo usa Analítica
+    environment:
+      POSTGRES_DB: cine_reservas_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - postgres_reservas_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d cine_reservas_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # Contenedor 2: Microservicio Spring Boot (Dockerfile multi-stage: compila dentro de la imagen)
+  componente2-reservas:
+    build:
+      context: ./componente2-reservas
+    container_name: app-reservas
+    ports:
+      - "8082:8082"
+    depends_on:
+      postgres-reservas:
+        condition: service_healthy   # no arranca hasta que PostgreSQL acepta conexiones
+      rabbitmq:
+        condition: service_started
+      componente1-cartelera:
+        condition: service_started
+    environment:
+      # Base de datos propia (nombre del contenedor, puerto interno 5432)
+      POSTGRES_HOST: postgres-reservas
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: cine_reservas_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      # Comunicación ASÍNCRONA: publica PaymentCompleted en payment.exchange (lo consumen Comp. 3 y 4)
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      # Comunicación SÍNCRONA (OpenFeign) con Cartelera y Usuarios por la red de Docker
+      CARTELERA_URL: http://componente1-cartelera:8081/api/v1
+      USUARIOS_URL: http://componente3-usuarios:8083/v1/iam
+      # Validación de los JWT del Comp. 3: la clave pública se descarga por la red de Docker,
+      # pero el emisor ("iss") es el que el Comp. 3 escribe dentro del token.
+      JWT_JWK_SET_URI: http://componente3-usuarios:8083/v1/iam/.well-known/jwks.json
+      JWT_ISSUER: http://localhost:8083/v1/iam
+      # Pasarela de pago simulada (no hay credenciales reales de Redsýs)
+      PAYMENT_MODE: simulated
 
 # ==========================================
 # COMPONENTE 4: ANALÍTICA
@@ -102,5 +153,6 @@ services:
 # ==========================================
 volumes:
   mongo_data:
+  postgres_reservas_data:
   postgres_analitica_data:
   rabbitmq_data:

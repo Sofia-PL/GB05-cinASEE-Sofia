@@ -1,0 +1,37 @@
+# =====================================================================
+# Perfil "isolated": ejecutar el Componente 2 SIN los demás microservicios.
+#
+#   - Cartelera (Comp. 1) y Usuarios (Comp. 3) se sustituyen por WireMock
+#     (docker-compose.yml de esta carpeta, puerto 8089).
+#   - Los JWT se validan con un secreto HMAC de desarrollo en lugar del JWKS
+#     del Comp. 3. Tokens: scripts/generate-dev-token.ps1
+#   - Pasarela de pago simulada.
+#
+# Activar con:  .\mvnw.cmd spring-boot:run "-Dspring-boot.run.profiles=isolated"
+# NUNCA usar este perfil en producción.
+# =====================================================================
+spring:
+  datasource:
+    # El docker-compose de esta carpeta publica PostgreSQL en el 5433 del equipo
+    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5433}/${POSTGRES_DB:cine_reservas_db}
+
+app:
+  clients:
+    cartelera:
+      url: ${CARTELERA_URL:http://localhost:8089/api/v1}
+    usuarios:
+      url: ${USUARIOS_URL:http://localhost:8089/v1/iam}
+  payment:
+    # simulated por defecto; con PAYMENT_MODE=redsys se usa el mock HTTP de WireMock
+    mode: ${PAYMENT_MODE:simulated}
+    redsys:
+      url: ${REDSYS_URL:http://localhost:8089/redsys}
+  security:
+    # Secreto compartido con el script de generación de tokens (mínimo 32 bytes)
+    dev-hmac-secret: ${DEV_JWT_SECRET:cinasee-dev-secret-solo-para-pruebas-locales-0123456789}
+    dev-issuer: ${JWT_ISSUER:http://localhost:8083/v1/iam}
+
+logging:
+  level:
+    # Muestra en consola cada llamada Feign a Cartelera/Usuarios
+    com.cinasee.componente2_reservas.clients: DEBUG

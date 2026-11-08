@@ -1,3 +1,103 @@
+# =====================================================================
+# Componente 2 - Reservas, Asientos y Pagos
+# Todas las propiedades admiten variables de entorno (útil en Docker).
+# =====================================================================
+server:
+  port: ${SERVER_PORT:8082}
+  servlet:
+    # URL base: http://localhost:8082/v1/reservations
+    context-path: /v1
+
 spring:
   application:
     name: componente2-reservas
+
+  # --- PostgreSQL (base de datos propia: Database per Service) ---
+  datasource:
+    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB:cine_reservas_db}
+    username: ${POSTGRES_USER:postgres}
+    password: ${POSTGRES_PASSWORD:postgres}
+
+  jpa:
+    # Sin Open Session In View: las consultas solo ocurren dentro de los servicios
+    open-in-view: false
+    hibernate:
+      # Hibernate crea/actualiza las tablas al arrancar (igual que el Comp. 3).
+      ddl-auto: ${JPA_DDL_AUTO:update}
+    properties:
+      hibernate:
+        jdbc:
+          # Todas las fechas se guardan normalizadas en UTC
+          time_zone: UTC
+
+  # --- RabbitMQ (bus de eventos compartido con los Comp. 3 y 4) ---
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USER:guest}
+    password: ${RABBITMQ_PASSWORD:guest}
+    # Publisher confirms: el broker confirma cada mensaje antes de marcarlo como publicado
+    publisher-confirm-type: simple
+
+  # --- Seguridad: validación de los JWT emitidos por el Componente 3 ---
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # Clave pública RSA del Comp. 3. Se descarga la primera vez que llega un token.
+          jwk-set-uri: ${JWT_JWK_SET_URI:http://localhost:8083/v1/iam/.well-known/jwks.json}
+          # Debe coincidir con el claim "iss" que firma el Comp. 3
+          issuer-uri: ${JWT_ISSUER:http://localhost:8083/v1/iam}
+
+  # --- OpenFeign: timeouts de las llamadas síncronas ---
+  cloud:
+    openfeign:
+      client:
+        config:
+          default:
+            connect-timeout: ${FEIGN_CONNECT_TIMEOUT_MS:2000}
+            read-timeout: ${FEIGN_READ_TIMEOUT_MS:5000}
+            logger-level: basic
+
+app:
+  clients:
+    # Comp. 1 - Cartelera (context-path /api/v1)
+    cartelera:
+      url: ${CARTELERA_URL:http://localhost:8081/api/v1}
+    # Comp. 3 - Usuarios (context-path /v1/iam)
+    usuarios:
+      url: ${USUARIOS_URL:http://localhost:8083/v1/iam}
+
+  reservations:
+    hold-ttl: ${RESERVATION_HOLD_TTL:10m}
+    currency: EUR
+    expiration-batch: 100
+    expiration-sweep-interval: ${RESERVATION_SWEEP_INTERVAL:30s}
+    catalog-time-zone: ${CATALOG_TIME_ZONE:UTC}
+
+  pricing:
+    spectator-day: ${SPECTATOR_DAY:WEDNESDAY}
+    spectator-day-discount: 0.20
+    loyalty-points-threshold: ${LOYALTY_POINTS_THRESHOLD:500}
+    loyalty-discount: 0.10
+    time-zone: Europe/Madrid
+
+  payment:
+    # simulated (por defecto) | redsys
+    mode: ${PAYMENT_MODE:simulated}
+    redsys:
+      url: ${REDSYS_URL:http://localhost:9090/redsys}
+
+  rabbitmq:
+    exchange: ${PAYMENT_EXCHANGE:payment.exchange}
+    payment-completed-routing-key: ${PAYMENT_COMPLETED_ROUTING_KEY:payment.completed}
+    payment-refunded-routing-key: ${PAYMENT_REFUNDED_ROUTING_KEY:payment.refunded}
+    confirm-timeout-ms: 5000
+
+  outbox:
+    relay-interval: ${OUTBOX_RELAY_INTERVAL:2s}
+    batch-size: 50
+
+logging:
+  level:
+    com.cinasee.componente2_reservas: INFO

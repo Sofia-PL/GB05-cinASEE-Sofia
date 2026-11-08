@@ -1,0 +1,34 @@
+{
+  "mappings": [
+    {
+      "name": "Usuarios - cliente 5590 con 1250 puntos (descuento de fidelización)",
+      "request": { "method": "GET", "url": "/v1/iam/users/5590" },
+      "response": {
+        "status": 200,
+        "headers": { "Content-Type": "application/json" },
+        "jsonBody": {
+          "id": 5590, "email": "cliente.vip@email.com", "fullName": "María Gómez",
+          "role": "CLIENTE_REGISTRADO", "loyaltyPoints": 1250, "preferredGenres": ["DRAMA"]
+        }
+      }
+    },
+    {
+      "name": "Usuarios - cliente 42 con pocos puntos (sin descuento)",
+      "request": { "method": "GET", "url": "/v1/iam/users/42" },
+      "response": {
+        "status": 200,
+        "headers": { "Content-Type": "application/json" },
+        "jsonBody": {
+          "id": 42, "email": "cliente@email.com", "fullName": "Juan Pérez",
+          "role": "CLIENTE_REGISTRADO", "loyaltyPoints": 100, "preferredGenres": []
+        }
+      }
+    },
+    {
+      "name": "Usuarios - usuario inexistente (Reservas responde 404)",
+      "priority": 10,
+      "request": { "method": "GET", "urlPathPattern": "/v1/iam/users/[0-9]+" },
+      "response": { "status": 404 }
+    }
+  ]
+}
