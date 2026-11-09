@@ -8,7 +8,11 @@ import org.springframework.web.bind.annotation.PathVariable;
 
 import java.util.List;
 
-@FeignClient(name = "usuarios-service", url = "${services.usuarios.url:http://localhost:8083/api/v1}")
+@FeignClient(
+        name = "usuarios-service",
+        url = "${services.usuarios.url:http://localhost:8083/v1/iam}",
+        configuration = ForwardJwtFeignConfig.class
+)
 public interface UsuariosClient {
 
     @GetMapping("/users/{userId}")

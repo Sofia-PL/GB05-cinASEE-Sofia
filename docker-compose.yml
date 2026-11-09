@@ -1,21 +1,26 @@
-version: '3.8'
-
 services:
 
 # ==========================================
 # INFRAESTRUCTURA COMPARTIDA / MENSAJERÍA
 # ==========================================
   rabbitmq:
-    image: rabbitmq:3-management-alpine
+    image: rabbitmq:4-management
     container_name: rabbitmq
     ports:
-      - "5672:5672"
-      - "15672:15672"
+      - "127.0.0.1:5672:5672"
+      - "127.0.0.1:15672:15672"
     environment:
-      RABBITMQ_DEFAULT_USER: guest
-      RABBITMQ_DEFAULT_PASS: guest
+      RABBITMQ_DEFAULT_USER: cinasee
+      RABBITMQ_DEFAULT_PASS: cinasee
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    restart: unless-stopped
 
 # ==========================================
 # COMPONENTE 3: USUARIOS
@@ -71,7 +76,7 @@ services:
       redis-usuarios:
         condition: service_healthy
       rabbitmq:
-        condition: service_started
+        condition: service_healthy
     environment:
       # Dentro de la red de Docker se usan nombres de servicio, no localhost
       MYSQL_HOST: mysql-usuarios
@@ -84,8 +89,8 @@ services:
       # Mismo broker que los Componentes 2 y 4
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_PORT: 5672
-      RABBITMQ_USER: guest
-      RABBITMQ_PASSWORD: guest
+      RABBITMQ_USER: cinasee
+      RABBITMQ_PASSWORD: cinasee
       # El "iss" del token sigue siendo localhost para que lo validen los demás
       JWT_ISSUER: http://localhost:8083/v1/iam
     restart: unless-stopped
@@ -98,11 +103,18 @@ services:
     image: mongo:7.0
     container_name: mongodb-cartelera
     ports:
-      - "27017:27017"
+      - "127.0.0.1:27017:27017"
     environment:
       MONGO_INITDB_DATABASE: cine_catalog_db
     volumes:
       - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    restart: unless-stopped
 
   # Contenedor 2: Microservicio Spring Boot
   componente1-cartelera:
@@ -110,12 +122,19 @@ services:
       context: ./componente1-cartelera
     container_name: app-cartelera
     ports:
-      - "8081:8081"
+      - "127.0.0.1:8081:8081"
     depends_on:
-      - mongodb-cartelera
+      mongodb-cartelera:
+        condition: service_healthy
+      componente3-usuarios:
+        condition: service_started
     environment:
       # Sobrescribimos la URI para que apunte al nombre del contenedor de Mongo, no a localhost
       SPRING_DATA_MONGODB_URI: mongodb://mongodb-cartelera:27017/cine_catalog_db
+      # El JWKS se descarga por la red interna; el "iss" sigue siendo el público del Comp. 3
+      JWT_JWK_SET_URI: http://componente3-usuarios:8083/v1/iam/.well-known/jwks.json
+      JWT_ISSUER: http://localhost:8083/v1/iam
+    restart: unless-stopped
 
 # ==========================================
 # COMPONENTE 2: RESERVAS
@@ -125,7 +144,7 @@ services:
     image: postgres:16-alpine
     container_name: postgres-reservas
     ports:
-      - "5433:5432"   # 5432 suele estar ocupado por un PostgreSQL local; 5434 lo usa Analítica
+      - "127.0.0.1:5433:5432"   # 5432 suele estar ocupado por un PostgreSQL local; 5434 lo usa Analítica
     environment:
       POSTGRES_DB: cine_reservas_db
       POSTGRES_USER: postgres
@@ -137,6 +156,7 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+    restart: unless-stopped
 
   # Contenedor 2: Microservicio Spring Boot (Dockerfile multi-stage: compila dentro de la imagen)
   componente2-reservas:
@@ -144,13 +164,15 @@ services:
       context: ./componente2-reservas
     container_name: app-reservas
     ports:
-      - "8082:8082"
+      - "127.0.0.1:8082:8082"
     depends_on:
       postgres-reservas:
         condition: service_healthy   # no arranca hasta que PostgreSQL acepta conexiones
       rabbitmq:
-        condition: service_started
+        condition: service_healthy
       componente1-cartelera:
+        condition: service_started
+      componente3-usuarios:
         condition: service_started
     environment:
       # Base de datos propia (nombre del contenedor, puerto interno 5432)
@@ -162,6 +184,8 @@ services:
       # Comunicación ASÍNCRONA: publica PaymentCompleted en payment.exchange (lo consumen Comp. 3 y 4)
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_PORT: 5672
+      RABBITMQ_USER: cinasee
+      RABBITMQ_PASSWORD: cinasee
       # Comunicación SÍNCRONA (OpenFeign) con Cartelera y Usuarios por la red de Docker
       CARTELERA_URL: http://componente1-cartelera:8081/api/v1
       USUARIOS_URL: http://componente3-usuarios:8083/v1/iam
@@ -171,6 +195,7 @@ services:
       JWT_ISSUER: http://localhost:8083/v1/iam
       # Pasarela de pago simulada (no hay credenciales reales de Redsýs)
       PAYMENT_MODE: simulated
+    restart: unless-stopped
 
 # ==========================================
 # COMPONENTE 4: ANALÍTICA
@@ -180,13 +205,19 @@ services:
     image: postgres:16-alpine
     container_name: postgres-analitica
     ports:
-      - "5434:5432"
+      - "127.0.0.1:5434:5432"
     environment:
       POSTGRES_DB: cine_analytics_dw
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     volumes:
       - postgres_analitica_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d cine_analytics_dw"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
 
   # Contenedor 2: Microservicio Spring Boot
   componente4-analitica:
@@ -194,10 +225,14 @@ services:
       context: ./componente4-analitica
     container_name: app-analitica
     ports:
-      - "8084:8084"
+      - "127.0.0.1:8084:8084"
     depends_on:
-      - postgres-analitica
-      - rabbitmq
+      postgres-analitica:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      componente3-usuarios:
+        condition: service_started
     environment:
       # Configuración de base de datos apuntando al contenedor PostgreSQL
       DB_HOST: postgres-analitica
@@ -210,9 +245,15 @@ services:
       # Configuración de RabbitMQ apuntando al broker
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_PORT: 5672
+      RABBITMQ_USER: cinasee
+      RABBITMQ_PASSWORD: cinasee
       # URLs para comunicación con otros microservicios en la red de Docker
       CARTELERA_SERVICE_URL: http://componente1-cartelera:8081/api/v1
-      USUARIOS_SERVICE_URL: http://componente3-usuarios:8083/api/v1
+      USUARIOS_SERVICE_URL: http://componente3-usuarios:8083/v1/iam
+      # Validación de los JWT del Comp. 3
+      JWT_JWK_SET_URI: http://componente3-usuarios:8083/v1/iam/.well-known/jwks.json
+      JWT_ISSUER: http://localhost:8083/v1/iam
+    restart: unless-stopped
 
 # ==========================================
 # COMPONENTE 5: GATEWAY

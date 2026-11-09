@@ -10,7 +10,11 @@ import org.springframework.web.bind.annotation.RequestParam;
 
 import java.util.List;
 
-@FeignClient(name = "cartelera-service", url = "${services.cartelera.url:http://localhost:8081/api/v1}")
+@FeignClient(
+        name = "cartelera-service",
+        url = "${services.cartelera.url:http://localhost:8081/api/v1}",
+        configuration = ForwardJwtFeignConfig.class
+)
 public interface CarteleraClient {
 
     @GetMapping("/movies")

@@ -1,5 +1,5 @@
 server:
-  port: 8081 # Servidor de desarrollo CineAsee
+  port: ${SERVER_PORT:8081} # Servidor de desarrollo CineAsee
   servlet:
     context-path: /api/v1 # Ruta base de la API
 
@@ -8,12 +8,15 @@ spring:
     name: componente1-cartelera
   data:
     mongodb:
-      uri: mongodb://localhost:27017/cine_catalog_db
+      uri: ${SPRING_DATA_MONGODB_URI:mongodb://localhost:27017/cine_catalog_db}
   security:
     oauth2:
       resourceserver:
         jwt:
-          # Aquí debes definir la URL del proveedor de identidad (Componente 3)
-          # o la clave secreta compartida usada para verificar la firma del token JWT
-          issuer-uri: http://localhost:8083/v1/iam
-
+          # Clave pública RSA del Componente 3. Dentro de Docker se descarga por la
+          # red interna (componente3-usuarios), no por localhost.
+          # Si esta propiedad está presente, Spring NO hace discovery del issuer al
+          # arrancar: evita que el contenedor se llame a sí mismo en localhost:8083.
+          jwk-set-uri: ${JWT_JWK_SET_URI:http://localhost:8083/v1/iam/.well-known/jwks.json}
+          # Debe coincidir con el claim "iss" que firma el Componente 3
+          issuer-uri: ${JWT_ISSUER:http://localhost:8083/v1/iam}

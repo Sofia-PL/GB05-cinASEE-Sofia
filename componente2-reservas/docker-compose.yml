@@ -28,7 +28,7 @@ services:
       POSTGRES_PASSWORD: postgres
     ports:
       # Puerto 5433 en el equipo para no chocar con un PostgreSQL instalado en local (5432)
-      - "5433:5432"
+      - "127.0.0.1:5433:5432"
     volumes:
       - reservas-pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -36,31 +36,34 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+    restart: unless-stopped
 
   rabbitmq:
     image: rabbitmq:4-management
     container_name: cinasee-rabbitmq-reservas
     environment:
-      RABBITMQ_DEFAULT_USER: guest
-      RABBITMQ_DEFAULT_PASS: guest
+      RABBITMQ_DEFAULT_USER: cinasee
+      RABBITMQ_DEFAULT_PASS: cinasee
     ports:
-      - "5672:5672"     # AMQP
-      - "15672:15672"   # Consola web http://localhost:15672 (guest/guest)
+      - "127.0.0.1:5672:5672"     # AMQP
+      - "127.0.0.1:15672:15672"   # Consola web http://localhost:15672 (cinasee/cinasee)
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
       interval: 10s
       timeout: 5s
       retries: 10
+    restart: unless-stopped
 
   wiremock:
     image: wiremock/wiremock:3.9.2
     container_name: cinasee-wiremock-reservas
     ports:
-      - "8089:8080"
+      - "127.0.0.1:8089:8080"
     volumes:
       # mappings/*.json: respuestas simuladas de Cartelera, Usuarios y la pasarela
       - ./wiremock:/home/wiremock
     command: ["--verbose"]
+    restart: unless-stopped
 
   reservas:
     profiles: ["app"]
@@ -79,10 +82,13 @@ services:
       POSTGRES_HOST: postgres-reservas
       POSTGRES_PORT: "5432"
       RABBITMQ_HOST: rabbitmq
+      RABBITMQ_USER: cinasee
+      RABBITMQ_PASSWORD: cinasee
       CARTELERA_URL: http://wiremock:8080/api/v1
       USUARIOS_URL: http://wiremock:8080/v1/iam
     ports:
-      - "8082:8082"
+      - "127.0.0.1:8082:8082"
+    restart: unless-stopped
 
 volumes:
   reservas-pgdata:

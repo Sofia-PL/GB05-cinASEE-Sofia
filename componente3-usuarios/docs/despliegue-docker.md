@@ -1,13 +1,13 @@
 # Despliegue en Docker del stack CinAsee
 
 > Documento del **Componente 3 (Usuarios / IAM y Fidelización)**.
-> Fecha: 2026-11-08.
+> Última actualización: 2026-11-09.
 >
-> Alcance: se han implementado **solo** los cambios del Componente 3 y se ha
-> añadido su bloque al `docker-compose.yml` global de forma **aditiva**. No se ha
-> modificado código, Dockerfile ni configuración de los Componentes 1, 2, 4 ni 5.
-> Todo lo que falla en esos componentes queda documentado aquí para que lo
-> corrijan sus responsables.
+> Alcance: se han implementado los cambios del Componente 3 **y** las
+> correcciones de los Componentes 1, 2 y 4 descritas en este documento. El
+> `docker-compose.yml` global queda preparado para el stack completo.
+> Siguen fuera de alcance el frontend (otra rama) y el API Gateway (sin
+> implementar).
 
 ---
 
@@ -27,22 +27,26 @@
   - `docker compose build componente3-usuarios` → OK
   - Imagen resultante: `cinasee-componente3-usuarios`
 
-### Lo que NO se ha tocado
+### Cambios aplicados en el resto de componentes (2026-11-09)
 
-- `componente1-cartelera/**`
-- `componente2-reservas/**` (incluido su `docker-compose.yml` aislado)
-- `componente4-analitica/**`
-- `componente5-gateway/**`
-- `frontend-ui/**`
-- Los servicios `rabbitmq`, `mongodb-cartelera`, `componente1-cartelera`,
-  `postgres-reservas`, `componente2-reservas`, `postgres-analitica` y
-  `componente4-analitica` del compose global.
+- **Componente 1:** `jwk-set-uri` + `issuer-uri` con variables de entorno,
+  Dockerfile multi-stage, `.dockerignore` y `GET /movies/{id}` público.
+- **Componente 2:** compose aislado alineado (usuario RabbitMQ, puertos
+  `127.0.0.1`, `restart`).
+- **Componente 4:** dependencias de seguridad, Resource Server, reenvío de JWT
+  por Feign, URL de Usuarios `/v1/iam`, Dockerfile multi-stage y `.dockerignore`.
+- **RabbitMQ:** `rabbitmq:4-management` con usuario dedicado `cinasee`.
+- **Compose global:** healthchecks, `depends_on` con `service_healthy`,
+  puertos en `127.0.0.1`, `restart` y eliminación de `version`.
 
-### Consecuencia
+### Sigue fuera de alcance
 
-El Componente 3 funciona de forma aislada. **El stack completo no estará 100 %
-operativo** hasta que se apliquen las correcciones de la sección 6 en los
-Componentes 1, 2 y 4.
+- `componente5-gateway/**`: sin rutas ni seguridad implementadas.
+- `frontend-ui/**`: se desarrolla en otra rama.
+
+> **Importante:** al cambiar el usuario de RabbitMQ hay que recrear el volumen
+> `cinasee_rabbitmq_data` (ver sección 8). Los volúmenes de MySQL y Redis se
+> conservan.
 
 ---
 
@@ -69,7 +73,7 @@ Componentes 1, 2 y 4.
 | `mysql-usuarios` | `mysql:8.4` | `127.0.0.1:3306` | `cinasee-mysql-data` |
 | `redis-usuarios` | `redis:7-alpine` | `127.0.0.1:6379` | `cinasee-redis-data` |
 | `componente3-usuarios` | build local | `127.0.0.1:8083` | — |
-| `rabbitmq` | `rabbitmq:3-management-alpine` | `5672`, `15672` | `rabbitmq_data` |
+| `rabbitmq` | `rabbitmq:4-management` | `127.0.0.1:5672`, `127.0.0.1:15672` | `rabbitmq_data` |
 
 > Los puertos se publican solo en `127.0.0.1` para no exponer las bases de datos
 > a la red local.
@@ -135,7 +139,7 @@ Variables del Componente 3:
 | `REDIS_HOST` | `redis-usuarios` | Host interno de Redis |
 | `REDIS_PORT` | `6379` | Puerto interno |
 | `RABBITMQ_HOST` | `rabbitmq` | Broker compartido |
-| `RABBITMQ_USER` / `RABBITMQ_PASSWORD` | `guest` / `guest` | Credenciales actuales del broker |
+| `RABBITMQ_USER` / `RABBITMQ_PASSWORD` | `cinasee` / `cinasee` | Credenciales del broker |
 | `JWT_ISSUER` | `http://localhost:8083/v1/iam` | Claim `iss` de los tokens |
 
 > `JWT_ISSUER` se mantiene en `localhost` a propósito: es el valor que validan
@@ -255,7 +259,7 @@ Ahora mismo no habrá claves: el código todavía no usa Redis.
 
 ### 5.5. RabbitMQ
 
-Consola web: <http://localhost:15672> (`guest` / `guest`).
+Consola web: <http://localhost:15672> (`cinasee` / `cinasee`).
 
 Deben existir:
 
@@ -275,7 +279,10 @@ Invoke-RestMethod -Uri "http://localhost:8083/v1/iam/users/1" `
 
 ---
 
-## 6. Revisión del resto del proyecto
+## 6. Correcciones aplicadas al resto del proyecto
+
+> Las subsecciones siguientes describen cada problema y la solución que ya está
+> implementada en el repositorio.
 
 ### 6.1. Componente 1 — Cartelera
 
@@ -360,11 +367,12 @@ EXPOSE 8081
 ENTRYPOINT ["java", "-XX:MaxRAMPercentage=75", "-jar", "/app/app.jar"]
 ```
 
-#### 6.1.3. Endpoints protegidos que consume el Componente 4
+#### 6.1.3. Endpoints que consume el Componente 4
 
-`GET /movies/{id}`, `GET /rooms` y `GET /rooms/{id}` requieren JWT. El
-Componente 2 lo reenvía con `ForwardJwtFeignConfig`, pero el Componente 4 no.
-Ver sección 6.2.3.
+`GET /movies/{id}` se ha dejado **público** para que el listener de RabbitMQ del
+Componente 4 pueda enriquecer el evento sin JWT (no hay petición HTTP entrante).
+`GET /rooms`, `GET /rooms/{id}` y el resto siguen requiriendo JWT; el Componente
+4 los llama dentro de peticiones HTTP y reenvía el token. Ver sección 6.2.3.
 
 ---
 
@@ -406,11 +414,18 @@ Y en el compose:
 Los Componentes 2 y 3 usan `RABBITMQ_USER`. Si se cambia el usuario del broker,
 el Componente 4 seguirá intentando `guest`.
 
-**Solución:** unificar en `RABBITMQ_USER` o definir ambas variables en el
-compose:
+**Solución aplicada:** `application.yml` acepta `RABBITMQ_USER` y mantiene
+`RABBITMQ_USERNAME` como alternativa:
 
 ```yaml
-      RABBITMQ_USERNAME: cinasee
+  rabbitmq:
+    username: ${RABBITMQ_USER:${RABBITMQ_USERNAME:guest}}
+```
+
+Y en el compose se define la variable común:
+
+```yaml
+      RABBITMQ_USER: cinasee
       RABBITMQ_PASSWORD: cinasee
 ```
 
@@ -523,20 +538,25 @@ aparecer:
 ACCESS_REFUSED - Login was refused using authentication mechanism PLAIN
 ```
 
-**Solución recomendada:** crear un usuario dedicado en el servicio compartido:
+**Solución aplicada:** usuario dedicado en el servicio compartido:
 
 ```yaml
   rabbitmq:
+    image: rabbitmq:4-management
     environment:
       RABBITMQ_DEFAULT_USER: cinasee
       RABBITMQ_DEFAULT_PASS: cinasee
 ```
 
-Y actualizar los tres consumidores/productores:
+Y actualizados los tres consumidores/productores:
 
 - Componente 2: `RABBITMQ_USER` / `RABBITMQ_PASSWORD`
 - Componente 3: `RABBITMQ_USER` / `RABBITMQ_PASSWORD`
-- Componente 4: `RABBITMQ_USERNAME` / `RABBITMQ_PASSWORD`
+- Componente 4: `RABBITMQ_USER` / `RABBITMQ_PASSWORD`
+
+> El usuario `RABBITMQ_DEFAULT_USER` solo se crea al inicializar el volumen. Si
+> el volumen `rabbitmq_data` ya existía con `guest`, hay que recrearlo (ver
+> sección 8).
 
 Si no se puede cambiar el broker, la alternativa es desactivar la restricción:
 
@@ -548,11 +568,10 @@ No se recomienda en producción.
 
 #### 6.3.2. Versiones distintas
 
-- Compose global: `rabbitmq:3-management-alpine`
-- Compose aislado del Componente 2: `rabbitmq:4-management`
-
-**Solución:** unificar en `rabbitmq:4-management` (o en la misma versión que
-use el equipo) para que las colas, argumentos y consola se comporten igual.
+- Estado anterior: compose global con `rabbitmq:3-management-alpine` y compose
+  aislado del Componente 2 con `rabbitmq:4-management`.
+- **Solución aplicada:** ambos usan `rabbitmq:4-management`, con el mismo
+  usuario `cinasee`.
 
 #### 6.3.3. Dos brokers a la vez
 
@@ -616,31 +635,41 @@ Ejemplo de healthcheck de Mongo:
 | Elemento | Responsable | Estado |
 |---|---|---|
 | MySQL, Redis, Comp. 3, Dockerfile y compose del Comp. 3 | Nosotros | Hecho |
-| Comp. 1: JWT, Dockerfile, healthcheck de Mongo | Compañero/a de Cartelera | Pendiente |
-| Comp. 2: usuario RabbitMQ, healthcheck de RabbitMQ | Compañero/a de Reservas | Pendiente |
-| Comp. 4: URL de Usuarios, JWT, Dockerfile, healthcheck | Compañero/a de Analítica | Pendiente |
-| RabbitMQ compartido: usuario dedicado y versión | Equipo | Pendiente |
+| Comp. 1: JWT, Dockerfile, healthcheck de Mongo | Nosotros | Hecho |
+| Comp. 2: usuario RabbitMQ, compose aislado | Nosotros | Hecho |
+| Comp. 4: URL de Usuarios, JWT, Dockerfile, healthcheck | Nosotros | Hecho |
+| RabbitMQ compartido: usuario dedicado y versión | Nosotros | Hecho |
 | Frontend | Otra rama | Fuera de alcance |
 | Gateway | Sin implementar | Fuera de alcance |
 
 ---
 
-## 8. Orden recomendado para completar el stack
+## 8. Arranque del stack completo
 
-1. Aplicar las correcciones del Componente 1 (sección 6.1).
-2. Aplicar las correcciones del Componente 4 (sección 6.2).
-3. Unificar el usuario y la versión de RabbitMQ (sección 6.3).
-4. Añadir healthchecks y `depends_on` en el compose (sección 6.4).
-5. Ejecutar:
+Las correcciones de las secciones 6.1 a 6.4 ya están aplicadas. Como el usuario
+de RabbitMQ ha cambiado, hay que recrear **solo** el volumen del broker:
 
 ```powershell
+# 1. Parar el stack (NO uses -v: borraría MySQL y Redis)
+docker compose down
+
+# 2. Ver el nombre real del volumen de RabbitMQ
+docker volume ls | Select-String "rabbitmq"
+
+# 3. Borrar solo ese volumen (las colas se recrean al arrancar)
+docker volume rm cinasee_rabbitmq_data
+
+# 4. Validar, construir y levantar
 docker compose config
 docker compose build
 docker compose up -d
 docker compose ps
 ```
 
-6. Revisar logs de cada servicio:
+> No borres `cinasee-mysql-data` ni `cinasee-redis-data`: contienen los datos
+> que se quieren conservar.
+
+Por último, revisar los logs de cada servicio:
 
 ```powershell
 docker compose logs -f componente1-cartelera
@@ -696,6 +725,33 @@ docker exec -it cinasee-mysql-usuarios mysql -ucinasee -pcinasee cinasee_users_d
   -e "SELECT * FROM purchase_history;"
 ```
 
+### 9.3. Pruebas de los endpoints corregidos
+
+```powershell
+# Cartelera: listado y detalle públicos (sin JWT)
+Invoke-RestMethod http://localhost:8081/api/v1/movies
+
+# Login en IAM
+$base = "http://localhost:8083/v1/iam"
+$login = @{ email = "cliente@cinasee.com"; password = "Password123!" } | ConvertTo-Json
+$token = (Invoke-RestMethod -Method Post -Uri "$base/auth/login" `
+  -ContentType "application/json" -Body $login).accessToken
+$headers = @{ Authorization = "Bearer $token" }
+
+# Analítica: recomendaciones del propio usuario
+Invoke-RestMethod -Uri "http://localhost:8084/api/recommendations/users/1" -Headers $headers
+
+# Analítica: métricas (requiere STAFF_TAQUILLA o ADMIN)
+Invoke-RestMethod -Uri "http://localhost:8084/api/metrics/occupancy?cinemaId=1" -Headers $headers
+
+# Analítica: sin token debe devolver 401
+try {
+  Invoke-RestMethod -Uri "http://localhost:8084/api/reports/box-office"
+} catch {
+  $_.Exception.Response.StatusCode.value__   # 401
+}
+```
+
 ---
 
 ## 10. Limitaciones conocidas
@@ -704,6 +760,7 @@ docker exec -it cinasee-mysql-usuarios mysql -ucinasee -pcinasee cinasee_users_d
 - La clave RSA se regenera en cada arranque.
 - `ddl-auto: update` no es apto para producción.
 - La DLQ no tiene reintento automático ni alerta.
-- El stack completo depende de las correcciones pendientes de los Componentes
-  1 y 4.
+- El volumen de RabbitMQ debe recrearse si se cambia el usuario del broker.
+- El listener de eventos del Componente 4 llama a Cartelera sin JWT; por eso
+  `GET /movies/{id}` es público. El resto de llamadas sí reenvían el token.
 - El frontend y el gateway quedan fuera de este despliegue.
