@@ -5,6 +5,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 
 @Configuration
@@ -14,9 +15,11 @@ public class SecurityConfig {
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
             .csrf(csrf -> csrf.disable())
+            .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
+                .requestMatchers("/error").permitAll()
                 // Excepciones de seguridad públicas según el esquema OpenAPI
-                .requestMatchers(HttpMethod.GET, "/movies", "/api/v1/movies").permitAll() // Listado de películas público
+                .requestMatchers(HttpMethod.GET, "/movies", "/movies/**", "/api/v1/movies", "/api/v1/movies/**").permitAll() // Listado y detalle de películas públicos
                 .requestMatchers(HttpMethod.GET, "/sessions", "/api/v1/sessions").permitAll() // Consulta de cartelera pública
                 // El resto de la API protegida por defecto
                 .anyRequest().authenticated()
@@ -26,4 +29,3 @@ public class SecurityConfig {
         return http.build();
     }
 }
-

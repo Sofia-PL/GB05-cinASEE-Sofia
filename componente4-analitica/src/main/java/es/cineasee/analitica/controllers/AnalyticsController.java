@@ -7,6 +7,7 @@ import es.cineasee.analitica.services.AnalyticsService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
@@ -43,6 +44,7 @@ public class AnalyticsController {
     }
 
     @GetMapping("/recommendations/users/{userId}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'STAFF_TAQUILLA') or #userId.toString() == authentication.name")
     public ResponseEntity<RecommendationResponseDTO> getUserRecommendations(
             @PathVariable("userId") Long userId,
             @RequestParam(value = "limit", defaultValue = "5") Integer limit) {

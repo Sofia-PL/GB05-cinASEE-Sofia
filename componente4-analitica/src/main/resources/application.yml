@@ -1,5 +1,5 @@
 server:
-  port: 8084
+  port: ${SERVER_PORT:8084}
   servlet:
     context-path: /api
 
@@ -25,13 +25,25 @@ spring:
   rabbitmq:
     host: ${RABBITMQ_HOST:localhost}
     port: ${RABBITMQ_PORT:5672}
-    username: ${RABBITMQ_USERNAME:guest}
+    # RABBITMQ_USER es el nombre que usan los Componentes 2 y 3;
+    # se mantiene RABBITMQ_USERNAME como alternativa por compatibilidad.
+    username: ${RABBITMQ_USER:${RABBITMQ_USERNAME:guest}}
     password: ${RABBITMQ_PASSWORD:guest}
     virtual-host: /
     listener:
       simple:
         auto-startup: true
         acknowledge-mode: auto
+
+  # Validación de los JWT emitidos por el Componente 3 (IAM)
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # La clave pública se descarga por la red de Docker
+          jwk-set-uri: ${JWT_JWK_SET_URI:http://localhost:8083/v1/iam/.well-known/jwks.json}
+          # Debe coincidir con el claim "iss" que firma el Comp. 3
+          issuer-uri: ${JWT_ISSUER:http://localhost:8083/v1/iam}
 
 # Integración con RabbitMQ
 app:
@@ -45,7 +57,8 @@ services:
   cartelera:
     url: ${CARTELERA_SERVICE_URL:http://localhost:8081/api/v1}
   usuarios:
-    url: ${USUARIOS_SERVICE_URL:http://localhost:8083/api/v1}
+    # El context-path del Comp. 3 es /v1/iam (no /api/v1)
+    url: ${USUARIOS_SERVICE_URL:http://localhost:8083/v1/iam}
   gateway:
     url: ${GATEWAY_SERVICE_URL:http://localhost:8080}
 
@@ -59,4 +72,3 @@ eureka:
   instance:
     prefer-ip-address: true
     instance-id: ${spring.application.name}:${server.port}
-
