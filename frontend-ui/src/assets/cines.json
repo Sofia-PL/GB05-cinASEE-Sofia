@@ -1,7 +1,7 @@
 [
   {
     "id": 1,
-    "name": "CineASEE Gran Via",
+    "name": "CinASEE Gran Via",
     "city": "Madrid",
     "province": "Madrid",
     "address": "Gran Via, 42",
@@ -13,7 +13,7 @@
   },
   {
     "id": 2,
-    "name": "CineASEE Diagonal",
+    "name": "CinASEE Diagonal",
     "city": "Barcelona",
     "province": "Barcelona",
     "address": "Avinguda Diagonal, 557",
@@ -25,7 +25,7 @@
   },
   {
     "id": 3,
-    "name": "CineASEE Turia",
+    "name": "CinASEE Turia",
     "city": "Valencia",
     "province": "Valencia",
     "address": "Carrer de Colon, 38",
@@ -37,7 +37,7 @@
   },
   {
     "id": 4,
-    "name": "CineASEE Nervion",
+    "name": "CinASEE Nervion",
     "city": "Sevilla",
     "province": "Sevilla",
     "address": "Avenida Eduardo Dato, 25",
@@ -49,7 +49,7 @@
   },
   {
     "id": 5,
-    "name": "CineASEE Alameda",
+    "name": "CinASEE Alameda",
     "city": "Malaga",
     "province": "Malaga",
     "address": "Alameda Principal, 18",
@@ -61,7 +61,7 @@
   },
   {
     "id": 6,
-    "name": "CineASEE Guggenheim",
+    "name": "CinASEE Guggenheim",
     "city": "Bilbao",
     "province": "Bizkaia",
     "address": "Avenida Abandoibarra, 2",
@@ -73,7 +73,7 @@
   },
   {
     "id": 7,
-    "name": "CineASEE Atlantico",
+    "name": "CinASEE Atlantico",
     "city": "A Coruna",
     "province": "A Coruna",
     "address": "Rua Real, 31",
@@ -85,7 +85,7 @@
   },
   {
     "id": 8,
-    "name": "CineASEE Cesaraugusta",
+    "name": "CinASEE Cesaraugusta",
     "city": "Zaragoza",
     "province": "Zaragoza",
     "address": "Paseo de la Independencia, 24",
@@ -97,7 +97,7 @@
   },
   {
     "id": 9,
-    "name": "CineASEE Macarena",
+    "name": "CinASEE Macarena",
     "city": "Granada",
     "province": "Granada",
     "address": "Calle Recogidas, 18",
@@ -109,7 +109,7 @@
   },
   {
     "id": 10,
-    "name": "CineASEE Mediterraneo",
+    "name": "CinASEE Mediterraneo",
     "city": "Alicante",
     "province": "Alicante",
     "address": "Avenida Maisonnave, 12",
@@ -121,7 +121,7 @@
   },
   {
     "id": 11,
-    "name": "CineASEE Palma",
+    "name": "CinASEE Palma",
     "city": "Palma",
     "province": "Illes Balears",
     "address": "Avinguda Jaume III, 15",
@@ -133,7 +133,7 @@
   },
   {
     "id": 12,
-    "name": "CineASEE Anaga",
+    "name": "CinASEE Anaga",
     "city": "Santa Cruz de Tenerife",
     "province": "Santa Cruz de Tenerife",
     "address": "Avenida Tres de Mayo, 7",
