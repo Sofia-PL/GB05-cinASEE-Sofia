@@ -130,7 +130,7 @@ services:
         condition: service_started
     environment:
       # Sobrescribimos la URI para que apunte al nombre del contenedor de Mongo, no a localhost
-      SPRING_DATA_MONGODB_URI: mongodb://mongodb-cartelera:27017/cine_catalog_db
+      SPRING_MONGODB_URI: mongodb://mongodb-cartelera:27017/cine_catalog_db
       # El JWKS se descarga por la red interna; el "iss" sigue siendo el público del Comp. 3
       JWT_JWK_SET_URI: http://componente3-usuarios:8083/v1/iam/.well-known/jwks.json
       JWT_ISSUER: http://localhost:8083/v1/iam
