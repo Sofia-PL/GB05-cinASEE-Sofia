@@ -60,20 +60,21 @@ function cargarUsuario() {
   }
 }
 
-/* =========================================================
-   Contexto
-   ========================================================= */
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(cargarUsuario);
 
   /**
-   * @returns {{ ok: boolean, user?: object, error?: string }}
+   * Inicio de sesión local con control de errores
    */
   function login(email, password) {
     const normEmail = (email || '').trim().toLowerCase();
     const normPass = (password || '').trim();
+
+    if (!normEmail || !normPass) {
+      return { ok: false, error: 'Por favor, introduce tu correo electrónico y contraseña.' };
+    }
 
     // 1. Buscar en usuarios fijos del sistema
     let found = USUARIOS_FICTICIOS.find(
@@ -93,7 +94,10 @@ export function AuthProvider({ children }) {
     }
 
     if (!found) {
-      return { ok: false, error: 'Correo electrónico o contraseña incorrectos. Comprueba los datos de prueba.' };
+      return {
+        ok: false,
+        error: 'Correo electrónico o contraseña incorrectos. Comprueba los datos o usa el acceso rápido.',
+      };
     }
 
     const userData = { name: found.name, email: found.email, rol: found.rol };
@@ -103,17 +107,23 @@ export function AuthProvider({ children }) {
   }
 
   /**
-   * Registro ficticio con selección de rol.
-   * @returns {{ ok: boolean, user?: object, error?: string }}
+   * Registro local con validaciones
    */
   function register(name, email, password, rol = 'USER') {
-    if (!name || !email || !password) {
+    const cleanName = (name || '').trim();
+    const cleanEmail = (email || '').trim().toLowerCase();
+    const cleanPass = (password || '').trim();
+
+    if (!cleanName || !cleanEmail || !cleanPass) {
       return { ok: false, error: 'Todos los campos son obligatorios.' };
     }
-    const normEmail = email.trim().toLowerCase();
-    const yaFijo = USUARIOS_FICTICIOS.find((u) => u.email.toLowerCase() === normEmail);
+    if (cleanPass.length < 8) {
+      return { ok: false, error: 'La contraseña debe tener un mínimo de 8 caracteres.' };
+    }
+
+    const yaFijo = USUARIOS_FICTICIOS.find((u) => u.email.toLowerCase() === cleanEmail);
     if (yaFijo) {
-      return { ok: false, error: 'Ese correo ya está registrado en el sistema.' };
+      return { ok: false, error: 'Ese correo electrónico ya está registrado en el sistema.' };
     }
 
     let regUsers = [];
@@ -123,11 +133,11 @@ export function AuthProvider({ children }) {
       regUsers = [];
     }
 
-    if (regUsers.some((u) => u.email.toLowerCase() === normEmail)) {
+    if (regUsers.some((u) => u.email.toLowerCase() === cleanEmail)) {
       return { ok: false, error: 'Ese correo ya está registrado.' };
     }
 
-    const newUser = { name: name.trim(), email: normEmail, password, rol: rol || 'USER' };
+    const newUser = { name: cleanName, email: cleanEmail, password: cleanPass, rol: rol || 'USER' };
     regUsers.push(newUser);
     localStorage.setItem(LS_REG_KEY, JSON.stringify(regUsers));
 
@@ -137,13 +147,40 @@ export function AuthProvider({ children }) {
     return { ok: true, user: userData };
   }
 
+  function updateUser(newData) {
+    if (!user) return null;
+    const updated = { ...user, ...newData };
+    localStorage.setItem(LS_KEY, JSON.stringify(updated));
+    try {
+      const regUsers = JSON.parse(localStorage.getItem(LS_REG_KEY) || '[]');
+      const idx = regUsers.findIndex((u) => u.email.toLowerCase() === user.email.toLowerCase());
+      if (idx !== -1) {
+        regUsers[idx] = { ...regUsers[idx], ...newData };
+        localStorage.setItem(LS_REG_KEY, JSON.stringify(regUsers));
+      }
+    } catch {
+      // ignorar
+    }
+    setUser(updated);
+    return updated;
+  }
+
   function logout() {
     localStorage.removeItem(LS_KEY);
     setUser(null);
   }
 
   return (
-    <AuthContext.Provider value={{ user, login, register, logout }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        isAuthenticated: Boolean(user),
+        login,
+        register,
+        logout,
+        updateUser,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );
@@ -152,4 +189,3 @@ export function AuthProvider({ children }) {
 export function useAuth() {
   return useContext(AuthContext);
 }
-

@@ -5,7 +5,7 @@ export default function AdminMetricasPage() {
   const [periodo, setPeriodo] = useState('semana');
   const [diaConcreto, setDiaConcreto] = useState(() => new Date().toISOString().split('T')[0]);
 
-  // Cálculo ficticio según el periodo o día concreto
+  // Cálculo ficticio según el periodo o día concreto esto luego se quita 
   const datos = (() => {
     if (periodo === 'dia-concreto') {
       const seed = diaConcreto.split('-').reduce((acc, v) => acc + parseInt(v, 10), 0);

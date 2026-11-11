@@ -30,7 +30,6 @@ export default function CarteleraPage() {
   return (
     <div className="cartelera-page">
       <header className="cartelera-header">
-        <p className="home-eyebrow">CinASEE España</p>
         <h1>Cartelera</h1>
         <p className="cartelera-subtitle">
           Pasa el ratón sobre cualquier película para consultar su sinopsis y comprar entradas

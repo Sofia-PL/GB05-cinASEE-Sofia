@@ -211,7 +211,7 @@ export default function AdminSalasPage() {
     <div className="admin-page-container">
       <header className="admin-header">
         <div>
-          <h1 className="admin-header-title">Gestión de Salas y Complejo Cinematográfico</h1>
+          <h1 className="admin-header-title">Gestión de Salas y Cine</h1>
           <p className="admin-header-desc">
             Configuración técnica de aforos, filas, columnas, estado operativo y datos de contacto del cine.
           </p>
@@ -260,7 +260,7 @@ export default function AdminSalasPage() {
         <>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px' }}>
             <p style={{ margin: 0, fontSize: '0.9rem', color: 'var(--text-muted)' }}>
-              Complejo: <strong>{cineActivo.name}</strong> · Capacidad total activa: <strong>
+              Cine: <strong>{cineActivo.name}</strong> · Capacidad total activa: <strong>
                 {salas.reduce((acc, s) => acc + (s.filas * s.cols - (s.asientosInoperativos || 0)), 0)} butacas
               </strong>
             </p>
@@ -346,7 +346,7 @@ export default function AdminSalasPage() {
             Ficha Oficial de {cineActivo.name}
           </h2>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem', margin: '0 0 20px' }}>
-            Modifica los canales de atención al público, teléfonos, correo y horario de apertura del complejo.
+            Modifica los canales de atención al público, teléfonos, correo y horario de apertura del cine.
           </p>
 
           {cineGuardadoMsg && (
@@ -367,7 +367,7 @@ export default function AdminSalasPage() {
           <form onSubmit={handleGuardarCine}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
               <div className="admin-form-group">
-                <label className="admin-label">Nombre del Complejo</label>
+                <label className="admin-label">Nombre del Cine</label>
                 <input
                   type="text"
                   className="admin-input"

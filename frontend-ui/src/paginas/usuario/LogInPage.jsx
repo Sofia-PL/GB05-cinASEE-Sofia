@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 export default function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -9,10 +11,12 @@ export default function LoginPage() {
 
   const defaultTab = location.pathname === '/registro' ? 'registro' : 'login';
   const [tab, setTab] = useState(defaultTab);
-  const [error, setError] = useState('');
+  const [errorGlobal, setErrorGlobal] = useState('');
+  const [cargando, setCargando] = useState(false);
+  const [campoErrores, setCampoErrores] = useState({});
 
   const [loginData, setLoginData] = useState({ email: '', password: '' });
-  const [regData, setRegData] = useState({ name: '', email: '', password: '', confirm: '', rol: 'USER' });
+  const [regData, setRegData] = useState({ name: '', email: '', password: '', confirm: '' });
 
   function redirigirSegunRol(rol) {
     if (rol === 'ADMIN') {
@@ -24,47 +28,117 @@ export default function LoginPage() {
     }
   }
 
-  function handleLogin(e) {
+  function limpiarErrores() {
+    setErrorGlobal('');
+    setCampoErrores({});
+  }
+
+  async function handleLogin(e) {
     e.preventDefault();
-    setError('');
-    const result = login(loginData.email, loginData.password);
-    if (result.ok) {
-      redirigirSegunRol(result.user?.rol);
-    } else {
-      setError(result.error);
+    limpiarErrores();
+
+    const nuevosErrores = {};
+    const emailTrim = (loginData.email || '').trim();
+    const passTrim = (loginData.password || '').trim();
+
+    if (!emailTrim) {
+      nuevosErrores.email = 'Introduce tu correo electrónico.';
+    } else if (!EMAIL_REGEX.test(emailTrim)) {
+      nuevosErrores.email = 'El formato del correo electrónico no es válido.';
+    }
+
+    if (!passTrim) {
+      nuevosErrores.password = 'Introduce tu contraseña.';
+    }
+
+    if (Object.keys(nuevosErrores).length > 0) {
+      setCampoErrores(nuevosErrores);
+      setErrorGlobal('Por favor, revisa los campos marcados en rojo.');
+      return;
+    }
+
+    setCargando(true);
+    try {
+      const result = await login(emailTrim, passTrim);
+      if (result.ok) {
+        redirigirSegunRol(result.user?.rol);
+      } else {
+        setErrorGlobal(result.error || 'Credenciales inválidas.');
+      }
+    } catch {
+      setErrorGlobal('Error inesperado al iniciar sesión.');
+    } finally {
+      setCargando(false);
     }
   }
 
-  function loginDemo(email, pass) {
-    setError('');
-    const result = login(email, pass);
-    if (result.ok) {
-      redirigirSegunRol(result.user?.rol);
-    } else {
-      setError(result.error);
+  async function loginDemo(email, pass) {
+    limpiarErrores();
+    setCargando(true);
+    try {
+      const result = await login(email, pass);
+      if (result.ok) {
+        redirigirSegunRol(result.user?.rol);
+      } else {
+        setErrorGlobal(result.error);
+      }
+    } finally {
+      setCargando(false);
     }
   }
 
-  function handleRegister(e) {
+  async function handleRegister(e) {
     e.preventDefault();
-    setError('');
-    if (!regData.name.trim() || !regData.email.trim() || !regData.password) {
-      setError('Por favor, completa todos los campos.');
+    limpiarErrores();
+
+    const nuevosErrores = {};
+    const nameTrim = (regData.name || '').trim();
+    const emailTrim = (regData.email || '').trim();
+    const pass = regData.password || '';
+    const confirm = regData.confirm || '';
+
+    if (!nameTrim) {
+      nuevosErrores.name = 'Introduce tu nombre y apellidos.';
+    } else if (nameTrim.length < 3) {
+      nuevosErrores.name = 'El nombre debe tener al menos 3 caracteres.';
+    }
+
+    if (!emailTrim) {
+      nuevosErrores.email = 'Introduce tu correo electrónico.';
+    } else if (!EMAIL_REGEX.test(emailTrim)) {
+      nuevosErrores.email = 'El correo electrónico no tiene un formato válido.';
+    }
+
+    if (!pass) {
+      nuevosErrores.password = 'Introduce una contraseña.';
+    } else if (pass.length < 8) {
+      nuevosErrores.password = 'La contraseña debe tener un mínimo de 8 caracteres (requisito del sistema).';
+    }
+
+    if (!confirm) {
+      nuevosErrores.confirm = 'Confirma tu contraseña.';
+    } else if (pass !== confirm) {
+      nuevosErrores.confirm = 'Las contraseñas no coinciden.';
+    }
+
+    if (Object.keys(nuevosErrores).length > 0) {
+      setCampoErrores(nuevosErrores);
+      setErrorGlobal('Corrige los errores antes de continuar.');
       return;
     }
-    if (regData.password !== regData.confirm) {
-      setError('Las contraseñas no coinciden');
-      return;
-    }
-    if (regData.password.length < 4) {
-      setError('La contraseña debe tener al menos 4 caracteres');
-      return;
-    }
-    const result = register(regData.name, regData.email, regData.password, regData.rol);
-    if (result.ok) {
-      redirigirSegunRol(result.user?.rol);
-    } else {
-      setError(result.error);
+
+    setCargando(true);
+    try {
+      const result = register(nameTrim, emailTrim, pass, 'USER');
+      if (result.ok) {
+        redirigirSegunRol('USER');
+      } else {
+        setErrorGlobal(result.error || 'Error al crear la cuenta.');
+      }
+    } catch {
+      setErrorGlobal('Error inesperado al procesar el registro.');
+    } finally {
+      setCargando(false);
     }
   }
 
@@ -83,6 +157,7 @@ export default function LoginPage() {
             <button
               type="button"
               className="login-role-btn login-role-btn--admin"
+              disabled={cargando}
               onClick={() => loginDemo('admin@cinasee.es', 'admin123')}
             >
               <div>
@@ -93,6 +168,7 @@ export default function LoginPage() {
             <button
               type="button"
               className="login-role-btn login-role-btn--staff"
+              disabled={cargando}
               onClick={() => loginDemo('staff@cinasee.es', 'staff123')}
             >
               <div>
@@ -103,6 +179,7 @@ export default function LoginPage() {
             <button
               type="button"
               className="login-role-btn login-role-btn--user"
+              disabled={cargando}
               onClick={() => loginDemo('usuario@cinasee.es', 'user123')}
             >
               <div>
@@ -123,7 +200,7 @@ export default function LoginPage() {
             role="tab"
             aria-selected={tab === 'login'}
             className={`login-tab${tab === 'login' ? ' active' : ''}`}
-            onClick={() => { setTab('login'); setError(''); }}
+            onClick={() => { setTab('login'); limpiarErrores(); }}
           >
             Iniciar sesión
           </button>
@@ -131,7 +208,7 @@ export default function LoginPage() {
             role="tab"
             aria-selected={tab === 'registro'}
             className={`login-tab${tab === 'registro' ? ' active' : ''}`}
-            onClick={() => { setTab('registro'); setError(''); }}
+            onClick={() => { setTab('registro'); limpiarErrores(); }}
           >
             Registrarse
           </button>
@@ -159,7 +236,24 @@ export default function LoginPage() {
           </div>
         )}
 
-        {error && <p className="login-error" role="alert">{error}</p>}
+        {errorGlobal && (
+          <div
+            className="login-error"
+            role="alert"
+            style={{
+              padding: '10px 14px',
+              borderRadius: '6px',
+              background: '#fde8e8',
+              border: '1px solid #f8b4b4',
+              color: '#9b1c1c',
+              marginBottom: '16px',
+              fontSize: '0.88rem',
+              fontWeight: 600
+            }}
+          >
+            {errorGlobal}
+          </div>
+        )}
 
         {tab === 'login' && (
           <form className="login-form" onSubmit={handleLogin} noValidate>
@@ -170,11 +264,20 @@ export default function LoginPage() {
                 type="email"
                 autoComplete="email"
                 placeholder="ejemplo@cinasee.com"
-                required
                 value={loginData.email}
-                onChange={(e) => setLoginData((p) => ({ ...p, email: e.target.value }))}
+                onChange={(e) => {
+                  setLoginData((p) => ({ ...p, email: e.target.value }));
+                  if (campoErrores.email) setCampoErrores((prev) => ({ ...prev, email: '' }));
+                }}
+                style={campoErrores.email ? { borderColor: '#d9383a', background: '#fff5f5' } : {}}
               />
+              {campoErrores.email && (
+                <span style={{ color: '#d9383a', fontSize: '0.8rem', marginTop: '4px' }}>
+                  {campoErrores.email}
+                </span>
+              )}
             </div>
+
             <div className="login-field">
               <label htmlFor="login-pass">Contraseña</label>
               <input
@@ -182,13 +285,27 @@ export default function LoginPage() {
                 type="password"
                 autoComplete="current-password"
                 placeholder="Introduce tu contraseña"
-                required
                 value={loginData.password}
-                onChange={(e) => setLoginData((p) => ({ ...p, password: e.target.value }))}
+                onChange={(e) => {
+                  setLoginData((p) => ({ ...p, password: e.target.value }));
+                  if (campoErrores.password) setCampoErrores((prev) => ({ ...prev, password: '' }));
+                }}
+                style={campoErrores.password ? { borderColor: '#d9383a', background: '#fff5f5' } : {}}
               />
+              {campoErrores.password && (
+                <span style={{ color: '#d9383a', fontSize: '0.8rem', marginTop: '4px' }}>
+                  {campoErrores.password}
+                </span>
+              )}
             </div>
-            <button className="login-submit home-button" type="submit">
-              Acceder a la cuenta
+
+            <button
+              className="login-submit home-button"
+              type="submit"
+              disabled={cargando}
+              style={{ opacity: cargando ? 0.7 : 1, cursor: cargando ? 'not-allowed' : 'pointer' }}
+            >
+              {cargando ? 'Accediendo...' : 'Acceder a la cuenta'}
             </button>
           </form>
         )}
@@ -202,11 +319,20 @@ export default function LoginPage() {
                 type="text"
                 autoComplete="name"
                 placeholder="Tu nombre completo"
-                required
                 value={regData.name}
-                onChange={(e) => setRegData((p) => ({ ...p, name: e.target.value }))}
+                onChange={(e) => {
+                  setRegData((p) => ({ ...p, name: e.target.value }));
+                  if (campoErrores.name) setCampoErrores((prev) => ({ ...prev, name: '' }));
+                }}
+                style={campoErrores.name ? { borderColor: '#d9383a', background: '#fff5f5' } : {}}
               />
+              {campoErrores.name && (
+                <span style={{ color: '#d9383a', fontSize: '0.8rem', marginTop: '4px' }}>
+                  {campoErrores.name}
+                </span>
+              )}
             </div>
+
             <div className="login-field">
               <label htmlFor="reg-email">Correo electrónico</label>
               <input
@@ -214,43 +340,41 @@ export default function LoginPage() {
                 type="email"
                 autoComplete="email"
                 placeholder="tu@email.com"
-                required
                 value={regData.email}
-                onChange={(e) => setRegData((p) => ({ ...p, email: e.target.value }))}
-              />
-            </div>
-            <div className="login-field">
-              <label htmlFor="reg-rol">Tipo de perfil</label>
-              <select
-                id="reg-rol"
-                value={regData.rol}
-                onChange={(e) => setRegData((p) => ({ ...p, rol: e.target.value }))}
-                style={{
-                  padding: '10px 14px',
-                  borderRadius: 'var(--radius-sm)',
-                  border: '1px solid rgba(43, 18, 21, 0.2)',
-                  font: 'inherit',
-                  background: 'white',
-                  color: 'var(--dark-burgundy)'
+                onChange={(e) => {
+                  setRegData((p) => ({ ...p, email: e.target.value }));
+                  if (campoErrores.email) setCampoErrores((prev) => ({ ...prev, email: '' }));
                 }}
-              >
-                <option value="USER">Cliente / Espectador</option>
-                <option value="STAFF">Personal de sala y taquilla</option>
-                <option value="ADMIN">Administrador de cine</option>
-              </select>
+                style={campoErrores.email ? { borderColor: '#d9383a', background: '#fff5f5' } : {}}
+              />
+              {campoErrores.email && (
+                <span style={{ color: '#d9383a', fontSize: '0.8rem', marginTop: '4px' }}>
+                  {campoErrores.email}
+                </span>
+              )}
             </div>
+
             <div className="login-field">
-              <label htmlFor="reg-pass">Contraseña</label>
+              <label htmlFor="reg-pass">Contraseña (mínimo 8 caracteres)</label>
               <input
                 id="reg-pass"
                 type="password"
                 autoComplete="new-password"
-                placeholder="Mínimo 4 caracteres"
-                required
+                placeholder="Mínimo 8 caracteres"
                 value={regData.password}
-                onChange={(e) => setRegData((p) => ({ ...p, password: e.target.value }))}
+                onChange={(e) => {
+                  setRegData((p) => ({ ...p, password: e.target.value }));
+                  if (campoErrores.password) setCampoErrores((prev) => ({ ...prev, password: '' }));
+                }}
+                style={campoErrores.password ? { borderColor: '#d9383a', background: '#fff5f5' } : {}}
               />
+              {campoErrores.password && (
+                <span style={{ color: '#d9383a', fontSize: '0.8rem', marginTop: '4px' }}>
+                  {campoErrores.password}
+                </span>
+              )}
             </div>
+
             <div className="login-field">
               <label htmlFor="reg-confirm">Confirmar contraseña</label>
               <input
@@ -258,13 +382,27 @@ export default function LoginPage() {
                 type="password"
                 autoComplete="new-password"
                 placeholder="Repite la contraseña"
-                required
                 value={regData.confirm}
-                onChange={(e) => setRegData((p) => ({ ...p, confirm: e.target.value }))}
+                onChange={(e) => {
+                  setRegData((p) => ({ ...p, confirm: e.target.value }));
+                  if (campoErrores.confirm) setCampoErrores((prev) => ({ ...prev, confirm: '' }));
+                }}
+                style={campoErrores.confirm ? { borderColor: '#d9383a', background: '#fff5f5' } : {}}
               />
+              {campoErrores.confirm && (
+                <span style={{ color: '#d9383a', fontSize: '0.8rem', marginTop: '4px' }}>
+                  {campoErrores.confirm}
+                </span>
+              )}
             </div>
-            <button className="login-submit home-button" type="submit">
-              Crear cuenta
+
+            <button
+              className="login-submit home-button"
+              type="submit"
+              disabled={cargando}
+              style={{ opacity: cargando ? 0.7 : 1, cursor: cargando ? 'not-allowed' : 'pointer' }}
+            >
+              {cargando ? 'Creando cuenta...' : 'Crear cuenta'}
             </button>
           </form>
         )}

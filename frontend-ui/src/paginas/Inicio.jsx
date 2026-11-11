@@ -26,7 +26,7 @@ export default function Inicio() {
 
     const timer = window.setInterval(() => {
       setActiveMovie((index) => (index + 1) % availableMovies.length);
-    }, 8000);
+    }, 5000);
 
     return () => window.clearInterval(timer);
   }, [availableMovies.length]);
@@ -76,8 +76,7 @@ export default function Inicio() {
         )}
       </section>
 
-      {/* Listado de cines en el inicio con diseño actual y armónico */}
-      {/* Listado de cines en el inicio con avance difuminado y botón "Ver más cines" */}
+      {/* Listado de cines en el inicio */}
       <section className="home-cinemas-section">
         <p className="home-eyebrow">CinASEE España</p>
         <h2>Nuestros cines</h2>

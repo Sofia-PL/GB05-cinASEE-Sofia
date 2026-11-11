@@ -25,7 +25,7 @@ function loadPeliculas() {
   }
   return initialPeliculas.map((p) => ({
     ...p,
-    trailerUrl: p.trailerUrl || 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+    trailerUrl: p.trailerUrl,
   }));
 }
 
@@ -50,7 +50,7 @@ export default function AdminPeliculasPage() {
     inShowcase: false,
   });
 
-  // Persistir en localStorage
+  // Persistir en localStorage [Esto ns ]
   useEffect(() => {
     try {
       localStorage.setItem(LS_PELIS_KEY, JSON.stringify(peliculas));
@@ -109,10 +109,10 @@ export default function AdminPeliculasPage() {
         peliculas.map((p) =>
           p.id === formData.id
             ? {
-                ...p,
-                ...formData,
-                durationMinutes: Number(formData.durationMinutes) || 90,
-              }
+              ...p,
+              ...formData,
+              durationMinutes: Number(formData.durationMinutes) || 90,
+            }
             : p
         )
       );
@@ -280,7 +280,7 @@ export default function AdminPeliculasPage() {
                           rel="noreferrer"
                           style={{ color: 'var(--granate)', fontWeight: 600, fontSize: '0.82rem' }}
                         >
-                          Ver enlace ↗
+                          Ver enlace
                         </a>
                       ) : (
                         <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>Sin tráiler</span>

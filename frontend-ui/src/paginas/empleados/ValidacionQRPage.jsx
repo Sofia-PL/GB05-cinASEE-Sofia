@@ -6,14 +6,21 @@ export default function ValidacionQRPage() {
 
   function handleValidar(e) {
     e?.preventDefault();
-    if (!codigo.trim()) return;
+    const cleanCode = (codigo || '').trim();
+    if (!cleanCode) {
+      setResultado({
+        valido: false,
+        mensaje: 'Por favor, introduce o escanea un código de ticket antes de validar.',
+      });
+      return;
+    }
 
     let ticketEncontrado = null;
     try {
       const raw = localStorage.getItem('cinasee_entradas');
       if (raw) {
         const lista = JSON.parse(raw);
-        ticketEncontrado = lista.find((t) => t.id.toLowerCase() === codigo.trim().toLowerCase());
+        ticketEncontrado = lista.find((t) => t.id.toLowerCase() === cleanCode.toLowerCase());
       }
     } catch {
       // Ignorar
@@ -23,15 +30,15 @@ export default function ValidacionQRPage() {
       setResultado({
         valido: true,
         ticket: ticketEncontrado,
-        mensaje: 'Entrada verificada con éxito. Acceso permitido.',
+        mensaje: 'Entrada verificada con éxito. Acceso permitido a la sala.',
       });
-    } else if (codigo.toUpperCase().startsWith('CN-')) {
+    } else if (cleanCode.toUpperCase().startsWith('CN-') || cleanCode.toUpperCase().startsWith('QR-')) {
       setResultado({
         valido: true,
         ticket: {
-          id: codigo.toUpperCase(),
+          id: cleanCode.toUpperCase(),
           pelicula: 'Godzilla Minus Zero',
-          cine: 'CinASEE Gran Via',
+          cine: 'CinASEE Gran Vía',
           sala: 'Sala 1 (IMAX)',
           hora: '19:00',
           butacas: ['F5', 'F6'],
@@ -42,7 +49,7 @@ export default function ValidacionQRPage() {
     } else {
       setResultado({
         valido: false,
-        mensaje: 'Código no reconocido o entrada ya utilizada.',
+        mensaje: 'Código no reconocido, no registrado o entrada ya utilizada.',
       });
     }
   }

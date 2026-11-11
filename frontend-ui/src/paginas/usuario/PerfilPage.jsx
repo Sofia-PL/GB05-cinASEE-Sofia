@@ -1,11 +1,30 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { useCine } from '../../context/CineContext';
+import cines from '../../assets/cines.json';
 
 export default function PerfilPage() {
-  const { user, logout } = useAuth();
+  const { user, logout, updateUser } = useAuth();
+  const { setCineSeleccionado } = useCine();
   const navigate = useNavigate();
+
   const [entradas, setEntradas] = useState([]);
+  const [nombre, setNombre] = useState(user?.name || '');
+  const [email, setEmail] = useState(user?.email || '');
+  const [telefono, setTelefono] = useState(user?.telefono || '');
+  const [cineHabitualId, setCineHabitualId] = useState(user?.cineHabitualId || '');
+  const [mensajeExito, setMensajeExito] = useState('');
+  const [mensajeError, setMensajeError] = useState('');
+
+  useEffect(() => {
+    if (user) {
+      setNombre(user.name || '');
+      setEmail(user.email || '');
+      setTelefono(user.telefono || '');
+      setCineHabitualId(user.cineHabitualId || '');
+    }
+  }, [user]);
 
   useEffect(() => {
     try {
@@ -23,13 +42,52 @@ export default function PerfilPage() {
     navigate('/');
   }
 
+  function handleGuardarDatos(e) {
+    e.preventDefault();
+    if (!user) return;
+    setMensajeError('');
+    setMensajeExito('');
+
+    const cleanNombre = nombre.trim();
+    const cleanEmail = email.trim();
+
+    if (!cleanNombre) {
+      setMensajeError('El nombre y apellidos no pueden estar vacíos.');
+      return;
+    }
+    if (!cleanEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+      setMensajeError('Introduce un formato de correo electrónico válido.');
+      return;
+    }
+
+    const cineObj = cines.find((c) => c.id === Number(cineHabitualId));
+    const cineHabitualName = cineObj ? cineObj.name : '';
+
+    updateUser({
+      name: cleanNombre,
+      email: cleanEmail,
+      telefono: telefono.trim(),
+      cineHabitualId: cineHabitualId ? Number(cineHabitualId) : null,
+      cineHabitualName,
+    });
+
+    if (cineObj) {
+      setCineSeleccionado(cineObj);
+    }
+
+    setMensajeExito('Datos personales y cine habitual guardados con éxito.');
+    setTimeout(() => setMensajeExito(''), 3500);
+  }
+
   function borrarHistorial() {
     localStorage.removeItem('cinasee_entradas');
     setEntradas([]);
   }
 
+  const cineHabitualObj = cines.find((c) => c.id === Number(cineHabitualId));
+
   return (
-    <div style={{ maxWidth: '900px', margin: '0 auto', padding: 'clamp(28px, 4vw, 56px) var(--gutter)' }}>
+    <div style={{ maxWidth: '960px', margin: '0 auto', padding: 'clamp(28px, 4vw, 56px) var(--gutter)' }}>
       {/* Cabecera del perfil */}
       <header style={{
         background: 'white',
@@ -37,7 +95,7 @@ export default function PerfilPage() {
         padding: '28px',
         boxShadow: 'var(--shadow-md)',
         border: '1px solid rgba(217, 164, 65, 0.3)',
-        marginBottom: '32px',
+        marginBottom: '28px',
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
@@ -45,13 +103,18 @@ export default function PerfilPage() {
         gap: '20px'
       }}>
         <div>
-          <p className="home-eyebrow">Mi Cuenta CinASEE</p>
-          <h1 style={{ fontSize: '2rem', color: 'var(--burgundy)', margin: '4px 0 8px' }}>
+          <p className="home-eyebrow" style={{ margin: '0 0 4px' }}>Mi Cuenta CinASEE</p>
+          <h1 style={{ fontSize: '2rem', color: 'var(--burgundy)', margin: '4px 0 6px' }}>
             {user ? user.name : 'Usuario invitado'}
           </h1>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.95rem' }}>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.92rem', margin: 0 }}>
             {user ? user.email : 'Sin sesión iniciada'} &nbsp;·&nbsp;
             Perfil: <strong style={{ color: 'var(--granate)' }}>{user ? user.rol : 'INVITADO'}</strong>
+            {cineHabitualObj && (
+              <>
+                &nbsp;·&nbsp; Cine habitual: <strong style={{ color: 'var(--burgundy)' }}>{cineHabitualObj.name}</strong>
+              </>
+            )}
           </p>
         </div>
 
@@ -77,11 +140,148 @@ export default function PerfilPage() {
         </div>
       </header>
 
+      {/* Sección: Edición de Datos Personales y Cine Habitual */}
+      {user && (
+        <section style={{
+          background: 'white',
+          borderRadius: 'var(--radius-lg)',
+          padding: '28px',
+          boxShadow: 'var(--shadow-md)',
+          border: '1px solid rgba(217, 164, 65, 0.3)',
+          marginBottom: '32px'
+        }}>
+          <div style={{ marginBottom: '18px' }}>
+            <h2 style={{ fontSize: '1.45rem', color: 'var(--burgundy)', margin: '0 0 4px', fontWeight: 700 }}>
+              Datos Personales y Cine Habitual
+            </h2>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', margin: 0 }}>
+              Actualiza tu información y vincula tu cine de preferencia para acelerar la compra de entradas.
+            </p>
+          </div>
+
+          {mensajeExito && (
+            <div style={{
+              background: 'rgba(40, 167, 69, 0.12)',
+              border: '1px solid rgba(40, 167, 69, 0.35)',
+              color: '#155724',
+              padding: '10px 14px',
+              borderRadius: '6px',
+              marginBottom: '18px',
+              fontSize: '0.9rem',
+              fontWeight: 600
+            }}>
+              {mensajeExito}
+            </div>
+          )}
+
+          {mensajeError && (
+            <div style={{
+              background: '#fde8e8',
+              border: '1px solid #f8b4b4',
+              color: '#9b1c1c',
+              padding: '10px 14px',
+              borderRadius: '6px',
+              marginBottom: '18px',
+              fontSize: '0.9rem',
+              fontWeight: 600
+            }}>
+              {mensajeError}
+            </div>
+          )}
+
+          <form onSubmit={handleGuardarDatos}>
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+              gap: '16px',
+              marginBottom: '18px'
+            }}>
+              <div>
+                <label className="admin-label" htmlFor="perfil-nombre">Nombre y Apellidos</label>
+                <input
+                  id="perfil-nombre"
+                  type="text"
+                  className="admin-input"
+                  value={nombre}
+                  onChange={(e) => setNombre(e.target.value)}
+                  placeholder="Tu nombre completo"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="admin-label" htmlFor="perfil-email">Correo Electrónico</label>
+                <input
+                  id="perfil-email"
+                  type="email"
+                  className="admin-input"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="ejemplo@correo.es"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="admin-label" htmlFor="perfil-telefono">Teléfono de Contacto</label>
+                <input
+                  id="perfil-telefono"
+                  type="tel"
+                  className="admin-input"
+                  value={telefono}
+                  onChange={(e) => setTelefono(e.target.value)}
+                  placeholder="600 000 000"
+                />
+              </div>
+
+              <div>
+                <label className="admin-label" htmlFor="perfil-cine">Cine Habitual</label>
+                <select
+                  id="perfil-cine"
+                  className="admin-select"
+                  value={cineHabitualId}
+                  onChange={(e) => setCineHabitualId(e.target.value)}
+                >
+                  <option value="">-- Sin cine habitual asignado --</option>
+                  {cines.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name} ({c.city})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div style={{
+              background: 'rgba(217, 164, 65, 0.1)',
+              border: '1px solid rgba(217, 164, 65, 0.3)',
+              borderRadius: '6px',
+              padding: '10px 14px',
+              marginBottom: '20px',
+              fontSize: '0.86rem',
+              color: 'var(--dark-burgundy)'
+            }}>
+              Tu cine habitual se preseleccionará de forma automática en cartelera y en la compra de entradas, evitando tener que buscarlo y rellenarlo cada vez.
+            </div>
+
+            <button
+              type="submit"
+              className="home-button"
+              style={{ padding: '0.7em 1.6em', fontSize: '0.95rem' }}
+            >
+              Guardar Cambios
+            </button>
+          </form>
+        </section>
+      )}
+
       {/* Sección Mis Entradas */}
       <section>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px' }}>
           <div>
-            <h2 style={{ fontSize: '1.6rem', color: 'var(--burgundy)', margin: '0 0 4px' }}>Entradas y Reservas</h2>
+            <h2 style={{ fontSize: '1.45rem', color: 'var(--burgundy)', margin: '0 0 4px', fontWeight: 700 }}>
+              Entradas y Reservas
+            </h2>
             <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', margin: 0 }}>
               Historial de compras y localizadores de acceso a sala
             </p>

@@ -31,7 +31,7 @@ export default function Cines() {
           </div>
         ) : (
           <p className="cines-header-desc">
-            Encuentra tu complejo más cercano y consulta la cartelera actualizada con sesiones y formatos disponibles.
+            Encuentra tu cine más cercano y consulta la cartelera actualizada con sesiones y formatos disponibles.
           </p>
         )}
       </header>

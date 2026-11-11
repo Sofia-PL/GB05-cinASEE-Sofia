@@ -162,7 +162,7 @@ export default function AdminSesionesPage() {
         <div>
           <h1 className="admin-header-title">Programación de Sesiones por Película</h1>
           <p className="admin-header-desc">
-            Organización de horarios, salas asignadas y precios de venta para cada título en este complejo.
+            Organización de horarios, salas asignadas y precios de venta para cada título en este cine.
           </p>
         </div>
 

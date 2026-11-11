@@ -177,6 +177,11 @@ function PasoButacas({ data, cantidad, seleccionadas, setSeleccionadas, onNext, 
     });
   }
 
+  function handleContinuar() {
+    if (seleccionadas.length !== cantidad) return;
+    onNext();
+  }
+
   const filasArr = Array.from({ length: filas }, (_, f) => f);
   const colsArr = Array.from({ length: cols }, (_, c) => c);
 
@@ -255,7 +260,7 @@ function PasoButacas({ data, cantidad, seleccionadas, setSeleccionadas, onNext, 
         <button
           className="home-button"
           type="button"
-          onClick={onNext}
+          onClick={handleContinuar}
           disabled={seleccionadas.length < cantidad}
         >
           {seleccionadas.length < cantidad
@@ -271,6 +276,8 @@ function PasoPago({ data, cantidad, seleccionadas, onDone, onPrev }) {
   const [form, setForm] = useState({ titular: '', tarjeta: '', caducidad: '', cvv: '' });
   const [estado, setEstado] = useState('idle');
   const [pedidoId, setPedidoId] = useState('');
+  const [errores, setErrores] = useState({});
+  const [errorGlobal, setErrorGlobal] = useState('');
 
   const layout = getSeatLayout(data.cineId, data.sesion.sala);
   const total = (data.sesion.precio * cantidad).toFixed(2);
@@ -285,20 +292,81 @@ function PasoPago({ data, cantidad, seleccionadas, onDone, onPrev }) {
     return val.replace(/\D/g, '').slice(0, 16).replace(/(\d{4})(?=\d)/g, '$1 ');
   }
 
+  function validarFormulario() {
+    const nuevos = {};
+    const titularTrim = (form.titular || '').trim();
+    const tarjetaRaw = (form.tarjeta || '').replace(/\s+/g, '');
+    const caducidadTrim = (form.caducidad || '').trim();
+    const cvvTrim = (form.cvv || '').trim();
+
+    // 1. Titular
+    if (!titularTrim) {
+      nuevos.titular = 'Introduce el nombre y apellidos del titular de la tarjeta.';
+    } else if (titularTrim.length < 3) {
+      nuevos.titular = 'El nombre del titular debe tener al menos 3 caracteres.';
+    }
+
+    // 2. Tarjeta (16 dígitos numéricos)
+    if (!tarjetaRaw) {
+      nuevos.tarjeta = 'Introduce el número de tu tarjeta bancaria.';
+    } else if (tarjetaRaw.length !== 16 || !/^\d{16}$/.test(tarjetaRaw)) {
+      nuevos.tarjeta = `El número de tarjeta debe tener 16 dígitos (has introducido ${tarjetaRaw.length}).`;
+    }
+
+    // 3. Caducidad (MM/AA)
+    if (!caducidadTrim) {
+      nuevos.caducidad = 'Introduce la fecha de caducidad (MM/AA).';
+    } else if (!/^(0[1-9]|1[0-2])\/\d{2}$/.test(caducidadTrim)) {
+      nuevos.caducidad = 'Formato no válido. Debe ser MM/AA (ej: 08/28).';
+    } else {
+      const [mmStr, aaStr] = caducidadTrim.split('/');
+      const mes = parseInt(mmStr, 10);
+      const ano = 2000 + parseInt(aaStr, 10);
+      const ahora = new Date();
+      const anoActual = ahora.getFullYear();
+      const mesActual = ahora.getMonth() + 1;
+
+      if (ano < anoActual || (ano === anoActual && mes < mesActual)) {
+        nuevos.caducidad = 'La tarjeta introducida está caducada.';
+      }
+    }
+
+    // 4. CVV (3 o 4 dígitos)
+    if (!cvvTrim) {
+      nuevos.cvv = 'Introduce el código de seguridad CVV.';
+    } else if (!/^\d{3,4}$/.test(cvvTrim)) {
+      nuevos.cvv = 'El código CVV debe tener 3 o 4 dígitos.';
+    }
+
+    setErrores(nuevos);
+    if (Object.keys(nuevos).length > 0) {
+      setErrorGlobal('Por favor, completa y corrige los campos de pago en rojo.');
+      return false;
+    }
+
+    setErrorGlobal('');
+    return true;
+  }
+
   function handleSubmit(e) {
     e.preventDefault();
+
+    if (!validarFormulario()) {
+      return;
+    }
+
     setEstado('procesando');
 
     setTimeout(() => {
-      const id = `CN-${Math.floor(100000 + Math.random() * 900000)}`;
-      setPedidoId(id);
+      const idGenerado = `CN-${Math.floor(100000 + Math.random() * 900000)}`;
+      setPedidoId(idGenerado);
       setEstado('ok');
 
       try {
         const raw = localStorage.getItem('cinasee_entradas');
         const lista = raw ? JSON.parse(raw) : [];
         lista.unshift({
-          id,
+          id: idGenerado,
           pelicula: data.peliculaTitle,
           cine: data.cineName,
           fecha: data.fecha,
@@ -312,7 +380,7 @@ function PasoPago({ data, cantidad, seleccionadas, onDone, onPrev }) {
       } catch (err) {
         console.error('Error guardando ticket', err);
       }
-    }, 1500);
+    }, 1200);
   }
 
   if (estado === 'ok') {
@@ -348,7 +416,7 @@ function PasoPago({ data, cantidad, seleccionadas, onDone, onPrev }) {
     return (
       <div className="compra-panel" style={{ textAlign: 'center', padding: '60px 20px' }}>
         <h2>Procesando pago de forma segura...</h2>
-        <p style={{ color: 'var(--text-muted)' }}>Validando autorización bancaria. Por favor espera.</p>
+        <p style={{ color: 'var(--text-muted)' }}>Validando autorización bancaria y emitiendo entradas. Por favor espera.</p>
       </div>
     );
   }
@@ -363,30 +431,64 @@ function PasoPago({ data, cantidad, seleccionadas, onDone, onPrev }) {
         <p className="compra-total-grande">Importe total: <strong>{total} €</strong></p>
       </div>
 
+      {errorGlobal && (
+        <div
+          role="alert"
+          style={{
+            padding: '10px 14px',
+            borderRadius: '6px',
+            background: '#fde8e8',
+            border: '1px solid #f8b4b4',
+            color: '#9b1c1c',
+            marginBottom: '16px',
+            fontSize: '0.88rem',
+            fontWeight: 600
+          }}
+        >
+          {errorGlobal}
+        </div>
+      )}
+
       <form className="compra-pago-form" onSubmit={handleSubmit} noValidate>
         <div className="login-field">
           <label htmlFor="pago-titular">Titular de la tarjeta</label>
           <input
             id="pago-titular"
             type="text"
-            required
-            placeholder="Nombre completo"
+            placeholder="Nombre completo tal como figura en la tarjeta"
             value={form.titular}
-            onChange={(e) => setForm((p) => ({ ...p, titular: e.target.value }))}
+            onChange={(e) => {
+              setForm((p) => ({ ...p, titular: e.target.value }));
+              if (errores.titular) setErrores((prev) => ({ ...prev, titular: '' }));
+            }}
+            style={errores.titular ? { borderColor: '#d9383a', background: '#fff5f5' } : {}}
           />
+          {errores.titular && (
+            <span style={{ color: '#d9383a', fontSize: '0.8rem', marginTop: '4px' }}>
+              {errores.titular}
+            </span>
+          )}
         </div>
 
         <div className="login-field">
-          <label htmlFor="pago-tarjeta">Número de tarjeta</label>
+          <label htmlFor="pago-tarjeta">Número de tarjeta (16 dígitos)</label>
           <input
             id="pago-tarjeta"
             type="text"
-            required
             placeholder="1234 5678 9012 3456"
             maxLength={19}
             value={form.tarjeta}
-            onChange={(e) => setForm((p) => ({ ...p, tarjeta: formatTarjeta(e.target.value) }))}
+            onChange={(e) => {
+              setForm((p) => ({ ...p, tarjeta: formatTarjeta(e.target.value) }));
+              if (errores.tarjeta) setErrores((prev) => ({ ...prev, tarjeta: '' }));
+            }}
+            style={errores.tarjeta ? { borderColor: '#d9383a', background: '#fff5f5' } : {}}
           />
+          {errores.tarjeta && (
+            <span style={{ color: '#d9383a', fontSize: '0.8rem', marginTop: '4px' }}>
+              {errores.tarjeta}
+            </span>
+          )}
         </div>
 
         <div className="compra-pago-row">
@@ -395,7 +497,6 @@ function PasoPago({ data, cantidad, seleccionadas, onDone, onPrev }) {
             <input
               id="pago-cad"
               type="text"
-              required
               placeholder="MM/AA"
               maxLength={5}
               value={form.caducidad}
@@ -403,20 +504,36 @@ function PasoPago({ data, cantidad, seleccionadas, onDone, onPrev }) {
                 let val = e.target.value.replace(/\D/g, '').slice(0, 4);
                 if (val.length > 2) val = val.slice(0, 2) + '/' + val.slice(2);
                 setForm((p) => ({ ...p, caducidad: val }));
+                if (errores.caducidad) setErrores((prev) => ({ ...prev, caducidad: '' }));
               }}
+              style={errores.caducidad ? { borderColor: '#d9383a', background: '#fff5f5' } : {}}
             />
+            {errores.caducidad && (
+              <span style={{ color: '#d9383a', fontSize: '0.8rem', marginTop: '4px' }}>
+                {errores.caducidad}
+              </span>
+            )}
           </div>
+
           <div className="login-field">
             <label htmlFor="pago-cvv">Código CVV</label>
             <input
               id="pago-cvv"
               type="password"
-              required
               placeholder="123"
               maxLength={4}
               value={form.cvv}
-              onChange={(e) => setForm((p) => ({ ...p, cvv: e.target.value.replace(/\D/g, '').slice(0, 4) }))}
+              onChange={(e) => {
+                setForm((p) => ({ ...p, cvv: e.target.value.replace(/\D/g, '').slice(0, 4) }));
+                if (errores.cvv) setErrores((prev) => ({ ...prev, cvv: '' }));
+              }}
+              style={errores.cvv ? { borderColor: '#d9383a', background: '#fff5f5' } : {}}
             />
+            {errores.cvv && (
+              <span style={{ color: '#d9383a', fontSize: '0.8rem', marginTop: '4px' }}>
+                {errores.cvv}
+              </span>
+            )}
           </div>
         </div>
 
@@ -443,10 +560,12 @@ export default function CompraPage() {
   const [seleccionadas, setSeleccionadas] = useState([]);
 
   useEffect(() => {
-    if (!data) navigate('/cartelera', { replace: true });
+    if (!data || !data.sesion) {
+      navigate('/cartelera', { replace: true });
+    }
   }, [data, navigate]);
 
-  if (!data) return null;
+  if (!data || !data.sesion) return null;
 
   function avanzar() {
     setPaso((p) => p + 1);

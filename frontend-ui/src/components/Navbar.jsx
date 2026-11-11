@@ -25,8 +25,8 @@ export default function Navbar() {
     navigate('/');
   }
 
-  // En la home empieza translúcido; en el resto de páginas o con scroll es opaco y legible
-  const navClass = `site-navbar${scrolled || !isHome ? ' site-navbar--scrolled' : ''}`;
+  // En la home mantiene el degradado sobre el carrusel; en el resto fondo blanco con letras granates
+  const navClass = `site-navbar${!isHome ? ' site-navbar--subpage' : ''}${scrolled ? ' site-navbar--scrolled' : ''}`;
 
   return (
     <nav className={navClass} aria-label="Navegación principal">
@@ -71,9 +71,6 @@ export default function Navbar() {
           </>
         ) : (
           <>
-            {user.rol === 'ADMIN' && (
-              <span className="site-navbar-badge">Admin</span>
-            )}
             <Link to="/perfil" className="site-navbar-link">
               {user.name}
             </Link>
