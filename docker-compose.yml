@@ -258,7 +258,31 @@ services:
 # ==========================================
 # COMPONENTE 5: GATEWAY
 # ==========================================
-
+  componente5-gateway:
+    build:
+      context: ./componente5-gateway
+    container_name: componente5-gateway
+    ports:
+      - "127.0.0.1:8080:8080"
+    depends_on:
+      componente1-cartelera:
+        condition: service_started
+      componente2-reservas:
+        condition: service_started
+      componente3-usuarios:
+        condition: service_started
+      componente4-analitica:
+        condition: service_started
+    environment:
+      SERVER_PORT: 8080
+      COMPONENTE1_URI: http://componente1-cartelera:8081
+      COMPONENTE2_URI: http://componente2-reservas:8082
+      COMPONENTE3_URI: http://componente3-usuarios:8083
+      COMPONENTE4_URI: http://componente4-analitica:8084
+      GATEWAY_CORS_ALLOWED_ORIGIN: http://localhost:3000
+      JWT_JWK_SET_URI: http://componente3-usuarios:8083/v1/iam/.well-known/jwks.json
+      JWT_ISSUER: http://localhost:8083/v1/iam
+    restart: unless-stopped
 
 # ==========================================
 volumes:
