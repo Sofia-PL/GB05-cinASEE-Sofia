@@ -2,7 +2,7 @@ openapi: 3.0.3
 
 info:
   title: API de Reservas - CinAsee
-  version: 1.1.0
+  version: 1.2.0
   description: >
     API responsable del Componente 2: gestión de reservas, bloqueo de butacas y pagos.
 
@@ -231,8 +231,12 @@ paths:
   /reservations/{reservationId}/payment:
     post:
       tags: [Reservations]
-      summary: Procesar pago y confirmar reserva
+      summary: Procesar pago y confirmar reserva (pago directo, pasarela simulada)
       description: >
+        Cobro directo en una sola petición. Se usa con la pasarela simulada
+        (PAYMENT_MODE=simulated: tests y modo aislado). Con PAYMENT_MODE=redsys responde
+        409 (USE_REDSYS_FLOW): el pago se hace con /payment/redsys y /payment/redsys/confirm.
+
         Inicia el cobro seguro de una reserva previamente bloqueada.
 
         El microservicio invoca la pasarela externa configurada (Redsýs).
@@ -282,6 +286,110 @@ paths:
           description: >
             La pasarela de pagos externa (Redsýs) no está disponible en este momento.
             El pago no ha podido ser procesado.
+
+  # ==========================================================
+  # PATH 3b: PAGO CON REDSYS (REDIRECCIÓN) — activo con PAYMENT_MODE=redsys
+  # ==========================================================
+  /reservations/{reservationId}/payment/redsys:
+    post:
+      tags: [Reservations]
+      summary: Iniciar el pago en la web de Redsys
+      description: >
+        Devuelve el formulario firmado (HMAC_SHA256_V1) para enviar al cliente al TPV Virtual
+        de Redsys. El frontend crea un formulario HTML con method="POST", action=url y un
+        campo oculto por cada entrada de "fields", y lo envía: el cliente mete la tarjeta en
+        la web de Redsys (la tarjeta nunca pasa por CinAsee).
+
+        La reserva sigue PENDING_PAYMENT. Mientras el cliente paga, la reserva no caduca
+        hasta paymentDeadline (margen de 15 minutos desde el inicio del pago).
+
+        Redsys devuelve al cliente a la URL OK / KO configurada con tres parámetros firmados
+        (Ds_SignatureVersion, Ds_MerchantParameters, Ds_Signature), que se envían a
+        /payment/redsys/confirm.
+      operationId: startRedsysPayment
+      parameters:
+        - $ref: '#/components/parameters/ReservationId'
+      responses:
+        '200':
+          description: Formulario firmado para Redsys.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RedsysPaymentForm'
+        '400':
+          description: El TTL de la reserva ha vencido (RESERVATION_EXPIRED).
+        '403':
+          description: La reserva pertenece a otro usuario.
+        '404':
+          description: La reserva indicada no existe.
+        '409':
+          description: Reserva ya pagada o cerrada, o Redsys no está activo (PAYMENT_MODE_MISMATCH).
+        '503':
+          description: Redsys no está configurado (falta la clave del terminal).
+
+  /reservations/{reservationId}/payment/redsys/confirm:
+    post:
+      tags: [Reservations]
+      summary: Confirmar el pago con la respuesta firmada de Redsys
+      description: >
+        El frontend reenvía tal cual los tres parámetros con los que Redsys devolvió al
+        cliente. Reservas comprueba la firma, que el pedido es el último de esta reserva y
+        que el importe, la moneda y el comercio coinciden. Si Ds_Response está entre 0000 y
+        0099, el pago está autorizado: reserva CONFIRMED, entradas QR y evento
+        'PaymentCompleted' (igual que con el pago directo). Es idempotente: una respuesta
+        repetida devuelve las mismas entradas.
+      operationId: confirmRedsysPayment
+      parameters:
+        - $ref: '#/components/parameters/ReservationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RedsysResult'
+      responses:
+        '200':
+          description: Pago autorizado y entradas emitidas.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TicketConfirmation'
+        '400':
+          description: Respuesta no válida (firma, pedido o importe) — INVALID_PAYMENT_RESPONSE.
+        '402':
+          description: Redsys ha denegado el pago. La reserva sigue pendiente.
+        '403':
+          description: La reserva pertenece a otro usuario.
+        '404':
+          description: No hay ninguna reserva con ese pedido.
+        '409':
+          description: La reserva está cerrada (caducada, cancelada o devuelta).
+
+  /reservations/payments/redsys/return:
+    get:
+      tags: [Reservations]
+      summary: Página de vuelta desde Redsys (sin frontend)
+      description: >
+        URL OK / KO por defecto. El navegador vuelve aquí desde Redsys; si los parámetros
+        llevan una firma válida, confirma el pago y muestra una página HTML con el resultado
+        y las entradas. Es pública porque la autenticidad la garantiza la firma de Redsys.
+        Acepta también POST (formulario). Cuando el frontend tenga su página de resultado,
+        las URL OK/KO se apuntan allí (REDSYS_URL_OK / REDSYS_URL_KO).
+      operationId: redsysReturn
+      security: []
+      parameters:
+        - { name: Ds_SignatureVersion, in: query, required: false, schema: { type: string } }
+        - { name: Ds_MerchantParameters, in: query, required: false, schema: { type: string } }
+        - { name: Ds_Signature, in: query, required: false, schema: { type: string } }
+      responses:
+        '200':
+          description: Pago confirmado, o pago no completado (sin parámetros).
+          content:
+            text/html: {}
+        '400':
+          description: Respuesta de Redsys no válida.
+        '402':
+          description: Pago denegado por Redsys.
 
   # ==========================================================
   # PATH 4: MAPA DE BUTACAS OCUPADAS (público)
@@ -636,6 +744,39 @@ components:
               totalTicketsSold: { type: integer, example: 1250 }
               reservations: { type: integer, example: 600 }
               grossRevenue: { type: number, format: float, example: 11250.50 }
+
+    RedsysPaymentForm:
+      type: object
+      properties:
+        reservationId: { type: integer, format: int64, example: 8901 }
+        url:
+          type: string
+          description: URL del TPV Virtual de Redsys (action del formulario).
+          example: https://sis-t.redsys.es:25443/sis/realizarPago
+        fields:
+          type: object
+          description: Campos ocultos del formulario.
+          additionalProperties: { type: string }
+          example:
+            Ds_SignatureVersion: HMAC_SHA256_V1
+            Ds_MerchantParameters: eyJEU19NRVJDSEFOVF9BTU9VTlQiOiIxNTMwIiwi...
+            Ds_Signature: W+YueOr7l11QYxqIEPIHLEwhg8SxVsJUPQlPBG/TzdA=
+        order: { type: string, description: Número de pedido enviado a Redsys, example: "000089011234" }
+        amount: { type: number, format: float, example: 15.30 }
+        currency: { type: string, example: EUR }
+        paymentDeadline:
+          type: string
+          format: date-time
+          description: Hasta cuándo se mantienen bloqueadas las butacas mientras se paga.
+
+    RedsysResult:
+      type: object
+      required: [Ds_SignatureVersion, Ds_MerchantParameters, Ds_Signature]
+      description: Los tres parámetros con los que Redsys devuelve al cliente, sin modificar.
+      properties:
+        Ds_SignatureVersion: { type: string, example: HMAC_SHA256_V1 }
+        Ds_MerchantParameters: { type: string, description: JSON en Base64 con el resultado (Ds_Order, Ds_Amount, Ds_Response...) }
+        Ds_Signature: { type: string, description: Firma HMAC-SHA256 de Redsys }
 
     ApiError:
       type: object

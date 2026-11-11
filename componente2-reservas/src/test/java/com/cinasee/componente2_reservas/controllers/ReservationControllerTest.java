@@ -14,7 +14,9 @@ import com.cinasee.componente2_reservas.models.ReservationStatus;
 import com.cinasee.componente2_reservas.models.SeatStatus;
 import com.cinasee.componente2_reservas.security.CallerIdentity;
 import com.cinasee.componente2_reservas.services.CancellationService;
+import com.cinasee.componente2_reservas.dto.RedsysPaymentForm;
 import com.cinasee.componente2_reservas.services.PaymentService;
+import com.cinasee.componente2_reservas.services.RedsysPaymentService;
 import com.cinasee.componente2_reservas.services.ReportService;
 import com.cinasee.componente2_reservas.services.ReservationService;
 import com.cinasee.componente2_reservas.services.TicketService;
@@ -49,7 +51,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * Tests de la capa web: seguridad (JWT y roles), validación de entrada (@Valid) y
  * traducción de excepciones a códigos HTTP del OpenAPI. Los servicios son mocks.
  */
-@WebMvcTest({ReservationController.class, ReportController.class, TicketController.class})
+@WebMvcTest({ReservationController.class, ReportController.class, TicketController.class, RedsysReturnController.class})
 @Import(SecurityConfig.class)
 class ReservationControllerTest {
 
@@ -66,6 +68,8 @@ class ReservationControllerTest {
     private ReportService reportService;
     @MockitoBean
     private TicketService ticketService;
+    @MockitoBean
+    private RedsysPaymentService redsysPaymentService;
     /** No se usa (jwt() inyecta el token ya validado) pero el Resource Server necesita el bean. */
     @MockitoBean
     private JwtDecoder jwtDecoder;
@@ -230,6 +234,87 @@ class ReservationControllerTest {
                         .content("{\"gateway\":\"REDSYS\",\"paymentToken\":\"tok\"}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("RESERVATION_EXPIRED"));
+    }
+
+    // ---------------------------------------------------------------- Redsys
+
+    private static TicketConfirmation confirmed() {
+        return new TicketConfirmation(8901L, ReservationStatus.CONFIRMED, new BigDecimal("15.30"), "EUR",
+                "000089011234", List.of("QR-8901-8-12-ABCDEFGH"));
+    }
+
+    @Test
+    void redsys_iniciarPago_devuelveElFormulario() throws Exception {
+        when(redsysPaymentService.startPayment(eq(8901L), any())).thenReturn(new RedsysPaymentForm(8901L,
+                "https://sis-t.redsys.es:25443/sis/realizarPago",
+                java.util.Map.of("Ds_SignatureVersion", "HMAC_SHA256_V1", "Ds_MerchantParameters", "eyJ9", "Ds_Signature", "abc="),
+                "000089011234", new BigDecimal("15.30"), "EUR", Instant.parse("2026-10-08T12:15:00Z")));
+
+        mockMvc.perform(post("/reservations/8901/payment/redsys").with(token("5590", "CLIENTE_REGISTRADO")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.url").value("https://sis-t.redsys.es:25443/sis/realizarPago"))
+                .andExpect(jsonPath("$.fields.Ds_SignatureVersion").value("HMAC_SHA256_V1"))
+                .andExpect(jsonPath("$.order").value("000089011234"));
+    }
+
+    @Test
+    void redsys_iniciarPagoSinToken_401() throws Exception {
+        mockMvc.perform(post("/reservations/8901/payment/redsys"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void redsys_confirmar_usaLosNombresDeParametrosDeRedsys() throws Exception {
+        when(redsysPaymentService.confirmPayment(eq(8901L), any(), any())).thenReturn(confirmed());
+
+        mockMvc.perform(post("/reservations/8901/payment/redsys/confirm").with(token("5590", "CLIENTE_REGISTRADO"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"Ds_SignatureVersion\":\"HMAC_SHA256_V1\",\"Ds_MerchantParameters\":\"eyJ9\",\"Ds_Signature\":\"abc=\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("CONFIRMED"));
+    }
+
+    @Test
+    void redsys_confirmarSinParametros_400() throws Exception {
+        mockMvc.perform(post("/reservations/8901/payment/redsys/confirm").with(token("5590", "CLIENTE_REGISTRADO"))
+                        .contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+    }
+
+    @Test
+    void redsys_retornoDelNavegador_esPublicoYMuestraLasEntradas() throws Exception {
+        when(redsysPaymentService.confirmFromRedsys("HMAC_SHA256_V1", "eyJ9", "abc")).thenReturn(confirmed());
+
+        mockMvc.perform(get("/reservations/payments/redsys/return")
+                        .param("Ds_SignatureVersion", "HMAC_SHA256_V1")
+                        .param("Ds_MerchantParameters", "eyJ9")
+                        .param("Ds_Signature", "abc"))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content()
+                        .string(org.hamcrest.Matchers.containsString("QR-8901-8-12-ABCDEFGH")));
+    }
+
+    @Test
+    void redsys_retornoSinParametros_reservaPendiente() throws Exception {
+        mockMvc.perform(get("/reservations/payments/redsys/return"))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content()
+                        .string(org.hamcrest.Matchers.containsString("Pago no completado")));
+    }
+
+    @Test
+    void redsys_retornoConPagoDenegado_402() throws Exception {
+        when(redsysPaymentService.confirmFromRedsys(any(), any(), any()))
+                .thenThrow(new PaymentDeclinedException("Redsys ha denegado la operación (código 0190)"));
+
+        mockMvc.perform(get("/reservations/payments/redsys/return")
+                        .param("Ds_SignatureVersion", "HMAC_SHA256_V1")
+                        .param("Ds_MerchantParameters", "eyJ9")
+                        .param("Ds_Signature", "abc"))
+                .andExpect(status().isPaymentRequired())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content()
+                        .string(org.hamcrest.Matchers.containsString("Pago rechazado")));
     }
 
     @Test

@@ -2,12 +2,15 @@ package com.cinasee.componente2_reservas.controllers;
 
 import com.cinasee.componente2_reservas.dto.CreateReservationRequest;
 import com.cinasee.componente2_reservas.dto.PaymentRequest;
+import com.cinasee.componente2_reservas.dto.RedsysPaymentForm;
+import com.cinasee.componente2_reservas.dto.RedsysResultRequest;
 import com.cinasee.componente2_reservas.dto.ReservationResponse;
 import com.cinasee.componente2_reservas.dto.SeatMapResponse;
 import com.cinasee.componente2_reservas.dto.TicketConfirmation;
 import com.cinasee.componente2_reservas.security.CallerIdentity;
 import com.cinasee.componente2_reservas.services.CancellationService;
 import com.cinasee.componente2_reservas.services.PaymentService;
+import com.cinasee.componente2_reservas.services.RedsysPaymentService;
 import com.cinasee.componente2_reservas.services.ReservationService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
@@ -44,6 +47,7 @@ public class ReservationController {
     private final ReservationService reservationService;
     private final PaymentService paymentService;
     private final CancellationService cancellationService;
+    private final RedsysPaymentService redsysPaymentService;
 
     /** createReservation: inicia la reserva y bloquea butacas 10 min → 201 Created. */
     @PostMapping
@@ -77,6 +81,27 @@ public class ReservationController {
                                              @Valid @RequestBody PaymentRequest request,
                                              @AuthenticationPrincipal Jwt jwt) {
         return paymentService.payReservation(reservationId, request, CallerIdentity.from(jwt));
+    }
+
+    /**
+     * startRedsysPayment: devuelve el formulario firmado para enviar al cliente a la
+     * web de pago de Redsys. La reserva sigue pendiente hasta la confirmación.
+     */
+    @PostMapping("/{reservationId}/payment/redsys")
+    public RedsysPaymentForm startRedsysPayment(@PathVariable Long reservationId,
+                                                @AuthenticationPrincipal Jwt jwt) {
+        return redsysPaymentService.startPayment(reservationId, CallerIdentity.from(jwt));
+    }
+
+    /**
+     * confirmRedsysPayment: el frontend reenvía los parámetros firmados con los que Redsys
+     * devolvió al cliente. Si la firma es válida y el pago se autorizó → entradas (200).
+     */
+    @PostMapping("/{reservationId}/payment/redsys/confirm")
+    public TicketConfirmation confirmRedsysPayment(@PathVariable Long reservationId,
+                                                   @Valid @RequestBody RedsysResultRequest result,
+                                                   @AuthenticationPrincipal Jwt jwt) {
+        return redsysPaymentService.confirmPayment(reservationId, result, CallerIdentity.from(jwt));
     }
 
     /** cancelReservation: anula una reserva pendiente o devuelve una pagada → 200. */

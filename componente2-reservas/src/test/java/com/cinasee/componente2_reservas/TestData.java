@@ -4,6 +4,7 @@ import com.cinasee.componente2_reservas.clients.dto.CatalogRoom;
 import com.cinasee.componente2_reservas.clients.dto.CatalogSession;
 import com.cinasee.componente2_reservas.clients.dto.UserProfileDto;
 import com.cinasee.componente2_reservas.config.PricingProperties;
+import com.cinasee.componente2_reservas.config.RedsysProperties;
 import com.cinasee.componente2_reservas.config.ReservationProperties;
 import com.cinasee.componente2_reservas.dto.CreateReservationRequest;
 import com.cinasee.componente2_reservas.dto.SeatSelection;
@@ -49,7 +50,18 @@ public final class TestData {
     }
 
     public static ReservationProperties reservationProperties() {
-        return new ReservationProperties(Duration.ofMinutes(10), "EUR", 100, ZoneOffset.UTC);
+        return new ReservationProperties(Duration.ofMinutes(10), "EUR", 100, ZoneOffset.UTC, Duration.ofMinutes(15));
+    }
+
+    /**
+     * Clave INVENTADA para los tests de Redsys (24 bytes aleatorios en Base64). No es la
+     * clave genérica de Redsys: los tests no dependen de ninguna credencial externa.
+     */
+    public static final String TEST_REDSYS_KEY = "Mk9m98IfEblmPfrpsawt7BmxObt98Jev";
+
+    public static RedsysProperties redsysProperties() {
+        return new RedsysProperties("https://sis-t.redsys.es:25443/sis/realizarPago", "999008881", "1",
+                TEST_REDSYS_KEY, "978", "http://localhost:8082/ok", "http://localhost:8082/ko", "");
     }
 
     public static PricingProperties pricingProperties() {

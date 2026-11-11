@@ -27,3 +27,7 @@ app:
       url: http://localhost:0/usuarios
   payment:
     mode: simulated
+    redsys:
+      # Clave INVENTADA solo para tests (la misma que TestData.TEST_REDSYS_KEY):
+      # los tests nunca usan la clave genérica de Redsys ni se conectan a internet
+      secret-key: Mk9m98IfEblmPfrpsawt7BmxObt98Jev
