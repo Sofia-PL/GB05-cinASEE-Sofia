@@ -74,6 +74,8 @@ app:
     expiration-batch: 100
     expiration-sweep-interval: ${RESERVATION_SWEEP_INTERVAL:30s}
     catalog-time-zone: ${CATALOG_TIME_ZONE:UTC}
+    # Margen en el que no se caduca una reserva mientras el cliente paga en la web de Redsys
+    payment-grace: ${RESERVATION_PAYMENT_GRACE:15m}
 
   pricing:
     spectator-day: ${SPECTATOR_DAY:WEDNESDAY}
@@ -83,10 +85,37 @@ app:
     time-zone: Europe/Madrid
 
   payment:
-    # simulated (por defecto) | redsys
+    # simulated (tests y modo aislado) | redsys (web de pruebas real de Redsys)
     mode: ${PAYMENT_MODE:simulated}
     redsys:
-      url: ${REDSYS_URL:http://localhost:9090/redsys}
+      # ==================================================================================
+      # ATENCIÓN: DATOS GENÉRICOS DE PRUEBA DE REDSYS, NO SON CREDENCIALES REALES.
+      #
+      # El número de comercio, el terminal y la clave secreta de abajo son los "Datos
+      # genéricos de prueba" que Redsys publica para TODOS los desarrolladores en su
+      # "Manual de integración para conexión por Redirección" (v2.1, apartado de entorno
+      # de pruebas):
+      # https://canales.redsys.es/ayuda/documentacion/Manual%20integracion%20para%20conexion%20por%20Redireccion.pdf
+      # Solo funcionan contra el entorno de PRUEBAS (sis-t.redsys.es) y no mueven dinero
+      # real. Se dejan aquí para que el proyecto se pueda probar sin configurar nada.
+      #
+      # SI REUTILIZAS ESTE CÓDIGO CON UN COMERCIO REAL: NO escribas aquí tu clave.
+      # Una clave real es un secreto: pásala SOLO por variables de entorno
+      # (REDSYS_SECRET_KEY, REDSYS_MERCHANT_CODE, REDSYS_TERMINAL, REDSYS_PAYMENT_URL)
+      # o un gestor de secretos, y nunca la subas al repositorio.
+      # ==================================================================================
+      payment-url: ${REDSYS_PAYMENT_URL:https://sis-t.redsys.es:25443/sis/realizarPago}
+      merchant-code: ${REDSYS_MERCHANT_CODE:999008881}
+      terminal: ${REDSYS_TERMINAL:1}
+      secret-key: ${REDSYS_SECRET_KEY:sq7HjrUOBfKmC576ILgskD5srU870gJ7}
+      currency: "978"   # euro (código ISO 4217 numérico)
+      # A dónde vuelve el navegador del cliente desde Redsys. Por defecto, al endpoint de
+      # retorno de este microservicio (valida la firma y confirma). Cuando el frontend
+      # tenga su página de resultado, se apunta allí (por ejemplo http://localhost:3000/pago/resultado)
+      url-ok: ${REDSYS_URL_OK:http://localhost:8082/v1/reservations/payments/redsys/return}
+      url-ko: ${REDSYS_URL_KO:http://localhost:8082/v1/reservations/payments/redsys/return}
+      # Notificación servidor a servidor: necesita una URL pública en internet (vacía = no se usa)
+      merchant-url: ${REDSYS_MERCHANT_URL:}
 
   rabbitmq:
     exchange: ${PAYMENT_EXCHANGE:payment.exchange}

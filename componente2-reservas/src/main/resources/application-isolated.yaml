@@ -22,10 +22,9 @@ app:
     usuarios:
       url: ${USUARIOS_URL:http://localhost:8089/v1/iam}
   payment:
-    # simulated por defecto; con PAYMENT_MODE=redsys se usa el mock HTTP de WireMock
+    # simulated por defecto; con PAYMENT_MODE=redsys se paga en la web de pruebas real
+    # de Redsys (necesita internet; datos de prueba en application.yaml)
     mode: ${PAYMENT_MODE:simulated}
-    redsys:
-      url: ${REDSYS_URL:http://localhost:8089/redsys}
   security:
     # Secreto compartido con el script de generación de tokens (mínimo 32 bytes)
     dev-hmac-secret: ${DEV_JWT_SECRET:cinasee-dev-secret-solo-para-pruebas-locales-0123456789}

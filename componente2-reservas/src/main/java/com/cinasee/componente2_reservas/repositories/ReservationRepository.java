@@ -41,6 +41,9 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
      * Con FOR UPDATE, si una de estas reservas se está pagando en ese momento,
      * esta consulta espera a que termine el pago y PostgreSQL vuelve a evaluar el
      * WHERE: si ya está CONFIRMED, deja de aparecer en el resultado.
+     *
+     * No se incluyen las que tienen un pago en Redsys en curso (iniciado después de
+     * {@code graceLimit} = ahora − margen de pago): el cliente está pagando.
      */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""
@@ -48,25 +51,38 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
             where r.showId = :showId
               and r.status = :status
               and r.expiresAt <= :now
+              and (r.paymentStartedAt is null or r.paymentStartedAt <= :graceLimit)
             """)
     List<Reservation> findExpiredByShowForUpdate(@Param("showId") Long showId,
                                                  @Param("status") ReservationStatus status,
-                                                 @Param("now") Instant now);
+                                                 @Param("now") Instant now,
+                                                 @Param("graceLimit") Instant graceLimit);
 
     /**
      * Lote de reservas pendientes caducadas en cualquier sesión, para el
-     * barrido programado (ReservationExpirationScheduler).
+     * barrido programado (ReservationExpirationScheduler). Igual que la anterior,
+     * respeta el margen de las reservas con un pago en Redsys en curso.
      */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""
             select r from Reservation r
             where r.status = :status
               and r.expiresAt <= :now
+              and (r.paymentStartedAt is null or r.paymentStartedAt <= :graceLimit)
             order by r.expiresAt
             """)
     List<Reservation> findExpiredForUpdate(@Param("status") ReservationStatus status,
                                            @Param("now") Instant now,
+                                           @Param("graceLimit") Instant graceLimit,
                                            Pageable pageable);
+
+    /**
+     * Busca, bloqueándola, la reserva a la que pertenece un número de pedido de Redsys.
+     * Se usa al volver de la web de Redsys: el pedido viene dentro de la respuesta firmada.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select r from Reservation r where r.paymentOrder = :order")
+    Optional<Reservation> findByPaymentOrderForUpdate(@Param("order") String order);
 
     /**
      * Reservas creadas por un sujeto JWT concreto (las "mis entradas" del invitado).

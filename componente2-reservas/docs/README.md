@@ -26,7 +26,7 @@ flowchart LR
     GW["Comp. 5<br/>API Gateway"] -->|"HTTP + JWT"| C2["Comp. 2<br/>Reservas :8082"]
     C2 -->|"GET /sessions/{id}<br/>GET /rooms/{id}"| C1["Comp. 1<br/>Cartelera :8081"]
     C2 -->|"GET /users/{id}"| C3["Comp. 3<br/>Usuarios :8083"]
-    C2 -->|"POST /charge · /refund"| PAY["Pasarela<br/>Redsýs"]
+    C2 -.->|"formulario firmado<br/>(vía navegador)"| PAY["TPV Virtual<br/>Redsys (pruebas)"]
     C2 --> DB[("PostgreSQL<br/>cine_reservas_db")]
     C2 -.->|"PaymentCompleted<br/>PaymentRefunded"| MQ{{"RabbitMQ<br/>payment.exchange"}}
     MQ -.-> C3
@@ -76,7 +76,7 @@ Versiones: Java 21, Spring Boot 4.1.2, Spring Cloud 2025.1.4 (OpenFeign 5.0.4), 
 componente2-reservas/
 ├── src/main/java/com/cinasee/componente2_reservas/
 │   ├── Componente2ReservasApplication.java   @EnableFeignClients, @ConfigurationPropertiesScan
-│   ├── clients/        Feign: CarteleraClient, UsuariosClient, RedsysClient + DTOs remotos
+│   ├── clients/        Feign: CarteleraClient, UsuariosClient + DTOs remotos y de la pasarela
 │   │                   ForwardJwtFeignConfig (reenvía el JWT solo a Comp. 1 y 3)
 │   ├── config/         Seguridad, RabbitMQ, planificador, reloj, propiedades tipadas
 │   ├── controllers/    ReservationController, ReportController, TicketController
@@ -87,7 +87,7 @@ componente2-reservas/
 │   ├── repositories/   Spring Data JPA (con bloqueos y consultas agregadas)
 │   ├── security/       CallerIdentity (sub + rol extraídos del JWT)
 │   └── services/       Lógica de negocio (ver sección 4)
-│       └── payment/    Puerto PaymentGateway + adaptadores Simulated y Redsys
+│       └── payment/    Puerto PaymentGateway (Simulated, Redsys) + RedsysSignature (firma HMAC)
 ├── src/main/resources/ application.yaml, application-isolated.yaml
 ├── src/test/           Tests unitarios, de controlador y de integración
 ├── openapi/            componente_2.yaml
@@ -114,7 +114,10 @@ devuelven la respuesta. Toda la lógica está en `services/`.
 | `POST /reservations` | cualquier token | Bloquea butacas 10 min → `201` |
 | `GET /reservations` | cualquier token | Mis reservas (staff: `?userId=`) |
 | `GET /reservations/{id}` | propietario o staff | Detalle |
-| `POST /reservations/{id}/payment` | propietario o staff | Cobra y emite entradas → `200` |
+| `POST /reservations/{id}/payment` | propietario o staff | Pago directo con la pasarela **simulada** → `200` |
+| `POST /reservations/{id}/payment/redsys` | propietario o staff | **Redsys:** devuelve el formulario firmado para ir a la web de pago |
+| `POST /reservations/{id}/payment/redsys/confirm` | propietario o staff | **Redsys:** valida la respuesta firmada y emite las entradas |
+| `GET /reservations/payments/redsys/return` | público (lo protege la firma) | **Redsys:** página de vuelta del navegador (para probar sin frontend) |
 | `DELETE /reservations/{id}` | propietario o staff | Cancela (pendiente) o devuelve (pagada) |
 | `GET /reservations/shows/{showId}/seats` | público | Butacas ocupadas para el mapa |
 | `POST /reservations/tickets/{code}/check-in` | STAFF_TAQUILLA, ADMIN | Valida la entrada en la puerta |
@@ -195,7 +198,54 @@ vaciando la colección de la entidad. Hibernate ejecuta los `INSERT` antes que l
 `DELETE` al hacer *flush*, y si en la misma transacción se libera y se vuelve a
 bloquear la misma butaca, el `INSERT` chocaría con el `UNIQUE`.
 
-### 4.5 Pago (`PaymentService`)
+### 4.5 Pago (`PaymentService` y `RedsysPaymentService`)
+
+Hay dos pasarelas, elegidas con `PAYMENT_MODE`. Las dos terminan en el mismo método
+(`PaymentService.confirmPaidReservation`): mismas entradas y mismo evento, así que los
+Componentes 3 y 4 no saben cómo se pagó.
+
+| `PAYMENT_MODE` | Dónde se usa | Cómo se paga |
+|---|---|---|
+| `redsys` | `docker-compose.yml` global (despliegue completo) | En la **web de pruebas real de Redsys** (redirección) |
+| `simulated` (por defecto) | Tests y modo aislado | Una sola petición, sin internet |
+
+#### Redsys (redirección)
+
+```
+1. Frontend ── POST /reservations/{id}/payment/redsys ──► Reservas
+                Reservas firma el pedido y devuelve { url, fields, order, paymentDeadline }
+2. Navegador ── formulario POST ──► web de Redsys (tarjeta + 3D Secure)
+3. Redsys ──── devuelve el navegador a la URL OK/KO ──► con Ds_SignatureVersion,
+                Ds_MerchantParameters y Ds_Signature (resultado FIRMADO)
+4. Reservas valida la firma, el pedido y el importe → CONFIRMED + entradas + evento
+   - lo envía el frontend a  POST /reservations/{id}/payment/redsys/confirm  (con JWT), o
+   - llega directo a  GET /reservations/payments/redsys/return  (página de vuelta, sin frontend)
+```
+
+- **Firma `HMAC_SHA256_V1`** (`RedsysSignature`): clave derivada cifrando el número de
+  pedido con 3DES y la clave del terminal, y HMAC-SHA256 de `Ds_MerchantParameters`.
+  Solo con la criptografía estándar de Java, sin dependencias nuevas. Se comprobó
+  contra el servidor real de pruebas: con la firma correcta devuelve la *Pantalla de
+  pago* y con una falsa el error `SIS0042`.
+- **Nadie puede confirmar una reserva inventándose una respuesta:** solo se acepta si la
+  firma coincide (comparación en tiempo constante), el pedido es el último enviado para
+  esa reserva y el importe, la moneda y el comercio son los esperados. Si no → `400 INVALID_PAYMENT_RESPONSE`.
+- `Ds_Response` de `0000` a `0099` = autorizado (según el manual de Redsys). Otro código → `402`,
+  la reserva sigue pendiente y se puede reintentar con un pedido nuevo (Redsys rechaza pedidos repetidos).
+- **Idempotente:** si la respuesta llega dos veces (vuelta del navegador y confirmación
+  del frontend, o recarga), la segunda devuelve las mismas entradas sin emitir nada nuevo.
+- **TTL mientras se paga:** al iniciar el pago se guarda `payment_started_at`. Durante 15
+  minutos desde ese momento (`RESERVATION_PAYMENT_GRACE`), el barrido no caduca la reserva
+  ni libera sus butacas, aunque hayan pasado sus 10 minutos. Un pago solo se puede *iniciar*
+  dentro del TTL normal.
+- La tarjeta **nunca pasa por CinAsee**: la mete el cliente en la web de Redsys.
+- **Datos del comercio:** por defecto, los **datos genéricos de prueba que Redsys publica**
+  para todos los desarrolladores en su manual de integración por redirección (comercio
+  `999008881`, terminal 1 y su clave de pruebas), definidos en `application.yaml`. No son
+  credenciales de CinAsee ni mueven dinero. Para un comercio real, la clave se pasa
+  **solo** por variables de entorno (`REDSYS_SECRET_KEY`…), nunca en el repositorio.
+
+#### Pasarela simulada (pago directo)
 
 Todo en una única transacción:
 
@@ -213,17 +263,14 @@ Todo en una única transacción:
 Con `@Transactional(noRollbackFor = ReservationExpiredException.class)`, cuando se
 responde 400 por TTL vencido, el paso a EXPIRED y la liberación de butacas sí se guardan.
 
-**Pasarela.** `PaymentGateway` es una interfaz con dos implementaciones, elegidas con
-`PAYMENT_MODE`:
+**Pasarela simulada.** Un `paymentToken` que empieza por `tok_declined` se rechaza
+(402), uno que empieza por `tok_unavailable` simula la pasarela caída (503), y
+cualquier otro se aprueba. Con `PAYMENT_MODE=redsys` este endpoint responde `409
+USE_REDSYS_FLOW` e indica el flujo de Redsys.
 
-- `simulated` (por defecto): no hay credenciales reales de Redsýs. Un token que
-  empieza por `tok_declined` se rechaza, uno que empieza por `tok_unavailable`
-  simula la pasarela caída, y cualquier otro se aprueba.
-- `redsys`: llamada real con OpenFeign a `REDSYS_URL` (`/charge` y `/refund`). Hay
-  *mocks* de WireMock para probarla.
-
-El JWT del usuario **no** se envía a la pasarela: el interceptor que lo reenvía solo
-está en los clientes de Cartelera y Usuarios.
+`PaymentGateway` es una interfaz (patrón puerto-adaptador) con dos implementaciones:
+`SimulatedPaymentGateway` y `RedsysPaymentGateway`. El JWT del usuario **nunca** se
+envía a la pasarela.
 
 ### 4.6 Tarifas (`PricingService`)
 
@@ -239,8 +286,10 @@ está en los clientes de Cartelera y Usuarios.
 
 - `DELETE` de una reserva pendiente → CANCELLED y libera las butacas al momento.
 - `DELETE` de una reserva pagada → REFUNDED, solo si la sesión no ha empezado y
-  ninguna entrada se ha validado. Llama a `/refund` en la pasarela, libera las
-  butacas para revenderlas y publica `PaymentRefunded`.
+  ninguna entrada se ha validado. Pide la devolución a la pasarela, libera las
+  butacas para revenderlas y publica `PaymentRefunded`. Con Redsys, por ahora la
+  devolución se registra como **manual** (se hace desde el panel de Redsys) y queda
+  anotada en el log; automatizarla es una mejora pendiente.
 - *Check-in*: el empleado escanea el QR y la entrada queda marcada como usada. La
   fila se bloquea (`FOR UPDATE`), así que dos lectores no pueden validar la misma
   entrada a la vez. Una segunda lectura devuelve 409.
@@ -428,7 +477,10 @@ Todas las propiedades se pueden cambiar con variables de entorno:
 | `RESERVATION_SWEEP_INTERVAL` | `30s` | Frecuencia del barrido |
 | `SPECTATOR_DAY` | `WEDNESDAY` | Día del espectador |
 | `LOYALTY_POINTS_THRESHOLD` | `500` | Puntos para el descuento de fidelización |
-| `PAYMENT_MODE` / `REDSYS_URL` | `simulated` / — | Pasarela |
+| `PAYMENT_MODE` | `simulated` (`redsys` en el compose global) | Pasarela |
+| `REDSYS_PAYMENT_URL` / `REDSYS_MERCHANT_CODE` / `REDSYS_TERMINAL` / `REDSYS_SECRET_KEY` | Datos genéricos de prueba de Redsys | Comercio Redsys. Para uno real, **solo** por variables de entorno |
+| `REDSYS_URL_OK` / `REDSYS_URL_KO` | `http://localhost:8082/v1/reservations/payments/redsys/return` | A dónde vuelve el navegador desde Redsys (después, la página del frontend) |
+| `RESERVATION_PAYMENT_GRACE` | `15m` | Margen en el que no caduca una reserva mientras se paga en Redsys |
 | `FEIGN_CONNECT_TIMEOUT_MS` / `FEIGN_READ_TIMEOUT_MS` | `2000` / `5000` | Timeouts de las llamadas síncronas |
 
 ---
@@ -503,8 +555,9 @@ Necesita **JDK 21**. Si `JAVA_HOME` apunta a otro JDK, la compilación falla con
 `release version 21 not supported`; en ese caso cámbialo antes:
 `$env:JAVA_HOME="C:\Program Files\Eclipse Adoptium\jdk-21.0.11.10-hotspot"`.
 
-No necesitan Docker ni los otros microservicios: usan H2 en memoria y *mocks*.
-**71 tests, todos en verde.**
+No necesitan Docker, internet ni los otros microservicios: usan H2 en memoria y *mocks*.
+Los de Redsys fabrican las respuestas firmadas con una **clave inventada**, no con la
+de Redsys. **106 tests, todos en verde.**
 
 | Clase | Tipo | Qué comprueba |
 |---|---|---|
@@ -516,8 +569,11 @@ No necesitan Docker ni los otros microservicios: usan H2 en memoria y *mocks*.
 | `ForwardJwtFeignConfigTest` | Unitario | El JWT se reenvía a Cartelera y Usuarios |
 | `OutboxRelayTest` | Unitario | Publica y marca; con el broker caído reintenta y no pierde el evento |
 | `PaymentCompletedContractTest` | Contrato | El mismo mensaje se deserializa bien en la clase del Comp. 3 y en la del Comp. 4 |
-| `ReservationControllerTest` | `@WebMvcTest` | 401 sin token, 403 por rol, endpoint público, `@Valid` → 400, 201 + `Location`, formato de errores, 402/409/503 |
+| `RedsysSignatureTest` | Unitario | La firma coincide con una implementación de referencia independiente (validada contra Redsys); Base64 estándar y URL-safe; manipulación, otro pedido u otra clave → rechazada |
+| `RedsysPaymentServiceTest` | Unitario (Mockito) | Formulario firmado y pedido anotado; modo simulado → 409; sin clave → 503; TTL vencido → 400; autorizado (0000-0099) → entradas y evento; denegado → 402; firma falsa, importe distinto, otra reserva o intento antiguo → 400; respuesta repetida idempotente |
+| `ReservationControllerTest` | `@WebMvcTest` | 401 sin token, 403 por rol, endpoint público, `@Valid` → 400, 201 + `Location`, formato de errores, 402/409/503; endpoints de Redsys y página de vuelta pública |
 | `ReservationFlowIntegrationTest` | `@SpringBootTest` + H2 | Ver abajo |
+| `RedsysFlowIntegrationTest` | `@SpringBootTest` + H2 (`PAYMENT_MODE=redsys`) | Iniciar, "pagar en Redsys" y confirmar con el mismo evento; durante el pago las butacas no caducan ni las coge otro; pago abandonado caduca al acabar el margen; denegado y reintento con otro pedido; el pago directo indica el flujo Redsys |
 | `Componente2ReservasApplicationTests` | Arranque | El contexto completo de Spring arranca |
 
 `ReservationFlowIntegrationTest` usa Spring, JPA y transacciones reales. Solo son
@@ -543,9 +599,16 @@ Para probarlo a mano: [ejecucion-aislada.md](ejecucion-aislada.md).
 
 ## 11. Limitaciones conocidas
 
-- La pasarela por defecto es simulada. El adaptador `redsys` sigue el contrato
-  REST `/charge` de la especificación; la integración real con Redsýs necesita
-  firma HMAC de los parámetros y credenciales de comercio.
+- Redsys se usa en su **entorno de pruebas** con los datos genéricos públicos. Pasar a
+  real solo requiere las credenciales del banco por variables de entorno y la URL real.
+- Con Redsys, el resultado se recibe por la **vuelta del navegador**. La notificación
+  servidor a servidor (`REDSYS_MERCHANT_URL`) necesita una URL pública en internet y
+  configurarla en el terminal: queda para el despliegue en la nube. Si el cliente
+  cierra el navegador en Redsys antes de volver, la reserva caduca al acabar el margen.
+- Las **devoluciones con Redsys son manuales** (panel de Redsys). Automatizarlas
+  (operación de devolución por el servicio web de Redsys) está pendiente.
+- Si Redsys autorizase un pago de una reserva que ya caducó (cliente que tarda más del
+  margen), se rechaza la confirmación y se registra un error en el log para devolverlo a mano.
 - El QR se entrega como texto (el código de la entrada). Generar la imagen o el
   PKPass le corresponde al frontend.
 - El esquema lo crea Hibernate (`ddl-auto: update`). En producción convendría
