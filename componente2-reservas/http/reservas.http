@@ -132,3 +132,31 @@ Authorization: Bearer {{staffToken}}
 
 ### 20. Sin token → 401
 GET {{base}}/reservations
+
+### =====================================================================
+### PAGO CON REDSYS (solo con PAYMENT_MODE=redsys; necesita internet)
+### Con Redsys, los pasos 5-7 (pago directo) responden 409 USE_REDSYS_FLOW.
+### =====================================================================
+
+### 21. Nueva reserva para pagar con Redsys → 201
+# @name reservaRedsys
+POST {{base}}/reservations
+Authorization: Bearer {{clientToken}}
+Content-Type: application/json
+
+{ "showId": 1024, "seats": [ { "row": 2, "column": 7 } ] }
+
+### 22. Iniciar el pago → 200 con { url, fields, order, paymentDeadline }
+### Para ir a la web de Redsys usa: .\scripts\pagar-redsys.ps1 -ReservationId <id> -Token <token>
+POST {{base}}/reservations/{{reservaRedsys.response.body.id}}/payment/redsys
+Authorization: Bearer {{clientToken}}
+
+### 23. Confirmar con parámetros inventados → 400 INVALID_PAYMENT_RESPONSE (firma no válida)
+POST {{base}}/reservations/{{reservaRedsys.response.body.id}}/payment/redsys/confirm
+Authorization: Bearer {{clientToken}}
+Content-Type: application/json
+
+{ "Ds_SignatureVersion": "HMAC_SHA256_V1", "Ds_MerchantParameters": "eyJEc19PcmRlciI6IjEyMzQifQ", "Ds_Signature": "firma-inventada" }
+
+### 24. Página de vuelta sin parámetros (como si se cancelara en Redsys) → 200 "Pago no completado"
+GET {{base}}/reservations/payments/redsys/return

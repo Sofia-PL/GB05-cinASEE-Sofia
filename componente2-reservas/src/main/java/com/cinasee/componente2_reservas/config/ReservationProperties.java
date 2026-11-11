@@ -14,12 +14,16 @@ import java.time.ZoneId;
  * @param expirationBatch reservas caducadas que libera el barrido en cada pasada
  * @param catalogTimeZone zona horaria con la que se interpretan las fechas sin zona
  *                        que devuelve Cartelera (guarda LocalDateTime)
+ * @param paymentGrace    margen durante el que NO se caduca una reserva cuyo pago se
+ *                        ha iniciado en Redsys (el cliente está en la web de Redsys
+ *                        metiendo la tarjeta). Cuenta desde el inicio del pago.
  */
 @ConfigurationProperties(prefix = "app.reservations")
 public record ReservationProperties(
         @DefaultValue("10m") Duration holdTtl,
         @DefaultValue("EUR") String currency,
         @DefaultValue("100") int expirationBatch,
-        @DefaultValue("UTC") ZoneId catalogTimeZone
+        @DefaultValue("UTC") ZoneId catalogTimeZone,
+        @DefaultValue("15m") Duration paymentGrace
 ) {
 }

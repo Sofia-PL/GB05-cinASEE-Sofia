@@ -35,6 +35,8 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         // El mapa de butacas ocupadas es público (como la cartelera del Comp. 1)
                         .requestMatchers(HttpMethod.GET, "/reservations/shows/*/seats").permitAll()
+                        // Vuelta del navegador desde Redsys: sin JWT; la protege la firma de Redsys
+                        .requestMatchers("/reservations/payments/redsys/return").permitAll()
                         .requestMatchers("/error").permitAll()
                         // Datos agregados para Analítica (Comp. 4): solo personal interno
                         .requestMatchers(HttpMethod.GET, "/reservations/stats", "/reservations/box-office-data")

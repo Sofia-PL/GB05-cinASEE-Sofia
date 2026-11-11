@@ -19,6 +19,7 @@ import com.cinasee.componente2_reservas.services.payment.PaymentGateway;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
@@ -27,25 +28,26 @@ import java.util.Comparator;
 import java.util.List;
 
 /**
- * Caso de uso: pagar una reserva y emitir las entradas
- * (POST /reservations/{reservationId}/payment).
+ * Pago de reservas y emisión de entradas.
  *
- * <h2>Pasos (una sola transacción ACID)</h2>
+ * <p>Hay dos formas de cobrar, según {@code app.payment.mode}:</p>
+ * <ul>
+ *   <li><b>simulated</b> (tests y modo aislado): {@link #payReservation}, cobro síncrono
+ *       en una sola petición (POST /reservations/{id}/payment).</li>
+ *   <li><b>redsys</b> (despliegue completo): el cliente paga en la web de Redsys y el
+ *       resultado llega después; lo gestiona {@link RedsysPaymentService}.</li>
+ * </ul>
+ * <p>Las dos terminan en {@link #confirmPaidReservation}: misma emisión de entradas y
+ * mismo evento PaymentCompleted, así que los Componentes 3 y 4 no distinguen cómo se pagó.</p>
+ *
+ * <h2>Pasos del cobro síncrono (una sola transacción ACID)</h2>
  * <ol>
- *   <li>Bloquear la fila de la reserva (SELECT ... FOR UPDATE): mientras se cobra,
- *       nadie más puede caducarla, cancelarla ni pagarla dos veces.</li>
+ *   <li>Bloquear la fila de la reserva (SELECT ... FOR UPDATE).</li>
  *   <li>Comprobar propietario, estado y TTL. Si el TTL ha vencido se marca EXPIRED,
- *       se liberan las butacas y se responde 400 (ese cambio SÍ se guarda gracias a
- *       {@code noRollbackFor}).</li>
- *   <li><b>Reservas → Pasarela externa</b>: POST /charge (comunicación síncrona de tipo COMANDO).</li>
- *   <li>Si se aprueba: butacas a SOLD, un código QR único por butaca, reserva CONFIRMED.</li>
- *   <li>Registrar el evento PaymentCompleted en el outbox, en la misma transacción.
- *       El relay lo publicará en RabbitMQ para los Componentes 3 (puntos) y 4 (métricas).</li>
+ *       se liberan las butacas y se responde 400 ({@code noRollbackFor} guarda ese cambio).</li>
+ *   <li><b>Reservas → Pasarela</b>: cobro (comunicación síncrona de tipo COMANDO).</li>
+ *   <li>Si se aprueba: {@link #confirmPaidReservation}.</li>
  * </ol>
- *
- * Nota de diseño: la llamada a la pasarela se hace con la fila bloqueada. Es
- * deliberado (garantiza que no se cobra una reserva que otro proceso está
- * caducando) y está acotado por los timeouts de Feign.
  */
 @Slf4j
 @Service
@@ -59,6 +61,7 @@ public class PaymentService {
     private final OutboxService outboxService;
     private final Clock clock;
 
+    /** Cobro síncrono con la pasarela activa (solo admite cobros directos la simulada). */
     @Transactional(noRollbackFor = ReservationExpiredException.class)
     public TicketConfirmation payReservation(Long reservationId, PaymentRequest request, CallerIdentity caller) {
         Reservation reservation = reservationRepository.findByIdForUpdate(reservationId)
@@ -70,7 +73,7 @@ public class PaymentService {
 
         // --- Comunicación síncrona (COMANDO) con la pasarela externa ---
         GatewayChargeResponse charge = paymentGateway.charge(new GatewayChargeRequest(
-                buildOrderId(reservation, now),
+                buildOrderId(reservation.getId(), now),
                 reservation.getTotalAmount(),
                 reservation.getCurrency(),
                 request.paymentToken()));
@@ -81,10 +84,18 @@ public class PaymentService {
             throw new PaymentDeclinedException(charge.reason() != null ? charge.reason() : "motivo no especificado");
         }
 
-        // --- Emisión de entradas ---
-        List<ReservedSeat> seats = reservation.getSeats().stream()
-                .sorted(Comparator.comparing(ReservedSeat::getSeatRow).thenComparing(ReservedSeat::getSeatColumn))
-                .toList();
+        return confirmPaidReservation(reservation, request.gateway().name(), charge.transactionId(), now);
+    }
+
+    /**
+     * Marca como pagada una reserva PENDING_PAYMENT ya cobrada: butacas a SOLD, un
+     * código QR único por butaca, reserva CONFIRMED y evento PaymentCompleted en el
+     * outbox. Debe llamarse dentro de la transacción que tiene la reserva bloqueada.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public TicketConfirmation confirmPaidReservation(Reservation reservation, String gateway,
+                                                     String paymentReference, Instant now) {
+        List<ReservedSeat> seats = sortedSeats(reservation);
         for (ReservedSeat seat : seats) {
             seat.setStatus(SeatStatus.SOLD);
             seat.setTicketCode(ticketCodeGenerator.generate(reservation.getId(), seat.getSeatRow(), seat.getSeatColumn()));
@@ -92,22 +103,33 @@ public class PaymentService {
 
         reservation.setStatus(ReservationStatus.CONFIRMED);
         reservation.setPaidAt(now);
-        reservation.setPaymentGateway(request.gateway().name());
-        reservation.setPaymentReference(charge.transactionId());
+        reservation.setPaymentGateway(gateway);
+        reservation.setPaymentReference(paymentReference);
+        reservation.setPaymentStartedAt(null); // ya no hay un pago en curso
 
         // --- Evento de dominio asíncrono (Transactional Outbox) ---
         outboxService.enqueuePaymentCompleted(reservation);
 
-        log.info("Reserva {} pagada ({} {}), {} entradas emitidas",
-                reservationId, reservation.getTotalAmount(), reservation.getCurrency(), seats.size());
+        log.info("Reserva {} pagada con {} ({} {}), {} entradas emitidas",
+                reservation.getId(), gateway, reservation.getTotalAmount(), reservation.getCurrency(), seats.size());
+        return toConfirmation(reservation);
+    }
 
+    /** Confirmación de una reserva ya pagada (también para respuestas repetidas de Redsys). */
+    public static TicketConfirmation toConfirmation(Reservation reservation) {
         return new TicketConfirmation(
                 reservation.getId(),
                 reservation.getStatus(),
                 reservation.getTotalAmount(),
                 reservation.getCurrency(),
                 reservation.getPaymentReference(),
-                seats.stream().map(ReservedSeat::getTicketCode).toList());
+                sortedSeats(reservation).stream().map(ReservedSeat::getTicketCode).toList());
+    }
+
+    private static List<ReservedSeat> sortedSeats(Reservation reservation) {
+        return reservation.getSeats().stream()
+                .sorted(Comparator.comparing(ReservedSeat::getSeatRow).thenComparing(ReservedSeat::getSeatColumn))
+                .toList();
     }
 
     /** Valida que la reserva puede pagarse ahora mismo. */
@@ -129,11 +151,12 @@ public class PaymentService {
     }
 
     /**
-     * Número de pedido para la pasarela. Redsýs exige 4-12 caracteres, los 4
-     * primeros numéricos, y uno distinto por cada intento de cobro: se combina el
-     * id de la reserva (8 dígitos) con 4 dígitos del instante del intento.
+     * Número de pedido para la pasarela. Redsys exige 4-12 caracteres, los 4
+     * primeros numéricos, y uno distinto por cada intento de cobro (rechaza los
+     * repetidos): se combina el id de la reserva (8 dígitos) con 4 dígitos del
+     * instante del intento.
      */
-    private String buildOrderId(Reservation reservation, Instant now) {
-        return String.format("%08d%04d", reservation.getId() % 100_000_000L, now.toEpochMilli() % 10_000L);
+    static String buildOrderId(Long reservationId, Instant now) {
+        return String.format("%08d%04d", reservationId % 100_000_000L, now.toEpochMilli() % 10_000L);
     }
 }

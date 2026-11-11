@@ -7,7 +7,7 @@ Para probar Reservas no hace falta levantar Cartelera ni Usuarios:
 | Comp. 1 Cartelera (`:8081`) | **WireMock** con respuestas fijas (`wiremock/mappings/cartelera.json`) |
 | Comp. 3 Usuarios (`:8083`) | WireMock (`wiremock/mappings/usuarios.json`) |
 | Tokens del Comp. 3 (RS256) | Tokens HS256 de desarrollo creados con `scripts/generate-dev-token.ps1` |
-| Pasarela Redsýs | Pasarela simulada (o WireMock en modo `redsys`) |
+| Pasarela de pago | Pasarela simulada (o la web de pruebas real de Redsys con `PAYMENT_MODE=redsys`) |
 | Comp. 3 y 4 consumiendo eventos | Cola de depuración `reservas.debug.payment-events` |
 
 Todo esto lo activa el perfil de Spring **`isolated`** (`application-isolated.yaml`).
@@ -178,13 +178,34 @@ simultáneo (8 hilos a la vez) lo cubre `ReservationFlowIntegrationTest`.
 **Las dependencias caídas.** `docker compose stop wiremock` y crea una reserva:
 debe responder 503 `SERVICE_UNAVAILABLE`.
 
-**La pasarela por HTTP (modo `redsys` contra WireMock).**
+**El pago real con Redsys (web de pruebas).** Necesita internet. Arranca Reservas
+con Redsys activo:
 ```powershell
 $env:PAYMENT_MODE="redsys"
 .\mvnw.cmd spring-boot:run "-Dspring-boot.run.profiles=isolated"
 ```
-El pago se hace por OpenFeign contra `http://localhost:8089/redsys/charge`. Un
-`paymentToken` que contenga `declined` devuelve 402.
+(En el `docker-compose.yml` global ya viene activado.) Luego crea una reserva como en
+el apartado 5 y abre la web de pago:
+```powershell
+.\scripts\pagar-redsys.ps1 -ReservationId $r.id -Token $cliente
+```
+El navegador va a la web de pruebas de Redsys. Datos de la tarjeta de prueba (manual
+oficial de Redsys, *Datos genéricos de prueba*):
+
+| Campo | Valor |
+|---|---|
+| Número | `4548 8120 4940 0004` |
+| Caducidad | `12/20` según el manual (si Redsys la rechaza por caducada, prueba con una fecha futura, por ejemplo `12/49`) |
+| CVV | `123` |
+| Código de autenticación (3D Secure / CIP) | `123456` |
+
+Al terminar, Redsys devuelve el navegador a `http://localhost:8082/v1/reservations/payments/redsys/return`,
+que muestra **Pago confirmado** con las entradas. Si cancelas en Redsys o la tarjeta
+se deniega, muestra el motivo y la reserva sigue pendiente para reintentar.
+
+Los datos del comercio (número `999008881`, terminal 1 y clave) son los **genéricos de
+prueba publicados por Redsys** y ya están en `application.yaml`: no hay que crear ni
+configurar nada.
 
 ---
 

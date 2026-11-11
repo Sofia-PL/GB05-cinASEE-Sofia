@@ -156,7 +156,9 @@ public class ReservationService {
     private boolean isActive(ReservedSeat seat, Instant now) {
         Reservation reservation = seat.getReservation();
         return seat.getStatus() == SeatStatus.SOLD
-                || (reservation.getStatus() == ReservationStatus.PENDING_PAYMENT && now.isBefore(reservation.getExpiresAt()));
+                || (reservation.getStatus() == ReservationStatus.PENDING_PAYMENT && now.isBefore(reservation.getExpiresAt()))
+                // Pago en Redsys en curso: la butaca sigue ocupada aunque hayan pasado los 10 min
+                || reservation.isPaymentInProgressAt(now, properties.paymentGrace());
     }
 
     /** 400 si la misma butaca aparece dos veces en la petición. */

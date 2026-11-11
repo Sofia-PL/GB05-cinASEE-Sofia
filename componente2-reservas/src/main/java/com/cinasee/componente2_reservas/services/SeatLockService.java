@@ -70,7 +70,7 @@ public class SeatLockService {
 
         // 1) Liberar las reservas caducadas de ESTA sesión antes de comprobar huecos
         List<Reservation> stale = reservationRepository.findExpiredByShowForUpdate(
-                command.showId(), ReservationStatus.PENDING_PAYMENT, now);
+                command.showId(), ReservationStatus.PENDING_PAYMENT, now, now.minus(properties.paymentGrace()));
         release(stale, ReservationStatus.EXPIRED, now);
 
         // 2) Comprobación previa de disponibilidad (da un mensaje claro al usuario)
@@ -133,7 +133,8 @@ public class SeatLockService {
     public int expireOverdueReservations() {
         Instant now = clock.instant();
         List<Reservation> overdue = reservationRepository.findExpiredForUpdate(
-                ReservationStatus.PENDING_PAYMENT, now, PageRequest.of(0, properties.expirationBatch()));
+                ReservationStatus.PENDING_PAYMENT, now, now.minus(properties.paymentGrace()),
+                PageRequest.of(0, properties.expirationBatch()));
         release(overdue, ReservationStatus.EXPIRED, now);
         return overdue.size();
     }

@@ -193,8 +193,11 @@ services:
       # pero el emisor ("iss") es el que el Comp. 3 escribe dentro del token.
       JWT_JWK_SET_URI: http://componente3-usuarios:8083/v1/iam/.well-known/jwks.json
       JWT_ISSUER: http://localhost:8083/v1/iam
-      # Pasarela de pago simulada (no hay credenciales reales de Redsýs)
-      PAYMENT_MODE: simulated
+      # Pago en la web de pruebas REAL de Redsys. Usa los datos genéricos de prueba que Redsys
+      # publica para todos los desarrolladores (definidos en application.yaml del Comp. 2; no
+      # son credenciales reales). Para un comercio real: REDSYS_SECRET_KEY, REDSYS_MERCHANT_CODE...
+      # como variables de entorno, nunca en el repositorio. "simulated" = pasarela simulada.
+      PAYMENT_MODE: redsys
     restart: unless-stopped
 
 # ==========================================

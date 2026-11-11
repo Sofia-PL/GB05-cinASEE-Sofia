@@ -20,6 +20,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -140,6 +141,18 @@ public class Reservation {
     private String paymentReference;
 
     /**
+     * Número de pedido enviado a Redsys en el último intento de pago (Ds_Merchant_Order,
+     * 12 dígitos). Es único: Redsys rechaza pedidos repetidos y, además, sirve para
+     * encontrar la reserva cuando el cliente vuelve de la web de Redsys.
+     */
+    @Column(name = "payment_order", length = 12, unique = true)
+    private String paymentOrder;
+
+    /** Momento en que se inició el último pago en Redsys. Nulo si no hay ninguno en curso. */
+    @Column(name = "payment_started_at")
+    private Instant paymentStartedAt;
+
+    /**
      * Bloqueo optimista: si dos transacciones modifican la misma reserva a la vez,
      * la segunda falla en lugar de sobrescribir silenciosamente a la primera.
      * Es una segunda red de seguridad además del bloqueo pesimista (SELECT ... FOR UPDATE)
@@ -162,5 +175,16 @@ public class Reservation {
     /** Indica si la reserva sigue pendiente pero su TTL ya ha vencido en el instante indicado. */
     public boolean isHoldExpiredAt(Instant now) {
         return status == ReservationStatus.PENDING_PAYMENT && !now.isBefore(expiresAt);
+    }
+
+    /**
+     * Indica si hay un pago en Redsys en curso (el cliente está en la web de Redsys)
+     * dentro del margen indicado. Mientras sea así, la reserva no se caduca aunque
+     * hayan pasado sus 10 minutos, para no liberar butacas que se están pagando.
+     */
+    public boolean isPaymentInProgressAt(Instant now, Duration grace) {
+        return status == ReservationStatus.PENDING_PAYMENT
+                && paymentStartedAt != null
+                && now.isBefore(paymentStartedAt.plus(grace));
     }
 }
