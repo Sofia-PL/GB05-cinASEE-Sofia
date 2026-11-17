@@ -4,6 +4,7 @@ import com.cinasee.componente3_usuarios.dto.PurchaseHistoryItem;
 import com.cinasee.componente3_usuarios.dto.UpdateUserProfileRequest;
 import com.cinasee.componente3_usuarios.dto.UserProfile;
 import com.cinasee.componente3_usuarios.models.PurchaseHistory;
+import com.cinasee.componente3_usuarios.models.Role;
 import com.cinasee.componente3_usuarios.models.User;
 import com.cinasee.componente3_usuarios.repositories.PurchaseHistoryRepository;
 import com.cinasee.componente3_usuarios.repositories.UserRepository;
@@ -40,6 +41,10 @@ public class UserServiceImpl implements UserService {
                 ? List.of()
                 : new ArrayList<>(user.getPreferredGenres());
         profile.setPreferredGenres(genres);
+        profile.setPhone(user.getPhone());
+        profile.setHomeCinema(user.getHomeCinema());
+        profile.setCinemaId(user.getCinemaId());
+        profile.setCanReviewRoleRequests(canReviewRoleRequests(user));
 
         return profile;
     }
@@ -60,6 +65,16 @@ public class UserServiceImpl implements UserService {
                     .distinct()
                     .toList();
             user.setPreferredGenres(new ArrayList<>(genres));
+        }
+
+        if (request.getPhone() != null) {
+            String phone = request.getPhone().trim();
+            user.setPhone(phone.isEmpty() ? null : phone);
+        }
+
+        if (request.getHomeCinema() != null) {
+            String homeCinema = request.getHomeCinema().trim();
+            user.setHomeCinema(homeCinema.isEmpty() ? null : homeCinema);
         }
 
         userRepository.save(user);
@@ -86,6 +101,11 @@ public class UserServiceImpl implements UserService {
                         HttpStatus.NOT_FOUND,
                         "Usuario no encontrado con ID: " + userId
                 ));
+    }
+
+    private boolean canReviewRoleRequests(User user) {
+        return user.getRole() == Role.ADMIN
+                || (user.getRole() == Role.STAFF_TAQUILLA && user.isCinemaManager());
     }
 
     private PurchaseHistoryItem toPurchaseHistoryItem(PurchaseHistory history) {

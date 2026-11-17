@@ -13,11 +13,14 @@ import java.util.UUID;
 public class GuestTokenServiceImpl implements GuestTokenService {
 
     private final JwtProvider jwtProvider;
+    private final GuestRateLimiter guestRateLimiter;
 
     @Override
     public TokenResponse createGuestToken(GuestTokenRequest request) {
         // TODO: validar request.getCaptchaToken() contra el proveedor de CAPTCHA
-        // antes de emitir el token. El rate limiting se aplicará en el API Gateway.
+        // antes de emitir el token. El rate limiting sí se aplica ya por deviceId.
+        guestRateLimiter.checkLimit(request.getDeviceId());
+
         String guestId = "guest:" + UUID.randomUUID();
         String token = jwtProvider.generateGuestToken(guestId, request.getDeviceId());
 

@@ -26,6 +26,13 @@
 - La imagen se construye correctamente:
   - `docker compose build componente3-usuarios` → OK
   - Imagen resultante: `cinasee-componente3-usuarios`
+- Perfil real con `phone` y `homeCinema`; `PUT /v1/iam/users/{id}` ya persiste
+  los cambios en MySQL.
+- Usuarios semilla con roles reales: `admin@cinasee.com`,
+  `staff@cinasee.com` y `usuario@cinasee.com`.
+- Flujo de solicitudes de rol `STAFF_TAQUILLA` / `ADMIN` con aprobación por
+  parte de un administrador global o del taquillero responsable del cine.
+- Rate limiting de `/auth/guest` en Redis: 10 peticiones/minuto por `deviceId`.
 
 ### Cambios aplicados en el resto de componentes (2026-11-09)
 
@@ -232,6 +239,17 @@ $token = (Invoke-RestMethod -Method Post `
   -ContentType "application/json" -Body $login).accessToken
 ```
 
+Usuarios de demostración creados por `DemoDataInitializer` (solo si no existen):
+
+| Email | Contraseña | Rol | `cinemaId` | `cinemaManager` |
+|---|---|---|---|---|
+| `admin@cinasee.com` | `Admin123!` | `ADMIN` | — | `false` |
+| `staff@cinasee.com` | `Staff123!` | `STAFF_TAQUILLA` | `1` | `true` |
+| `usuario@cinasee.com` | `Usuario123!` | `CLIENTE_REGISTRADO` | — | `false` |
+
+Se desactivan con `APP_SEED_ENABLED=false`. Los tres sirven para el acceso
+rápido del frontend y devuelven un JWT real del Componente 3.
+
 ### 5.3. MySQL
 
 ```powershell
@@ -247,6 +265,7 @@ Deben existir:
 - `users`
 - `user_preferred_genres`
 - `purchase_history`
+- `role_requests`
 
 ### 5.4. Redis
 
@@ -255,7 +274,12 @@ docker exec -it cinasee-redis-usuarios redis-cli ping
 # PONG
 ```
 
-Ahora mismo no habrá claves: el código todavía no usa Redis.
+Redis se usa para el rate limiting de invitados. Tras varias peticiones a
+`/auth/guest` con el mismo `deviceId` aparecerán claves `rate:guest:<deviceId>`:
+
+```powershell
+docker exec -it cinasee-redis-usuarios redis-cli keys "rate:guest:*"
+```
 
 ### 5.5. RabbitMQ
 
@@ -273,9 +297,24 @@ Si el Componente 3 no puede autenticarse contra RabbitMQ, ver la sección 6.3.
 ### 5.6. Perfil con JWT
 
 ```powershell
-Invoke-RestMethod -Uri "http://localhost:8083/v1/iam/users/1" `
-  -Headers @{ Authorization = "Bearer $token" }
+$headers = @{ Authorization = "Bearer $token" }
+
+Invoke-RestMethod -Uri "http://localhost:8083/v1/iam/users/1" -Headers $headers
+
+$profile = @{
+  fullName = "Usuario Demo"
+  phone = "+34 600 000 000"
+  homeCinema = "CineAsee Centro"
+  preferredGenres = @("ACCION", "COMEDIA")
+} | ConvertTo-Json
+
+Invoke-RestMethod -Method Put -Uri "http://localhost:8083/v1/iam/users/1" `
+  -Headers $headers -ContentType "application/json" -Body $profile
 ```
+
+`UserProfile` devuelve además `phone`, `homeCinema`, `cinemaId` y
+`canReviewRoleRequests`. Este último indica al frontend si debe mostrar el panel
+de revisión de solicitudes.
 
 ---
 
@@ -615,7 +654,10 @@ Ejemplo de healthcheck de Mongo:
 | Actuator | `SecurityConfig` permite `/actuator/health`, pero no está la dependencia | Añadir `spring-boot-starter-actuator` y usarlo en el healthcheck |
 | Clave RSA | Se genera en cada arranque | Persistir en keystore/KMS; si no, reiniciar invalida los tokens |
 | `ddl-auto` | `update` | Migrar a Flyway con `validate` para despliegues reproducibles |
-| Redis | Configurado pero sin uso | Implementar revocación de JWT por `jti`, caché o sesiones |
+| Redis | Rate limiting de invitados implementado | Añadir revocación de JWT por `jti` o caché de sesiones |
+| CAPTCHA de invitados | Pendiente: no hay proveedor configurado | Integrar un proveedor y validar `captchaToken` antes de emitir el JWT |
+| Usuarios semilla | Contraseñas de demo en `application.yaml` | Mantener `APP_SEED_ENABLED=false` en producción |
+| Cambio de rol | El JWT antiguo conserva el rol anterior | El frontend debe forzar un nuevo login tras la aprobación |
 | Discovery OIDC | `jwks_uri` apunta a `localhost` | Usar `jwk-set-uri` en los demás servicios; no usar discovery dentro de Docker |
 | Tests en imagen | Se compilan con `-DskipTests` | Ejecutar `.\mvnw.cmd test` en CI antes de construir |
 
@@ -752,11 +794,92 @@ try {
 }
 ```
 
+### 9.4. Flujo de solicitudes de rol
+
+```powershell
+$base = "http://localhost:8083/v1/iam"
+
+# 1. Login del cliente que solicita el rol
+$userLogin = @{ email = "usuario@cinasee.com"; password = "Usuario123!" } | ConvertTo-Json
+$user = (Invoke-RestMethod -Method Post -Uri "$base/auth/login" `
+  -ContentType "application/json" -Body $userLogin).accessToken
+$userHeaders = @{ Authorization = "Bearer $user" }
+
+# 2. Crear la solicitud
+$roleRequest = @{
+  requestedRole = "STAFF_TAQUILLA"
+  cinemaId = 1
+  motivation = "Trabajo en la taquilla del cine 1"
+} | ConvertTo-Json
+
+$created = Invoke-RestMethod -Method Post -Uri "$base/role-requests" `
+  -Headers $userHeaders -ContentType "application/json" -Body $roleRequest
+$created | ConvertTo-Json -Depth 5
+
+# 3. Ver mis solicitudes
+Invoke-RestMethod -Uri "$base/role-requests/me" -Headers $userHeaders |
+  ConvertTo-Json -Depth 5
+
+# 4. Login del ADMIN y listado de pendientes
+$adminLogin = @{ email = "admin@cinasee.com"; password = "Admin123!" } | ConvertTo-Json
+$admin = (Invoke-RestMethod -Method Post -Uri "$base/auth/login" `
+  -ContentType "application/json" -Body $adminLogin).accessToken
+$adminHeaders = @{ Authorization = "Bearer $admin" }
+
+Invoke-RestMethod -Uri "$base/role-requests?status=PENDING&cinemaId=1" `
+  -Headers $adminHeaders | ConvertTo-Json -Depth 5
+
+# 5. Aprobar
+$review = @{
+  status = "APPROVED"
+  reviewComment = "Aprobado por el administrador"
+} | ConvertTo-Json
+
+Invoke-RestMethod -Method Patch -Uri "$base/role-requests/$($created.id)" `
+  -Headers $adminHeaders -ContentType "application/json" -Body $review |
+  ConvertTo-Json -Depth 5
+
+# 6. Volver a hacer login para que el JWT lleve el rol nuevo
+$user = (Invoke-RestMethod -Method Post -Uri "$base/auth/login" `
+  -ContentType "application/json" -Body $userLogin).accessToken
+Invoke-RestMethod -Uri "$base/users/3" -Headers @{ Authorization = "Bearer $user" } |
+  ConvertTo-Json -Depth 5
+```
+
+El `staff@cinasee.com` también puede revisar solicitudes `STAFF_TAQUILLA` de su
+propio cine (`cinemaId=1`), pero no solicitudes `ADMIN` ni de otros cines.
+
+### 9.5. Rate limit de invitados
+
+```powershell
+$guestBody = @{ deviceId = "web-demo-12345678" } | ConvertTo-Json
+
+1..12 | ForEach-Object {
+  try {
+    Invoke-RestMethod -Method Post -Uri "$base/auth/guest" `
+      -ContentType "application/json" -Body $guestBody | Out-Null
+    "$_ OK"
+  } catch {
+    "$_ -> $($_.Exception.Response.StatusCode.value__)"
+  }
+}
+```
+
+Las 10 primeras peticiones devuelven `200`; a partir de la 11 se recibe `429`.
+El contador vive en Redis y caduca a los 60 segundos.
+
 ---
 
 ## 10. Limitaciones conocidas
 
-- El Componente 3 no usa Redis todavía; está preparado para el futuro.
+- El CAPTCHA de `/auth/guest` sigue pendiente: solo hay rate limiting por
+  `deviceId`.
+- Si Redis no está disponible, el rate limiting se desactiva y se registra un
+  aviso para no bloquear por completo la emisión de tokens de invitado.
+- Los usuarios semilla tienen contraseñas conocidas; desactivar el seed en
+  producción.
+- El rol viaja en el JWT: tras aprobar una solicitud hay que volver a iniciar
+  sesión para obtener el rol nuevo.
 - La clave RSA se regenera en cada arranque.
 - `ddl-auto: update` no es apto para producción.
 - La DLQ no tiene reintento automático ni alerta.
