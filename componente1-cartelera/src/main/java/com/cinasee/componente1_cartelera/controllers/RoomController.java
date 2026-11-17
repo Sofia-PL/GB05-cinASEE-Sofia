@@ -20,8 +20,15 @@ public class RoomController {
     private final RoomService roomService;
 
     @GetMapping
-    public ResponseEntity<List<Room>> getRooms() {
-        return ResponseEntity.ok(roomService.getAllRooms());
+    public ResponseEntity<List<Room>> getRooms(
+            @RequestParam(required = false) Long cinemaId) {
+        List<Room> rooms;
+        if (cinemaId != null) {
+            rooms = roomService.getRoomsByCinemaId(cinemaId);
+        } else {
+            rooms = roomService.getAllRooms();
+        }
+        return ResponseEntity.ok(rooms);
     }
 
     @PostMapping

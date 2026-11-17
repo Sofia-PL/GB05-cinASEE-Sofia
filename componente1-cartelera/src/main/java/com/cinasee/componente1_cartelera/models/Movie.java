@@ -24,7 +24,6 @@ public class Movie {
     
     private String genre;
     private String ageRating;
-    private String distributor;
     private String posterUrl;
     private String trailerUrl;
 }

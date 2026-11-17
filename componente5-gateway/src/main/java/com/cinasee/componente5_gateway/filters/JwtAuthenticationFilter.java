@@ -23,6 +23,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             "{\"error\":\"unauthorized\",\"message\":\"A valid Bearer token is required\"}";
     private static final AntPathMatcher PATH_MATCHER = new AntPathMatcher();
     private static final List<String> ROUTED_PATHS = List.of(
+            "/api/v1/cinemas/**",
             "/api/v1/movies/**",
             "/api/v1/rooms/**",
             "/api/v1/sessions/**",
@@ -75,7 +76,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private boolean isPublicPath(String method, String path) {
         if ("GET".equalsIgnoreCase(method)
-                && (PATH_MATCHER.match("/api/v1/movies/**", path)
+                && (PATH_MATCHER.match("/api/v1/cinemas/**", path)
+                || PATH_MATCHER.match("/api/v1/movies/**", path)
                 || "/api/v1/sessions".equals(path)
                 || PATH_MATCHER.match("/v1/reservations/shows/*/seats", path)
                 || PATH_MATCHER.match("/v1/iam/.well-known/**", path)

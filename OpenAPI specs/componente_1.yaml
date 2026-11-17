@@ -1,19 +1,26 @@
 openapi: 3.0.3
 
 info:
-  title: API de CineASEE - Componente 1 (Catálogo, Salas y Cartelera/Sesiones)
-  version: 1.0.0
+  title: API de CineASEE - Componente 1 (Catálogo, Cines, Salas y Cartelera/Sesiones)
+  version: 2.0.0
   description: >
-    API responsable de la gestión del catálogo de películas, la configuración
-    de salas/espacios físicos y la planificación de la cartelera y sesiones de proyección.
+    API responsable de la gestión del catálogo de películas, los cines,
+    la configuración de salas/espacios físicos y la planificación de la cartelera
+    y sesiones de proyección.
 
-    Este microservicio es propietario de las entidades Película, Sala y Sesión. 
+    Este microservicio es propietario de las entidades Película, Cine, Sala y Sesión. 
     Para garantizar la coherencia del negocio, realiza validaciones internas 
     (solapamientos horarios entre sesiones) y expone endpoints para ser consultado 
     por otros microservicios:
 
     - Reservas y pagos: consulta disponibilidad de sesiones, salas y precios base.
     - Métricas y recomendaciones: consulta información de películas, géneros y aforos.
+
+    **MODELO DE DATOS:**
+    - Un **Cine** (Cinema) tiene varias **Salas** (Rooms).
+    - Cada **Sala** pertenece a un único **Cine**.
+    - Cada **Sesión** asigna una **Película** a una **Sala** (y por tanto a un **Cine**).
+    - Varios **Cines** pueden proyectar la misma **Película** simultáneamente.
 
 servers:
   - url: http://localhost:8081/api/v1
@@ -27,6 +34,8 @@ security:
 # TAGS
 # ============================================================
 tags:
+  - name: Cinemas
+    description: Gestión de cines (nombre, dirección, ciudad, consulta de salas asociadas)
   - name: Movies
     description: Gestión del catálogo de películas (CRUD, sinopsis, duración, clasificación)
   - name: Rooms
@@ -36,6 +45,166 @@ tags:
 
 
 paths:
+
+  # ==========================================================
+  # RECURSO: CINES (/cinemas)
+  # ==========================================================
+
+  /cinemas:
+    get:
+      tags:
+        - Cinemas
+      summary: Listar cines
+      description: >
+        Devuelve la lista de cines registrados en el sistema.
+        Permite filtrar por ciudad.
+      security: [] # Excepción de seguridad: listado de cines público
+      operationId: getCinemas
+      parameters:
+        - name: city
+          in: query
+          required: false
+          description: Filtrar cines por ciudad.
+          schema:
+            type: string
+          example: "Madrid"
+      responses:
+        '200':
+          description: Lista de cines recuperada con éxito.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Cinema'
+
+    post:
+      tags:
+        - Cinemas
+      summary: Registrar un nuevo cine
+      description: >
+        Permite al administrador dar de alta un nuevo cine en el sistema.
+      operationId: createCinema
+      requestBody:
+        required: true
+        description: Datos necesarios para el alta del cine.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCinemaRequest'
+            example:
+              name: "CineAsee Gran Vía"
+              address: "Gran Vía 32, Planta 1"
+              city: "Madrid"
+              phone: "+34 912 345 678"
+      responses:
+        '201':
+          description: Cine creado correctamente.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cinema'
+        '400':
+          description: Petición incorrecta (campos obligatorios ausentes).
+
+
+  /cinemas/{cinemaId}:
+    get:
+      tags:
+        - Cinemas
+      summary: Obtener detalle de un cine
+      description: Devuelve la información detallada de un cine según su identificador único.
+      security: [] # Público
+      operationId: getCinemaById
+      parameters:
+        - name: cinemaId
+          in: path
+          required: true
+          description: Identificador único del cine.
+          schema:
+            type: integer
+            format: int64
+          example: 1
+      responses:
+        '200':
+          description: Cine encontrado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cinema'
+        '404':
+          description: No existe ningún cine con el ID indicado.
+
+    put:
+      tags:
+        - Cinemas
+      summary: Actualizar datos de un cine
+      operationId: updateCinema
+      parameters:
+        - name: cinemaId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCinemaRequest'
+      responses:
+        '200':
+          description: Cine actualizado.
+        '404':
+          description: Cine no encontrado.
+
+    delete:
+      tags:
+        - Cinemas
+      summary: Eliminar un cine
+      operationId: deleteCinema
+      parameters:
+        - name: cinemaId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '204':
+          description: Cine eliminado correctamente.
+
+
+  /cinemas/{cinemaId}/rooms:
+    get:
+      tags:
+        - Cinemas
+      summary: Listar salas de un cine
+      description: Devuelve la lista de salas que pertenecen al cine indicado.
+      security: [] # Público
+      operationId: getRoomsByCinema
+      parameters:
+        - name: cinemaId
+          in: path
+          required: true
+          description: Identificador único del cine.
+          schema:
+            type: integer
+            format: int64
+          example: 1
+      responses:
+        '200':
+          description: Lista de salas del cine obtenida con éxito.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Room'
+        '404':
+          description: Cine no encontrado.
+
 
   # ==========================================================
   # RECURSO: PELÍCULAS (/movies)
@@ -97,7 +266,6 @@ paths:
               durationMinutes: 127
               genre: "DRAMA_ROMANTICO"
               ageRating: "TP"
-              distributor: "Focus Features / Universal Pictures"
               posterUrl: "https://cineasee.es/posters/orgullo_y_prejuicio_2005.jpg"
               trailerUrl: "https://youtube.com/watch?v=1dYv5u6v72g"
       responses:
@@ -187,9 +355,20 @@ paths:
     get:
       tags:
         - Rooms
-      summary: Listar salas del cine
-      description: Devuelve la lista completa de salas y sus características técnicas (IMAX, 3D, aforo).
+      summary: Listar salas
+      description: >
+        Devuelve la lista completa de salas y sus características técnicas (IMAX, 3D, aforo).
+        Permite filtrar por cine con el parámetro cinemaId.
       operationId: getRooms
+      parameters:
+        - name: cinemaId
+          in: query
+          required: false
+          description: Filtrar salas por ID de cine.
+          schema:
+            type: integer
+            format: int64
+          example: 1
       responses:
         '200':
           description: Lista de salas obtenida con éxito.
@@ -204,7 +383,9 @@ paths:
       tags:
         - Rooms
       summary: Crear una nueva sala
-      description: Registra una nueva sala con su configuración de filas, columnas y tipo de proyección.
+      description: >
+        Registra una nueva sala con su configuración de filas, columnas y tipo de proyección.
+        La sala queda asociada al cine indicado por cinemaId.
       operationId: createRoom
       requestBody:
         required: true
@@ -214,6 +395,7 @@ paths:
             schema:
               $ref: '#/components/schemas/CreateRoomRequest'
             example:
+              cinemaId: 1
               name: "Sala 1 - Principal"
               roomType: "ESTANDAR_2D"
               rowsCount: 10
@@ -229,6 +411,8 @@ paths:
                 $ref: '#/components/schemas/Room'
         '400':
           description: Datos de la sala no válidos.
+        '404':
+          description: Cine no encontrado con el ID indicado.
 
 
   /rooms/{roomId}:
@@ -415,6 +599,64 @@ components:
   schemas:
 
     # --------------------------------------------------------
+    # SCHEMA: CINE
+    # --------------------------------------------------------
+    Cinema:
+      type: object
+      required:
+        - id
+        - name
+        - address
+        - city
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: Identificador único del cine.
+          example: 1
+        name:
+          type: string
+          description: Nombre comercial del cine.
+          example: "CineAsee Gran Vía"
+        address:
+          type: string
+          description: Dirección física del cine.
+          example: "Gran Vía 32, Planta 1"
+        city:
+          type: string
+          description: Ciudad donde se ubica el cine.
+          example: "Madrid"
+        phone:
+          type: string
+          description: Teléfono de contacto del cine.
+          example: "+34 912 345 678"
+
+    CreateCinemaRequest:
+      type: object
+      required:
+        - name
+        - address
+        - city
+      properties:
+        name:
+          type: string
+          description: Nombre comercial del cine.
+          example: "CineAsee Gran Vía"
+        address:
+          type: string
+          description: Dirección física del cine.
+          example: "Gran Vía 32, Planta 1"
+        city:
+          type: string
+          description: Ciudad donde se ubica el cine.
+          example: "Madrid"
+        phone:
+          type: string
+          description: Teléfono de contacto del cine.
+          example: "+34 912 345 678"
+
+
+    # --------------------------------------------------------
     # SCHEMA: PELÍCULA
     # --------------------------------------------------------
     Movie:
@@ -452,10 +694,6 @@ components:
           type: string
           description: Clasificación por edades recomendada.
           example: "TP"
-        distributor:
-          type: string
-          description: Empresa distribuidora.
-          example: "Focus Features / Universal Pictures"
         posterUrl:
           type: string
           format: uri
@@ -498,10 +736,6 @@ components:
           type: string
           description: Calificación legal por edad recomendada.
           example: "TP"
-        distributor:
-          type: string
-          description: Compañía que posee los derechos de distribución.
-          example: "Focus Features / Universal Pictures"
         posterUrl:
           type: string
           format: uri
@@ -521,6 +755,7 @@ components:
       type: object
       required:
         - id
+        - cinemaId
         - name
         - roomType
         - capacity
@@ -531,6 +766,11 @@ components:
           type: integer
           format: int64
           description: Identificador único de la sala.
+          example: 1
+        cinemaId:
+          type: integer
+          format: int64
+          description: Identificador del cine al que pertenece la sala.
           example: 1
         name:
           type: string
@@ -569,11 +809,17 @@ components:
     CreateRoomRequest:
       type: object
       required:
+        - cinemaId
         - name
         - roomType
         - rowsCount
         - columnsCount
       properties:
+        cinemaId:
+          type: integer
+          format: int64
+          description: Identificador del cine al que se asocia la nueva sala.
+          example: 1
         name:
           type: string
           description: Nombre identificativo o código alfanumérico de la sala.

@@ -80,10 +80,13 @@ class GatewayIntegrationTest {
     @Test
     void routesPublicCatalogAndLoginRequestsToTheirServices() throws Exception {
         HttpResponse<String> catalog = send("GET", "/api/v1/movies", null, null, null);
+        HttpResponse<String> cinemas = send("GET", "/api/v1/cinemas", null, null, null);
         HttpResponse<String> login = send("POST", "/v1/iam/auth/login", null, null, null);
 
         assertEquals(200, catalog.statusCode());
         assertTrue(catalog.body().startsWith("component1|GET|/api/v1/movies|"));
+        assertEquals(200, cinemas.statusCode());
+        assertTrue(cinemas.body().startsWith("component1|GET|/api/v1/cinemas|"));
         assertEquals(200, login.statusCode());
         assertTrue(login.body().startsWith("component3|POST|/v1/iam/auth/login|"));
     }
@@ -92,11 +95,14 @@ class GatewayIntegrationTest {
     void routesAuthenticatedRequestsAndForwardsTheBearerToken() throws Exception {
         String token = createToken(ISSUER, Instant.now().plusSeconds(300));
 
+        HttpResponse<String> cinemaCreation = send("POST", "/api/v1/cinemas", token, null, null);
         HttpResponse<String> iam = send("GET", "/v1/iam/users/" + SUBJECT, token, null, null);
         HttpResponse<String> reservations = send("POST", "/v1/reservations", token, null, null);
         HttpResponse<String> recommendations =
                 send("GET", "/api/recommendations/users/" + SUBJECT, token, null, null);
 
+        assertEquals(200, cinemaCreation.statusCode());
+        assertTrue(cinemaCreation.body().startsWith("component1|POST|/api/v1/cinemas|Bearer " + token));
         assertEquals(200, iam.statusCode());
         assertTrue(iam.body().startsWith("component3|GET|/v1/iam/users/" + SUBJECT + "|Bearer " + token));
         assertEquals(200, reservations.statusCode());
@@ -108,6 +114,8 @@ class GatewayIntegrationTest {
 
     @Test
     void rejectsMissingMalformedExpiredAndWrongIssuerTokens() throws Exception {
+        HttpResponse<String> unauthenticatedCinemaCreation =
+                send("POST", "/api/v1/cinemas", null, null, null);
         HttpResponse<String> missing = send("GET", "/api/recommendations/users/" + SUBJECT, null, null, null);
         HttpResponse<String> malformed =
                 send("GET", "/api/recommendations/users/" + SUBJECT, "not-a-jwt", null, null);
@@ -118,6 +126,7 @@ class GatewayIntegrationTest {
                 send("GET", "/api/recommendations/users/" + SUBJECT,
                         createToken("http://wrong-issuer", Instant.now().plusSeconds(300)), null, null);
 
+        assertEquals(401, unauthenticatedCinemaCreation.statusCode());
         assertEquals(401, missing.statusCode());
         assertEquals("Bearer", missing.headers().firstValue("WWW-Authenticate").orElse(null));
         assertEquals(401, malformed.statusCode());

@@ -82,6 +82,27 @@ class JwtAuthenticationFilterTest {
     }
 
     @Test
+    void cinemaReadsArePublicButWritesRequireAuthentication() throws Exception {
+        JwtAuthenticationFilter filter = newFilter();
+        MockHttpServletRequest readRequest = new MockHttpServletRequest("GET", "/api/v1/cinemas/7/rooms");
+        MockHttpServletResponse readResponse = new MockHttpServletResponse();
+        RecordingFilterChain readChain = new RecordingFilterChain();
+
+        filter.doFilter(readRequest, readResponse, readChain);
+
+        assertSame(readRequest, readChain.request);
+
+        MockHttpServletRequest writeRequest = new MockHttpServletRequest("POST", "/api/v1/cinemas");
+        MockHttpServletResponse writeResponse = new MockHttpServletResponse();
+        RecordingFilterChain writeChain = new RecordingFilterChain();
+
+        filter.doFilter(writeRequest, writeResponse, writeChain);
+
+        assertEquals(401, writeResponse.getStatus());
+        assertNull(writeChain.request);
+    }
+
+    @Test
     void optionsRequestPassesWithoutToken() throws Exception {
         JwtAuthenticationFilter filter = newFilter();
         MockHttpServletRequest request = new MockHttpServletRequest("OPTIONS", "/v1/reservations");

@@ -2,9 +2,12 @@ package com.cinasee.componente1_cartelera.services;
 
 import com.cinasee.componente1_cartelera.models.CreateRoomRequest;
 import com.cinasee.componente1_cartelera.models.Room;
+import com.cinasee.componente1_cartelera.repositories.CinemaRepository;
 import com.cinasee.componente1_cartelera.repositories.RoomRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 import java.util.Optional;
@@ -14,9 +17,14 @@ import java.util.Optional;
 public class RoomService {
 
     private final RoomRepository roomRepository;
+    private final CinemaRepository cinemaRepository;
 
     public List<Room> getAllRooms() {
         return roomRepository.findAll();
+    }
+
+    public List<Room> getRoomsByCinemaId(Long cinemaId) {
+        return roomRepository.findByCinemaId(cinemaId);
     }
 
     public Optional<Room> getRoomById(Long roomId) {
@@ -24,11 +32,17 @@ public class RoomService {
     }
 
     public Room createRoom(CreateRoomRequest request) {
+        // Validar que el cine existe
+        if (!cinemaRepository.existsById(request.getCinemaId())) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Cine no encontrado con ID: " + request.getCinemaId());
+        }
+
         int capacity = request.getRowsCount() * request.getColumnsCount();
         Long nextId = System.currentTimeMillis();
 
         Room room = Room.builder()
                 .id(nextId)
+                .cinemaId(request.getCinemaId())
                 .name(request.getName())
                 .roomType(request.getRoomType())
                 .rowsCount(request.getRowsCount())
