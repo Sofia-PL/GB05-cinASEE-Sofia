@@ -35,6 +35,16 @@ spring:
         auto-startup: true
         acknowledge-mode: auto
 
+  # --- OpenFeign: timeouts de las llamadas síncronas (C1, C2 y C3) ---
+  cloud:
+    openfeign:
+      client:
+        config:
+          default:
+            connect-timeout: ${FEIGN_CONNECT_TIMEOUT_MS:2000}
+            read-timeout: ${FEIGN_READ_TIMEOUT_MS:5000}
+            logger-level: basic
+
   # Validación de los JWT emitidos por el Componente 3 (IAM)
   security:
     oauth2:
@@ -51,11 +61,19 @@ app:
     exchange: payment.exchange
     queue: payment.completed.queue
     routing-key: payment.completed
+  analytics:
+    # Zona horaria con la que se interpretan las horas de sesión que devuelve
+    # Reservas (Instant en UTC) para filtrar por día de la semana y franja.
+    # Debe coincidir con CATALOG_TIME_ZONE del Componente 2.
+    time-zone: ${ANALYTICS_TIME_ZONE:Europe/Madrid}
 
 # URLs de comunicación síncrona con otros microservicios (o enrutamiento vía Gateway)
 services:
   cartelera:
     url: ${CARTELERA_SERVICE_URL:http://localhost:8081/api/v1}
+  reservas:
+    # El context-path del Comp. 2 es /v1 (no /api/v1)
+    url: ${RESERVAS_SERVICE_URL:http://localhost:8082/v1}
   usuarios:
     # El context-path del Comp. 3 es /v1/iam (no /api/v1)
     url: ${USUARIOS_SERVICE_URL:http://localhost:8083/v1/iam}

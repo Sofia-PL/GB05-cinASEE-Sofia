@@ -189,6 +189,9 @@ services:
       # Comunicación SÍNCRONA (OpenFeign) con Cartelera y Usuarios por la red de Docker
       CARTELERA_URL: http://componente1-cartelera:8081/api/v1
       USUARIOS_URL: http://componente3-usuarios:8083/v1/iam
+      # Las sesiones de Cartelera son LocalDateTime sin zona: se interpretan en esta
+      # zona. Debe coincidir con ANALYTICS_TIME_ZONE del Componente 4.
+      CATALOG_TIME_ZONE: Europe/Madrid
       # Validación de los JWT del Comp. 3: la clave pública se descarga por la red de Docker,
       # pero el emisor ("iss") es el que el Comp. 3 escribe dentro del token.
       JWT_JWK_SET_URI: http://componente3-usuarios:8083/v1/iam/.well-known/jwks.json
@@ -234,6 +237,8 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
+      componente2-reservas:
+        condition: service_started
       componente3-usuarios:
         condition: service_started
     environment:
@@ -252,7 +257,11 @@ services:
       RABBITMQ_PASSWORD: cinasee
       # URLs para comunicación con otros microservicios en la red de Docker
       CARTELERA_SERVICE_URL: http://componente1-cartelera:8081/api/v1
+      # Ventas (fuente principal de ocupación y taquilla): context-path /v1
+      RESERVAS_SERVICE_URL: http://componente2-reservas:8082/v1
       USUARIOS_SERVICE_URL: http://componente3-usuarios:8083/v1/iam
+      # Zona horaria para interpretar las horas de sesión (igual que CATALOG_TIME_ZONE del Comp. 2)
+      ANALYTICS_TIME_ZONE: Europe/Madrid
       # Validación de los JWT del Comp. 3
       JWT_JWK_SET_URI: http://componente3-usuarios:8083/v1/iam/.well-known/jwks.json
       JWT_ISSUER: http://localhost:8083/v1/iam
