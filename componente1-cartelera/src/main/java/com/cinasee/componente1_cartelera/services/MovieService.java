@@ -60,7 +60,6 @@ public class MovieService {
                 .durationMinutes(request.getDurationMinutes())
                 .genre(request.getGenre())
                 .ageRating(request.getAgeRating())
-                .distributor(request.getDistributor())
                 .posterUrl(request.getPosterUrl())
                 .trailerUrl(request.getTrailerUrl())
                 .build();
@@ -76,7 +75,6 @@ public class MovieService {
         movie.setDurationMinutes(request.getDurationMinutes());
         movie.setGenre(request.getGenre());
         movie.setAgeRating(request.getAgeRating());
-        movie.setDistributor(request.getDistributor());
         movie.setPosterUrl(request.getPosterUrl());
         movie.setTrailerUrl(request.getTrailerUrl());
 

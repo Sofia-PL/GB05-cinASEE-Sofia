@@ -29,8 +29,6 @@ public class CreateMovieRequest {
     @NotBlank(message = "La clasificación por edades es obligatoria")
     private String ageRating;
 
-    private String distributor;
-
     private String posterUrl;
 
     private String trailerUrl;
