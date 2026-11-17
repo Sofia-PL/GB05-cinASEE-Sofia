@@ -29,6 +29,7 @@ public class SessionService {
     private final SessionRepository sessionRepository;
     private final MovieRepository movieRepository;
     private final RoomRepository roomRepository;
+    private final SessionIdGenerator sessionIdGenerator;
 
     public List<Session> getAllSessions(LocalDate date, Long movieId) {
         List<Session> sessions = sessionRepository.findAll();
@@ -74,9 +75,8 @@ public class SessionService {
                     "Solapamiento horario detectado. La sala seleccionada ya está ocupada en ese intervalo de tiempo (duración + tiempo de preparación).");
         }
 
-        Long nextId = System.currentTimeMillis();
         Session session = Session.builder()
-                .id(nextId)
+                .id(sessionIdGenerator.nextId())
                 .movieId(movie.getId())
                 .roomId(room.getId())
                 .startTime(startTime)

@@ -1,11 +1,14 @@
 package com.cinasee.componente1_cartelera;
 
+import com.cinasee.componente1_cartelera.models.Cinema;
 import com.cinasee.componente1_cartelera.models.Movie;
 import com.cinasee.componente1_cartelera.models.Room;
 import com.cinasee.componente1_cartelera.models.Session;
+import com.cinasee.componente1_cartelera.repositories.CinemaRepository;
 import com.cinasee.componente1_cartelera.repositories.MovieRepository;
 import com.cinasee.componente1_cartelera.repositories.RoomRepository;
 import com.cinasee.componente1_cartelera.repositories.SessionRepository;
+import com.cinasee.componente1_cartelera.services.SessionIdGenerator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -22,6 +25,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicLong;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -44,19 +48,35 @@ class CarteleraAcceptanceTest {
     @MockitoBean
     private MovieRepository movieRepository;
     @MockitoBean
+    private CinemaRepository cinemaRepository;
+    @MockitoBean
     private RoomRepository roomRepository;
     @MockitoBean
     private SessionRepository sessionRepository;
+    @MockitoBean
+    private SessionIdGenerator sessionIdGenerator;
 
+    private Map<Long, Cinema> cinemas;
     private Map<Long, Movie> movies;
     private Map<Long, Room> rooms;
     private Map<Long, Session> sessions;
 
     @BeforeEach
     void setUpRepositories() {
+        cinemas = new HashMap<>();
         movies = new HashMap<>();
         rooms = new HashMap<>();
         sessions = new HashMap<>();
+        AtomicLong sessionIds = new AtomicLong();
+        when(sessionIdGenerator.nextId()).thenAnswer(invocation -> sessionIds.incrementAndGet());
+        when(cinemaRepository.findAll()).thenAnswer(invocation -> new ArrayList<>(cinemas.values()));
+        when(cinemaRepository.findById(anyLong())).thenAnswer(invocation -> Optional.ofNullable(cinemas.get(invocation.getArgument(0))));
+        when(cinemaRepository.existsById(anyLong())).thenAnswer(invocation -> cinemas.containsKey(invocation.getArgument(0)));
+        when(cinemaRepository.save(any(Cinema.class))).thenAnswer(invocation -> {
+            Cinema cinema = invocation.getArgument(0);
+            cinemas.put(cinema.getId(), cinema);
+            return cinema;
+        });
         when(movieRepository.findAll()).thenAnswer(invocation -> new ArrayList<>(movies.values()));
         when(movieRepository.findById(anyLong())).thenAnswer(invocation -> Optional.ofNullable(movies.get(invocation.getArgument(0))));
         when(movieRepository.existsById(anyLong())).thenAnswer(invocation -> movies.containsKey(invocation.getArgument(0)));
@@ -94,6 +114,22 @@ class CarteleraAcceptanceTest {
 
     @Test
     void cinemaCanCreateCatalogAndScheduleWithoutRoomOverlap() throws Exception {
+        MvcResult cinemaResult = mockMvc.perform(post("/api/v1/cinemas").contextPath("/api/v1")
+                        .with(jwt().jwt(token -> token.subject("acceptance-test")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "name": "Cine de aceptación",
+                                  "address": "Calle de prueba 1",
+                                  "city": "Madrid",
+                                  "phone": "910000000"
+                                }
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.name").value("Cine de aceptación"))
+                .andReturn();
+        long cinemaId = jsonMapper.readTree(cinemaResult.getResponse().getContentAsString()).get("id").asLong();
+
         MvcResult movieResult = mockMvc.perform(post("/api/v1/movies").contextPath("/api/v1")
                         .with(jwt().jwt(token -> token.subject("acceptance-test")))
                         .contentType(MediaType.APPLICATION_JSON)
@@ -115,13 +151,15 @@ class CarteleraAcceptanceTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
+                                  "cinemaId": %d,
                                   "name": "Sala de aceptación",
                                   "roomType": "ESTANDAR_2D",
                                   "rowsCount": 8,
                                   "columnsCount": 10
                                 }
-                                """))
+                                """.formatted(cinemaId)))
                 .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.cinemaId").value(cinemaId))
                 .andExpect(jsonPath("$.capacity").value(80))
                 .andReturn();
         long roomId = jsonMapper.readTree(roomResult.getResponse().getContentAsString()).get("id").asLong();

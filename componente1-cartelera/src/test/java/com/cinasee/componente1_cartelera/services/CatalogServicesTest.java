@@ -1,11 +1,13 @@
 package com.cinasee.componente1_cartelera.services;
 
+import com.cinasee.componente1_cartelera.models.Cinema;
 import com.cinasee.componente1_cartelera.models.CreateMovieRequest;
 import com.cinasee.componente1_cartelera.models.CreateRoomRequest;
 import com.cinasee.componente1_cartelera.models.CreateSessionRequest;
 import com.cinasee.componente1_cartelera.models.Movie;
 import com.cinasee.componente1_cartelera.models.Room;
 import com.cinasee.componente1_cartelera.models.Session;
+import com.cinasee.componente1_cartelera.repositories.CinemaRepository;
 import com.cinasee.componente1_cartelera.repositories.MovieRepository;
 import com.cinasee.componente1_cartelera.repositories.RoomRepository;
 import com.cinasee.componente1_cartelera.repositories.SessionRepository;
@@ -41,6 +43,10 @@ class CatalogServicesTest {
     private RoomRepository roomRepository;
     @Mock
     private SessionRepository sessionRepository;
+    @Mock
+    private CinemaRepository cinemaRepository;
+    @Mock
+    private SessionIdGenerator sessionIdGenerator;
 
     @InjectMocks
     private MovieService movieService;
@@ -67,7 +73,9 @@ class CatalogServicesTest {
 
     @Test
     void createRoomCalculatesCapacityAndUsesDefaults() {
+        when(cinemaRepository.existsById(3L)).thenReturn(true);
         CreateRoomRequest request = CreateRoomRequest.builder()
+                .cinemaId(3L)
                 .name("Sala 1")
                 .roomType("ESTANDAR_2D")
                 .rowsCount(8)
@@ -78,14 +86,36 @@ class CatalogServicesTest {
         Room created = roomService.createRoom(request);
 
         assertEquals(96, created.getCapacity());
+        assertEquals(3L, created.getCinemaId());
         assertFalse(created.getWheelchairAccessible());
         assertEquals(0.0, created.getBasePrice());
+        verify(cinemaRepository).existsById(3L);
         verify(roomRepository).save(created);
+    }
+
+    @Test
+    void createRoomRejectsUnknownCinema() {
+        when(cinemaRepository.existsById(99L)).thenReturn(false);
+        CreateRoomRequest request = CreateRoomRequest.builder()
+                .cinemaId(99L)
+                .name("Sala 1")
+                .roomType("ESTANDAR_2D")
+                .rowsCount(8)
+                .columnsCount(12)
+                .build();
+
+        ResponseStatusException error = assertThrows(ResponseStatusException.class,
+                () -> roomService.createRoom(request));
+
+        assertEquals(HttpStatus.NOT_FOUND, error.getStatusCode());
+        assertTrue(error.getReason().contains("Cine no encontrado"));
+        verify(roomRepository, never()).save(any(Room.class));
     }
 
     @Test
     void createSessionAddsPreparationTimeToMovieDuration() {
         LocalDateTime start = LocalDate.now().plusDays(1).atTime(18, 30);
+        when(sessionIdGenerator.nextId()).thenReturn(123L);
         when(movieRepository.findById(1L)).thenReturn(Optional.of(movie(1L)));
         when(roomRepository.findById(2L)).thenReturn(Optional.of(room(2L)));
         when(sessionRepository.findByRoomIdAndStatusNot(2L, "CANCELADA")).thenReturn(List.of());
@@ -97,6 +127,7 @@ class CatalogServicesTest {
         assertEquals(start, created.getStartTime());
         assertEquals(start.plusMinutes(147), created.getEndTime());
         assertEquals("PROGRAMADA", created.getStatus());
+        assertEquals(123L, created.getId());
     }
 
     @Test
@@ -151,7 +182,7 @@ class CatalogServicesTest {
     }
 
     private static Room room(Long id) {
-        return Room.builder().id(id).name("Sala " + id).build();
+        return Room.builder().id(id).cinemaId(3L).name("Sala " + id).build();
     }
 
     private static Session session(Long id, Long movieId, Long roomId, LocalDateTime start,
