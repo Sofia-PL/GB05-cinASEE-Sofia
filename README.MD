@@ -101,30 +101,30 @@ o por eventos. Es el principio *database per service*.
 
 ```
 1. El cliente entra en el frontend (React, :3000) y hace login en C3.
-   → Recibe un JWT firmado con RS256.
+   * Recibe un JWT firmado con RS256.
 
 2. Consulta la cartelera en C1 a través del Gateway.
-   → GET /api/v1/movies?inShowcase=true
-   → GET /api/v1/sessions?movieId=...
+   * GET /api/v1/movies?inShowcase=true
+   * GET /api/v1/sessions?movieId=...
 
 3. Elige butacas y crea la reserva en C2.
-   → C2 valida sesión y sala contra C1 y el perfil contra C3.
-   → Bloquea las butacas 10 minutos (UNIQUE en PostgreSQL).
+   * C2 valida sesión y sala contra C1 y el perfil contra C3.
+   * Bloquea las butacas 10 minutos (UNIQUE en PostgreSQL).
 
 4. Paga.
-   → Modo simulado o Redsys.
-   → C2 confirma, emite un ticket por butaca y guarda el evento en su outbox.
+   * Modo simulado o Redsys.
+   * C2 confirma, emite un ticket por butaca y guarda el evento en su outbox.
 
 5. El outbox publica PaymentCompleted en RabbitMQ.
-   → C3 suma puntos y guarda el historial.
-   → C4 registra el hecho de venta en analytics_events.
+   * C3 suma puntos y guarda el historial.
+   * C4 registra el hecho de venta en analytics_events.
 
 6. C4 calcula ocupación y taquilla.
-   → Consulta las ventas agregadas de C2 y el aforo de C1.
-   → Devuelve /api/metrics/occupancy y /api/reports/box-office.
+   * Consulta las ventas agregadas de C2 y el aforo de C1.
+   * Devuelve /api/metrics/occupancy y /api/reports/box-office.
 
 7. El personal de sala valida la entrada.
-   → POST /v1/reservations/tickets/{code}/check-in (solo staff/admin).
+   * POST /v1/reservations/tickets/{code}/check-in (solo staff/admin).
 ```
 
 ### Comunicación síncrona y asíncrona
@@ -132,7 +132,7 @@ o por eventos. Es el principio *database per service*.
 | Tipo | Cuándo | Ejemplo |
 |---|---|---|
 | **Síncrona (OpenFeign)** | Se necesita una respuesta para continuar | C2 valida la sesión en C1 antes de reservar |
-| **Asíncrona (RabbitMQ)** | El hecho ya ocurrió y otros reaccionan | `PaymentCompleted` → puntos (C3) y analítica (C4) |
+| **Asíncrona (RabbitMQ)** | El hecho ya ocurrió y otros reaccionan | `PaymentCompleted` -> puntos (C3) y analítica (C4) |
 
 La comunicación asíncrona usa el patrón **outbox** en C2: el evento se guarda en
 la misma transacción del pago y un relay lo publica después. Así no se pierde
