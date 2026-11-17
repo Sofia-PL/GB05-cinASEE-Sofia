@@ -86,8 +86,10 @@ ignora los campos que no conoce.
 | `timestamp` | | ✔ | Inicio de la sesión en **hora local del cine** (Europe/Madrid, sin zona). El Comp. 4 lo usa para el día de la semana y la franja horaria |
 
 Campos que el Comp. 4 tiene pero Reservas no envía, porque no son datos suyos:
-`cinemaId` (Analítica pone 1 por defecto), y `movieTitle`, `genre`, `distributor`
-y `distributorId`, que Analítica obtiene de Cartelera a partir de `movieId`.
+`cinemaId` (Analítica pone 1 por defecto), y `movieTitle` y `genre`, que
+Analítica obtiene de Cartelera a partir de `movieId`. Los campos `distributor` y
+`distributorId` quedan a `null`: el catálogo ya no guarda la distribuidora
+(`Movie.distributor` se eliminó).
 
 `PaymentCompletedContractTest` comprueba que el mensaje se deserializa bien en
 copias de las dos clases consumidoras, usando el mismo `JacksonJsonMessageConverter`.

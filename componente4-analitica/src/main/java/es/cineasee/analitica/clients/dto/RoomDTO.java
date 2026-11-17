@@ -11,6 +11,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class RoomDTO {
     private Long id;
+    private Long cinemaId;
     private String name;
     private String roomType;
     private Integer capacity;

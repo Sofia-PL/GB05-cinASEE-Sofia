@@ -76,7 +76,7 @@ flowchart TD
 
 | Componente | Responsabilidad | Tecnología | README |
 |---|---|---|---|
-| **C1 · Catálogo y Cartelera** | Películas, salas y programación de sesiones (sin modelo de cines) | Spring Boot + MongoDB | [Ver](componente1-cartelera/README.md) |
+| **C1 · Catálogo y Cartelera** | Cines, películas, salas y programación de sesiones | Spring Boot + MongoDB | [Ver](componente1-cartelera/README.md) |
 | **C2 · Reservas y Pagos** | Bloqueo de butacas, precios, pago, tickets e informes | Spring Boot + PostgreSQL | [Ver](componente2-reservas/README.md) |
 | **C3 · IAM y Fidelización** | Login, registro, invitados, roles, puntos e historial | Spring Boot + MySQL + Redis | [Ver](componente3-usuarios/README.md) |
 | **C4 · Analítica** | Ocupación, Box Office y recomendaciones | Spring Boot + PostgreSQL | [Ver](componente4-analitica/README.md) |
@@ -256,23 +256,33 @@ Las sesiones de C1 son `LocalDateTime` sin zona. C2 las interpreta con
 
 ### 7. Seed idempotente
 
-C3 crea sus tres usuarios al arrancar y C1 debe crear su cartelera con el mismo
-patrón (`CommandLineRunner` + `existsById`). Se desactiva con
-`APP_SEED_ENABLED=false`. Ver
+C3 crea sus tres usuarios al arrancar y C1 debe crear sus cines, películas,
+salas y sesiones con el mismo patrón (`CommandLineRunner` + `existsById`). Se
+desactiva con `APP_SEED_ENABLED=false`. Ver
 [seed de cartelera](componente1-cartelera/docs/seed-cartelera.md).
 
-### 8. Un solo cine lógico: C1 no modela cines
+### 8. Cines en C1 y filtro por cine en C4
 
-El Componente 1 no tiene entidad `Cinema`: solo gestiona películas, salas y
-sesiones. Por eso:
+El Componente 1 modela cines: `Cinema` y `Room.cinemaId`, con endpoints
+públicos `GET /cinemas`, `GET /cinemas/{id}` y `GET /cinemas/{id}/rooms`, además
+del filtro `GET /rooms?cinemaId=`.
 
-- `cinemaId` existe en el modelo de C3 (para asignar al staff a un cine) y se
-  acepta en los endpoints de C4 por compatibilidad con el OpenAPI, pero **no
-  filtra**: hoy todo el sistema asume `cinemaId = 1`.
-- Un `STAFF_TAQUILLA` con `cinemaManager = true` revisa solicitudes "de su cine"
-  comparando ese mismo `cinemaId` lógico.
-- Para soportar varios cines reales habría que añadir el modelo en C1 y
-  propagarlo a C2 (sesiones), C3 (roles) y C4 (informes).
+Estado real del `cinemaId` en cada componente:
+
+- **C4 (analítica) sí filtra por cine.** Pide a C1 las salas del cine
+  (`GET /rooms?cinemaId=`) y descarta las filas de venta de C2 cuyo `roomId` no
+  está en ese conjunto; el aforo se calcula con esas mismas salas. Si C1 no
+  responde, usa un aforo estimado y no filtra, con `log.warn`.
+- **C3 (usuarios)** guarda `cinemaId` como un número libre que asigna un
+  `ADMIN`; **no se valida** contra el catálogo de C1. Ese valor solo se usa para
+  limitar qué solicitudes de rol puede revisar un `STAFF_TAQUILLA` con
+  `cinemaManager = true`.
+- **C2 (reservas)** trabaja por `sessionId`/`roomId` y su `CatalogRoom` ignora
+  `cinemaId` (`@JsonIgnoreProperties(ignoreUnknown = true)`), así que no rompe
+  con el C1 nuevo pero tampoco filtra por cine.
+
+Pendiente si se quiere el filtro de punta a punta: que C2 acepte y propague
+`cinemaId`, y que C3 valide el cine del staff contra `GET /cinemas/{id}`.
 
 ---
 

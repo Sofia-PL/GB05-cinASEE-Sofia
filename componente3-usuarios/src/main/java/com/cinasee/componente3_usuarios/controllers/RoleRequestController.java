@@ -21,7 +21,8 @@ public class RoleRequestController implements RoleRequestsApi {
     private final RoleRequestService roleRequestService;
 
     /**
-     * Un ADMIN no puede solicitar otro rol; el servicio lo rechaza con 409.
+     * Un ADMIN no pasa el {@code @PreAuthorize} y recibe 403. El servicio
+     * mantiene además un rechazo 409 por si se invocara directamente.
      */
     @Override
     @PreAuthorize("hasAnyRole('CLIENTE_REGISTRADO', 'STAFF_TAQUILLA')")

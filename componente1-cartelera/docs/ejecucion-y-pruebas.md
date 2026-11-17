@@ -139,12 +139,23 @@ en `POST http://localhost:8083/v1/iam/auth/login`. Sin token, una ruta protegida
 responde `401 Unauthorized`. Si el Componente 3 se reinicia y genera una nueva
 clave de firma, solicita un JWT nuevo.
 
-### Crear película, sala y sesión
+### Crear cine, película, sala y sesión
 
 Las respuestas de creación incluyen los identificadores generados. Utiliza esos
 IDs en los siguientes pasos:
 
 ```bash
+# Crear un cine (obligatorio antes de crear salas)
+curl -i -X POST http://localhost:8081/api/v1/cinemas \
+  -H "Authorization: $TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "name": "Cine de ejemplo",
+    "address": "Calle de ejemplo 1",
+    "city": "Madrid",
+    "phone": "910000000"
+  }'
+
 # Crear una película
 curl -i -X POST http://localhost:8081/api/v1/movies \
   -H "Authorization: $TOKEN" \
@@ -154,15 +165,15 @@ curl -i -X POST http://localhost:8081/api/v1/movies \
     "synopsis": "Descripción de ejemplo",
     "durationMinutes": 100,
     "genre": "DRAMA",
-    "ageRating": "TP",
-    "distributor": "Distribuidora de ejemplo"
+    "ageRating": "TP"
   }'
 
-# Crear una sala; el aforo se calcula como filas por columnas
+# Crear una sala dentro del cine; el aforo se calcula como filas por columnas
 curl -i -X POST http://localhost:8081/api/v1/rooms \
   -H "Authorization: $TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{
+    "cinemaId": 1,
     "name": "Sala de ejemplo",
     "roomType": "ESTANDAR_2D",
     "rowsCount": 8,
@@ -182,6 +193,9 @@ curl -i -X POST http://localhost:8081/api/v1/sessions \
     "ticketPrice": 8.50
   }'
 ```
+
+`cinemaId` debe existir: si no, `POST /rooms` responde `404`. La película ya no
+tiene campo `distributor`; si se envía, se ignora.
 
 `startTime` se envía en formato ISO de fecha y hora (`yyyy-MM-dd'T'HH:mm:ss`),
 sin sufijo de zona horaria, porque el modelo del servicio usa `LocalDateTime`.

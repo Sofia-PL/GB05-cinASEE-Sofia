@@ -28,6 +28,7 @@ validar el token y aplica sus propios roles. Es una capa adicional, no la única
 
 | Prefijo | Destino | Componente |
 |---|---|---|
+| `/api/v1/cinemas/**` | `http://componente1-cartelera:8081` | C1 Cines |
 | `/api/v1/movies/**` | `http://componente1-cartelera:8081` | C1 Catálogo |
 | `/api/v1/rooms/**` | `http://componente1-cartelera:8081` | C1 Catálogo |
 | `/api/v1/sessions/**` | `http://componente1-cartelera:8081` | C1 Cartelera |
@@ -50,6 +51,7 @@ pasar sin token:
 
 | Método | Ruta |
 |---|---|
+| `GET` | `/api/v1/cinemas/**` |
 | `GET` | `/api/v1/movies/**` |
 | `GET` | `/api/v1/sessions` |
 | `GET` | `/v1/reservations/shows/*/seats` |

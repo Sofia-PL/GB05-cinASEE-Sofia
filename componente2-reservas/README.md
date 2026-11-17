@@ -257,9 +257,9 @@ Filtros opcionales: `showId`, `roomId`, `from`, `to` (fechas ISO, inclusivas).
 
 `startDate` y `endDate` son obligatorios; el rango máximo es de **366 días**.
 
-> C2 solo expone **sus** datos (butacas e importes). El cruce con aforos,
-> títulos y distribuidoras lo hace el Componente 4 consultando a C1. Ningún
-> servicio lee la base de datos de otro.
+> C2 solo expone **sus** datos (butacas e importes). El cruce con aforos y
+> títulos lo hace el Componente 4 consultando a C1. Ningún servicio lee la base
+> de datos de otro.
 
 ---
 

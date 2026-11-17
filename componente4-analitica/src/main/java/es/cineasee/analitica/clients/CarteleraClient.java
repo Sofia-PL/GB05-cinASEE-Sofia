@@ -29,6 +29,13 @@ public interface CarteleraClient {
     @GetMapping("/rooms")
     List<RoomDTO> getAllRooms();
 
+    /**
+     * Salas de un cine concreto. Usa el filtro {@code ?cinemaId=} del
+     * Componente 1, que devuelve lista vacía si el cine no tiene salas.
+     */
+    @GetMapping("/rooms")
+    List<RoomDTO> getRoomsByCinema(@RequestParam("cinemaId") Long cinemaId);
+
     @GetMapping("/rooms/{roomId}")
     RoomDTO getRoomById(@PathVariable("roomId") Long roomId);
 

@@ -89,8 +89,12 @@ public class AnalyticsService {
      * Calcula la ocupación de una sala (o de todo el cine) cruzando:
      * aforo del Componente 1 + entradas vendidas del Componente 2.
      *
-     * @param cinemaId  se acepta por compatibilidad con el OpenAPI; el catálogo
-     *                  del Componente 1 no modela cines, así que no filtra.
+     * <p>El filtro por cine se resuelve con las salas de C1
+     * ({@code GET /rooms?cinemaId=}): el Componente 2 devuelve ventas por
+     * {@code roomId}, así que primero se obtienen las salas del cine y después
+     * se descartan las filas de otras salas.</p>
+     *
+     * @param cinemaId  cine a analizar; si es {@code null}, no se filtra
      * @param screenId  sala concreta (opcional)
      * @param dayOfWeek 1 = lunes ... 7 = domingo (opcional)
      * @param startTime hora local de inicio de franja, formato HH:mm (opcional)
@@ -98,8 +102,10 @@ public class AnalyticsService {
      */
     public OccupancyMetricDTO calculateOccupancy(Long cinemaId, Long screenId, Integer dayOfWeek,
                                                  String startTime, String endTime) {
-        int totalCapacity = resolveCapacity(screenId);
-        int totalTicketsSold = resolveTicketsSold(cinemaId, screenId, dayOfWeek, startTime, endTime);
+        List<RoomDTO> cinemaRooms = fetchRooms(cinemaId);
+        int totalCapacity = resolveCapacity(cinemaId, screenId, cinemaRooms);
+        int totalTicketsSold = resolveTicketsSold(cinemaId, screenId, dayOfWeek, startTime, endTime,
+                cinemaRooms);
 
         double occupancyPercentage = 0.0;
         if (totalCapacity > 0) {
@@ -120,29 +126,63 @@ public class AnalyticsService {
                 .build();
     }
 
-    /** Aforo: sala concreta o suma de todas las salas. Siempre desde Cartelera (C1). */
-    private int resolveCapacity(Long screenId) {
+    /**
+     * Salas del cine según Cartelera (C1). Devuelve {@code null} si C1 no
+     * responde, para distinguir "cine sin salas" (lista vacía) de "no se pudo
+     * consultar" (null).
+     */
+    private List<RoomDTO> fetchRooms(Long cinemaId) {
         try {
-            if (screenId != null) {
-                RoomDTO room = carteleraClient.getRoomById(screenId);
-                if (room != null && room.getCapacity() != null) {
-                    return room.getCapacity();
-                }
-                return DEFAULT_ROOM_CAPACITY;
+            return cinemaId != null
+                    ? carteleraClient.getRoomsByCinema(cinemaId)
+                    : carteleraClient.getAllRooms();
+        } catch (Exception ex) {
+            log.warn("No se pudieron obtener las salas desde Cartelera: {}. "
+                            + "Se usa un aforo estimado y no se filtra la venta por cine.",
+                    ex.getMessage());
+            return null;
+        }
+    }
+
+    /** Aforo: sala concreta o suma de las salas del cine. Siempre desde C1. */
+    private int resolveCapacity(Long cinemaId, Long screenId, List<RoomDTO> cinemaRooms) {
+        if (screenId != null) {
+            RoomDTO room = cinemaRooms == null ? null : cinemaRooms.stream()
+                    .filter(r -> screenId.equals(r.getId()))
+                    .findFirst()
+                    .orElse(null);
+
+            if (room != null) {
+                return room.getCapacity() != null ? room.getCapacity() : DEFAULT_ROOM_CAPACITY;
             }
 
-            List<RoomDTO> rooms = carteleraClient.getAllRooms();
-            if (rooms != null && !rooms.isEmpty()) {
-                return rooms.stream()
-                        .mapToInt(r -> r.getCapacity() != null ? r.getCapacity() : 100)
-                        .sum();
+            // La sala no está en la lista del cine (o C1 no respondió): se consulta
+            // el detalle para distinguir una sala de otro cine de un fallo de C1.
+            try {
+                RoomDTO detail = carteleraClient.getRoomById(screenId);
+                if (detail == null) {
+                    return DEFAULT_ROOM_CAPACITY;
+                }
+                if (cinemaId != null && detail.getCinemaId() != null
+                        && !cinemaId.equals(detail.getCinemaId())) {
+                    log.warn("La sala {} no pertenece al cine {}; se devuelve aforo 0.",
+                            screenId, cinemaId);
+                    return 0;
+                }
+                return detail.getCapacity() != null ? detail.getCapacity() : DEFAULT_ROOM_CAPACITY;
+            } catch (Exception ex) {
+                log.warn("No se pudo obtener la sala {} desde Cartelera: {}. "
+                        + "Se usa un valor estimado.", screenId, ex.getMessage());
+                return DEFAULT_ROOM_CAPACITY;
             }
-            return DEFAULT_TOTAL_CAPACITY;
-        } catch (Exception ex) {
-            log.warn("No se pudo obtener el aforo desde Cartelera: {}. Se usa un valor estimado.",
-                    ex.getMessage());
-            return screenId != null ? DEFAULT_ROOM_CAPACITY : DEFAULT_TOTAL_CAPACITY;
         }
+
+        if (cinemaRooms != null) {
+            return cinemaRooms.stream()
+                    .mapToInt(r -> r.getCapacity() != null ? r.getCapacity() : 100)
+                    .sum();
+        }
+        return DEFAULT_TOTAL_CAPACITY;
     }
 
     /**
@@ -150,15 +190,18 @@ public class AnalyticsService {
      * cae a los eventos locales de RabbitMQ para no romper el informe.
      */
     private int resolveTicketsSold(Long cinemaId, Long screenId, Integer dayOfWeek,
-                                   String startTime, String endTime) {
+                                   String startTime, String endTime, List<RoomDTO> cinemaRooms) {
         try {
             List<ShowStatsDTO> stats = reservasClient.getShowStats(null, screenId, null, null);
             if (stats == null || stats.isEmpty()) {
                 return 0;
             }
 
+            Set<Long> cinemaRoomIds = cinemaRoomIds(cinemaId, cinemaRooms);
+
             long total = stats.stream()
                     .filter(row -> screenId == null || screenId.equals(row.roomId()))
+                    .filter(row -> belongsToCinema(row.roomId(), cinemaId, cinemaRoomIds))
                     .filter(row -> matchesDayOfWeek(row.showStartTime(), dayOfWeek))
                     .filter(row -> matchesTimeRange(row.showStartTime(), startTime, endTime))
                     .mapToLong(ShowStatsDTO::ticketsSold)
@@ -171,6 +214,28 @@ public class AnalyticsService {
             Long tickets = analyticsEventRepository.sumTicketsSold(cinemaId, screenId, dayOfWeek);
             return tickets != null ? tickets.intValue() : 0;
         }
+    }
+
+    /**
+     * IDs de las salas del cine. {@code null} significa que no se puede filtrar
+     * (no hay cine o C1 no respondió); un conjunto vacío significa que el cine
+     * no tiene salas y, por tanto, no puede tener ventas.
+     */
+    private Set<Long> cinemaRoomIds(Long cinemaId, List<RoomDTO> cinemaRooms) {
+        if (cinemaId == null || cinemaRooms == null) {
+            return null;
+        }
+        return cinemaRooms.stream()
+                .map(RoomDTO::getId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+    }
+
+    private boolean belongsToCinema(Long roomId, Long cinemaId, Set<Long> cinemaRoomIds) {
+        if (cinemaId == null || cinemaRoomIds == null) {
+            return true;
+        }
+        return roomId != null && cinemaRoomIds.contains(roomId);
     }
 
     private boolean matchesDayOfWeek(Instant showStartTime, Integer dayOfWeek) {

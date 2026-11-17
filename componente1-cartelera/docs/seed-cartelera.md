@@ -4,8 +4,8 @@ Este documento es la lista de trabajo para completar el Componente 1. Al
 terminarlo, el sistema se podrá demostrar de punta a punta: cartelera → reserva
 → pago → evento → analítica.
 
-El Componente 1 hoy **arranca con MongoDB vacío**. Este seed crea películas,
-salas y sesiones con ids fijos y fechas relativas al día de arranque.
+El Componente 1 hoy **arranca con MongoDB vacío**. Este seed crea cines,
+películas, salas y sesiones con ids fijos y fechas relativas al día de arranque.
 
 ---
 
@@ -13,32 +13,43 @@ salas y sesiones con ids fijos y fechas relativas al día de arranque.
 
 ### 1.1 IDs fijos, no marcas de tiempo
 
-Hoy `MovieService`, `RoomService` y `SessionService` hacen:
+Hoy `MovieService`, `RoomService` y `CinemaService` hacen:
 
 ```java
 Long nextId = System.currentTimeMillis();
 ```
 
 Eso provoca colisiones si se crean dos documentos en el mismo milisegundo y hace
-que los ids cambien en cada entorno. **Para el seed se usan ids fijos** y se
-reservan rangos:
+que los ids cambien en cada entorno. Las **sesiones** ya usan
+`SessionIdGenerator` (contador atómico en `id_counters`), pero el resto no.
+
+**Para el seed se usan ids fijos** y se reservan rangos:
 
 | Entidad | Rango | Ejemplo |
 |---|---|---|
+| Cines | `1` – `999` | `1` |
 | Películas | `1001` – `1999` | `1001` |
 | Salas | `2001` – `2999` | `2001` |
 | Sesiones | `3001` – `3999` | `3001` |
 
 El seed escribe directamente con los repositorios, así que no pasa por
-`System.currentTimeMillis()`. Para el alta normal (API) lo recomendable es
-sustituir el timestamp por una secuencia atómica:
+`System.currentTimeMillis()` ni por `SessionIdGenerator`.
 
-```java
-private final AtomicLong sequence = new AtomicLong(System.currentTimeMillis());
-Long nextId = sequence.incrementAndGet();
-```
+> **Importante con las sesiones:** `SessionIdGenerator` arranca su contador en
+> `1`. Si el seed inserta sesiones `3001+` y luego se crea una por API, el
+> generador irá por `1, 2, 3…` hasta chocar con el rango sembrado. Tras el seed,
+> inicializa el contador:
+>
+> ```javascript
+> db.id_counters.updateOne(
+>   { _id: "sessions" },
+>   { $set: { value: 3000 } },
+>   { upsert: true }
+> );
+> ```
 
-o un contador en una colección `counters` de Mongo.
+Para el alta normal (API) lo recomendable es extender ese mismo contador a
+cines, películas y salas, en lugar de usar el timestamp.
 
 ### 1.2 Seed idempotente y desactivable
 
@@ -107,16 +118,16 @@ Dos opciones:
 
 ## 2. Películas (colección `movies`)
 
-| id | title | genre | durationMinutes | ageRating | distributor |
-|---|---|---|---|---|---|
-| 1001 | Dune: Parte Tres | CIENCIA_FICCION | 165 | +12 | Warner Bros. |
-| 1002 | Oppenheimer | DRAMA | 180 | +16 | Universal Pictures |
-| 1003 | Barbie | COMEDIA | 114 | +7 | Warner Bros. |
-| 1004 | Spider-Man: Across the Spider-Verse | ANIMACION | 140 | +7 | Sony Pictures |
-| 1005 | El Padrino | DRAMA | 175 | +18 | Paramount |
-| 1006 | Interstellar | CIENCIA_FICCION | 169 | +12 | Paramount |
-| 1007 | Coco | ANIMACION | 105 | +0 | Disney |
-| 1008 | John Wick 4 | ACCION | 169 | +18 | Lionsgate |
+| id | title | genre | durationMinutes | ageRating |
+|---|---|---|---|---|
+| 1001 | Dune: Parte Tres | CIENCIA_FICCION | 165 | +12 |
+| 1002 | Oppenheimer | DRAMA | 180 | +16 |
+| 1003 | Barbie | COMEDIA | 114 | +7 |
+| 1004 | Spider-Man: Across the Spider-Verse | ANIMACION | 140 | +7 |
+| 1005 | El Padrino | DRAMA | 175 | +18 |
+| 1006 | Interstellar | CIENCIA_FICCION | 169 | +12 |
+| 1007 | Coco | ANIMACION | 105 | +0 |
+| 1008 | John Wick 4 | ACCION | 169 | +18 |
 
 Campos adicionales:
 
@@ -124,31 +135,46 @@ Campos adicionales:
 - `posterUrl`: puede quedar `null` o apuntar a una imagen pública.
 - `trailerUrl`: puede quedar `null`.
 
-> **Opcional — distribuidora con id:** si se quiere que el Componente 4 pueda
-> filtrar por `distributorId`, añadir un campo `Long distributorId` a `Movie`,
-> a `CreateMovieRequest`, a `MovieService` y a esta tabla (por ejemplo
-> `1 = Warner Bros.`, `2 = Universal Pictures`, ...). Sin ese campo, C4 solo
-> puede mostrar el nombre de la distribuidora.
+> La entidad `Movie` **no tiene distribuidora**: el merge eliminó
+> `Movie.distributor`. No la añadas al seed; C4 mostrará `distributor = null`.
 
 > Los géneros deben escribirse **en mayúsculas y sin tildes** (`ANIMACION`, no
 > `Animación`): el Componente 4 compara géneros con `toUpperCase()`.
 
 ---
 
-## 3. Salas (colección `rooms`)
+## 3. Cines (colección `cinemas`)
 
-| id | name | roomType | rowsCount | columnsCount | capacity | basePrice | wheelchairAccessible |
-|---|---|---|---|---|---|---|---|
-| 2001 | Sala 1 - Estándar | ESTANDAR_2D | 10 | 12 | 120 | 8.50 | true |
-| 2002 | Sala 2 - 3D | DIGITAL_3D | 8 | 10 | 80 | 10.50 | true |
-| 2003 | Sala 3 - VIP | VIP | 6 | 8 | 48 | 14.00 | true |
+| id | name | address | city | phone |
+|---|---|---|---|---|
+| 1 | CinAsee Madrid | Gran Vía 1 | Madrid | 910000001 |
+| 2 | CinAsee Barcelona | Passeig de Gràcia 2 | Barcelona | 930000002 |
 
-La capacidad es la que usará el Componente 4 para calcular ocupación y la que
-usa el Componente 2 para validar que las butacas existen en el mapa.
+> El cine `1` debe existir porque el seed de C3 asigna `cinemaId = 1` al staff
+> (`staff@cinasee.com`). Si se cambia ese id, hay que cambiar también
+> `APP_SEED_STAFF_CINEMA_ID` en C3.
 
 ---
 
-## 4. Sesiones (colección `sessions`)
+## 4. Salas (colección `rooms`)
+
+| id | cinemaId | name | roomType | rowsCount | columnsCount | capacity | basePrice | wheelchairAccessible |
+|---|---|---|---|---|---|---|---|---|
+| 2001 | 1 | Sala 1 - Estándar | ESTANDAR_2D | 10 | 12 | 120 | 8.50 | true |
+| 2002 | 1 | Sala 2 - 3D | DIGITAL_3D | 8 | 10 | 80 | 10.50 | true |
+| 2003 | 1 | Sala 3 - VIP | VIP | 6 | 8 | 48 | 14.00 | true |
+| 2004 | 2 | Sala 1 - Estándar | ESTANDAR_2D | 10 | 12 | 120 | 8.50 | true |
+| 2005 | 2 | Sala 2 - 3D | DIGITAL_3D | 8 | 10 | 80 | 10.50 | true |
+
+- `cinemaId` es obligatorio: el seed debe crear los cines **antes** que las salas.
+- La capacidad es la que usará el Componente 4 para calcular ocupación y la que
+  usa el Componente 2 para validar que las butacas existen en el mapa.
+- Las sesiones de ejemplo usan solo las salas del cine `1`; las del cine `2`
+  quedan libres para crear sesiones por API.
+
+---
+
+## 5. Sesiones (colección `sessions`)
 
 Horas en **hora local española** (ver decisión 1.6). La columna `fin` ya incluye
 los 20 minutos de preparación de sala.
@@ -199,7 +225,7 @@ Notas:
 
 ---
 
-## 5. Implementación propuesta
+## 6. Implementación propuesta
 
 Nuevo archivo:
 `componente1-cartelera/src/main/java/com/cinasee/componente1_cartelera/config/CatalogDataInitializer.java`
@@ -213,32 +239,52 @@ public class CatalogDataInitializer implements CommandLineRunner {
 
     private static final int PREPARATION_MINUTES = 20;
 
+    private final CinemaRepository cinemaRepository;
     private final MovieRepository movieRepository;
     private final RoomRepository roomRepository;
     private final SessionRepository sessionRepository;
 
     @Override
     public void run(String... args) {
+        seedCinemas();
         seedMovies();
         seedRooms();
         seedSessions();
-        log.info("Seed de cartelera comprobado: {} películas, {} salas, {} sesiones",
-                movieRepository.count(), roomRepository.count(), sessionRepository.count());
+        log.info("Seed de cartelera comprobado: {} cines, {} películas, {} salas, {} sesiones",
+                cinemaRepository.count(), movieRepository.count(),
+                roomRepository.count(), sessionRepository.count());
+    }
+
+    private void seedCinemas() {
+        cinema(1L, "CinAsee Madrid", "Gran Vía 1", "Madrid", "910000001");
+        cinema(2L, "CinAsee Barcelona", "Passeig de Gràcia 2", "Barcelona", "930000002");
+    }
+
+    private void cinema(Long id, String name, String address, String city, String phone) {
+        if (cinemaRepository.existsById(id)) {
+            return;
+        }
+        cinemaRepository.save(Cinema.builder()
+                .id(id)
+                .name(name)
+                .address(address)
+                .city(city)
+                .phone(phone)
+                .build());
     }
 
     private void seedMovies() {
-        movie(1001L, "Dune: Parte Tres", "CIENCIA_FICCION", 165, "+12", "Warner Bros.");
-        movie(1002L, "Oppenheimer", "DRAMA", 180, "+16", "Universal Pictures");
-        movie(1003L, "Barbie", "COMEDIA", 114, "+7", "Warner Bros.");
-        movie(1004L, "Spider-Man: Across the Spider-Verse", "ANIMACION", 140, "+7", "Sony Pictures");
-        movie(1005L, "El Padrino", "DRAMA", 175, "+18", "Paramount");
-        movie(1006L, "Interstellar", "CIENCIA_FICCION", 169, "+12", "Paramount");
-        movie(1007L, "Coco", "ANIMACION", 105, "+0", "Disney");
-        movie(1008L, "John Wick 4", "ACCION", 169, "+18", "Lionsgate");
+        movie(1001L, "Dune: Parte Tres", "CIENCIA_FICCION", 165, "+12");
+        movie(1002L, "Oppenheimer", "DRAMA", 180, "+16");
+        movie(1003L, "Barbie", "COMEDIA", 114, "+7");
+        movie(1004L, "Spider-Man: Across the Spider-Verse", "ANIMACION", 140, "+7");
+        movie(1005L, "El Padrino", "DRAMA", 175, "+18");
+        movie(1006L, "Interstellar", "CIENCIA_FICCION", 169, "+12");
+        movie(1007L, "Coco", "ANIMACION", 105, "+0");
+        movie(1008L, "John Wick 4", "ACCION", 169, "+18");
     }
 
-    private void movie(Long id, String title, String genre, int duration,
-                       String rating, String distributor) {
+    private void movie(Long id, String title, String genre, int duration, String rating) {
         if (movieRepository.existsById(id)) {
             return;
         }
@@ -249,22 +295,25 @@ public class CatalogDataInitializer implements CommandLineRunner {
                 .durationMinutes(duration)
                 .genre(genre)
                 .ageRating(rating)
-                .distributor(distributor)
                 .build());
     }
 
     private void seedRooms() {
-        room(2001L, "Sala 1 - Estándar", "ESTANDAR_2D", 10, 12, 8.50);
-        room(2002L, "Sala 2 - 3D", "DIGITAL_3D", 8, 10, 10.50);
-        room(2003L, "Sala 3 - VIP", "VIP", 6, 8, 14.00);
+        room(2001L, 1L, "Sala 1 - Estándar", "ESTANDAR_2D", 10, 12, 8.50);
+        room(2002L, 1L, "Sala 2 - 3D", "DIGITAL_3D", 8, 10, 10.50);
+        room(2003L, 1L, "Sala 3 - VIP", "VIP", 6, 8, 14.00);
+        room(2004L, 2L, "Sala 1 - Estándar", "ESTANDAR_2D", 10, 12, 8.50);
+        room(2005L, 2L, "Sala 2 - 3D", "DIGITAL_3D", 8, 10, 10.50);
     }
 
-    private void room(Long id, String name, String type, int rows, int columns, double price) {
+    private void room(Long id, Long cinemaId, String name, String type,
+                      int rows, int columns, double price) {
         if (roomRepository.existsById(id)) {
             return;
         }
         roomRepository.save(Room.builder()
                 .id(id)
+                .cinemaId(cinemaId)
                 .name(name)
                 .roomType(type)
                 .rowsCount(rows)
@@ -334,22 +383,25 @@ app:
 
 ---
 
-## 6. Checklist de verificación
+## 7. Checklist de verificación
 
 - [ ] `docker compose up -d --build` arranca sin errores.
+- [ ] `GET /api/v1/cinemas` devuelve 2 cines con ids `1` y `2`.
+- [ ] `GET /api/v1/cinemas/1/rooms` devuelve 3 salas; `/cinemas/2/rooms`, 2.
 - [ ] `GET /api/v1/movies` devuelve 8 películas con ids `1001`–`1008`.
-- [ ] `GET /api/v1/rooms` (con token) devuelve 3 salas con capacidades 120, 80 y 48.
+- [ ] `GET /api/v1/rooms` (con token) devuelve 5 salas con capacidades 120, 80, 48, 120 y 80.
 - [ ] `GET /api/v1/sessions` devuelve 18 sesiones.
 - [ ] `GET /api/v1/movies?inShowcase=true` devuelve las 8 (todas tienen sesión futura).
 - [ ] Todas las sesiones están en `A_LA_VENTA`.
 - [ ] Dos sesiones de la misma sala no se solapan.
+- [ ] `id_counters/_id="sessions"` vale `3000` tras el seed.
 - [ ] Reiniciar el servicio no duplica documentos (idempotencia).
 - [ ] `POST /v1/reservations` con `showId: 3001` funciona (el C2 acepta la sesión).
 - [ ] Tras pagar, el evento llega a RabbitMQ y el C4 devuelve ocupación > 0.
 
 ---
 
-## 7. Comandos útiles
+## 8. Comandos útiles
 
 ```bash
 # Login como admin
@@ -359,6 +411,8 @@ TOKEN=$(curl -s -X POST http://localhost:8083/v1/iam/auth/login \
   | jq -r .token)
 
 # Catálogo
+curl http://localhost:8081/api/v1/cinemas | jq
+curl http://localhost:8081/api/v1/cinemas/1/rooms | jq
 curl http://localhost:8081/api/v1/movies | jq
 curl -H "Authorization: Bearer $TOKEN" http://localhost:8081/api/v1/rooms | jq
 curl http://localhost:8081/api/v1/sessions | jq
@@ -374,5 +428,9 @@ curl -X PATCH http://localhost:8081/api/v1/sessions/3001 \
 
 # Inspección directa de Mongo
 docker exec -it mongodb-cartelera mongosh cine_catalog_db --eval \
-  'db.movies.countDocuments(); db.rooms.countDocuments(); db.sessions.countDocuments()'
+  'db.cinemas.countDocuments(); db.movies.countDocuments(); db.rooms.countDocuments(); db.sessions.countDocuments()'
+
+# Inicializar el contador de sesiones tras el seed
+docker exec -it mongodb-cartelera mongosh cine_catalog_db --eval \
+  'db.id_counters.updateOne({_id:"sessions"}, {$set:{value:3000}}, {upsert:true})'
 ```

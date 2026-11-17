@@ -198,10 +198,14 @@ Los servicios convierten el claim `role` en autoridades `ROLE_<rol>` mediante un
 | `ADMIN` | Administración global |
 
 Roles solicitables (`POST /role-requests`): `STAFF_TAQUILLA` y `ADMIN`.
-Un `ADMIN` no puede solicitar otro rol (409).
+Un `ADMIN` no puede solicitar otro rol: el `@PreAuthorize` del controlador le
+devuelve **403** (el servicio mantiene además un 409 defensivo si se invocara
+directamente).
 
 Un `STAFF_TAQUILLA` con `cinemaManager = true` solo puede revisar solicitudes de
-**su** cine (`cinemaId`).
+**su** cine (`cinemaId`). Ese flag **solo lo asigna el seed**: aprobar una
+solicitud `STAFF_TAQUILLA` cambia el rol y el cine, pero no convierte al nuevo
+taquillero en `cinemaManager`.
 
 ### Quién puede cambiar qué
 
@@ -213,7 +217,7 @@ comprobaciones de `RoleRequestServiceImpl`:
 |---|---|---|
 | Ver perfil e historial (`GET /users/{id}`, `/history`) | El propio usuario, `STAFF_TAQUILLA` o `ADMIN` | Solo lectura |
 | Editar perfil (`PUT /users/{id}`) | El propio usuario o `ADMIN` | `STAFF_TAQUILLA` **no** puede editar datos personales |
-| Solicitar un rol (`POST /role-requests`) | `CLIENTE_REGISTRADO` o `STAFF_TAQUILLA` | Un `ADMIN` recibe 409 |
+| Solicitar un rol (`POST /role-requests`) | `CLIENTE_REGISTRADO` o `STAFF_TAQUILLA` | Un `ADMIN` recibe **403** |
 | Ver solicitudes (`GET /role-requests`) | `ADMIN` (todas) o `STAFF_TAQUILLA` con `cinemaManager` (solo las de su cine) | — |
 | Aprobar o rechazar (`PATCH /role-requests/{id}`) | `ADMIN` cualquiera; `STAFF_TAQUILLA` solo solicitudes `STAFF_TAQUILLA` de su cine y nunca la propia | Al aprobar cambia `role` y `cinemaId` del solicitante |
 | Modificar puntos de fidelización | **Nadie por API** | Solo el evento `PaymentCompleted` suma puntos |
@@ -221,6 +225,10 @@ comprobaciones de `RoleRequestServiceImpl`:
 En resumen: **los cambios sensibles (rol, cine asignado y datos de otros
 usuarios) son exclusivos de `ADMIN`**; cada usuario solo edita su propio perfil y
 `STAFF_TAQUILLA` únicamente consulta.
+
+> Un `STAFF_TAQUILLA` puede consultar el perfil y el historial de **cualquier**
+> usuario, no solo de los de su cine: la restricción por `cinemaId` se aplica a
+> las solicitudes de rol, no a los datos de clientes.
 
 ---
 
@@ -353,8 +361,12 @@ la DLQ (`default-requeue-rejected: false`).
   healthcheck del compose se basa en el arranque del proceso.
 - **Rate limit *fail-open*:** prioriza disponibilidad sobre protección si Redis
   cae.
-- **Un único cine lógico (C1 no modela cines):** `cinemaId` existe en el modelo
-  de usuarios para asignar al staff a un cine, pero el catálogo (Componente 1)
-  no tiene entidad `Cinema`; hoy se usa `cinemaId = 1`.
+- **Cines modelados, pero `cinemaId` sin validar:** el catálogo (Componente 1)
+  ya tiene entidad `Cinema` y `Room.cinemaId`, pero el `cinemaId` de usuarios es
+  un número libre que asigna un `ADMIN`; no se comprueba contra C1. Si se
+  quiere validar, C3 necesitaría una llamada a `GET /cinemas/{id}`.
+- **`cinemaManager` solo por seed:** no hay endpoint para concederlo. Un
+  `STAFF_TAQUILLA` aprobado por `POST /role-requests` no podrá revisar
+  solicitudes hasta que se cambie el flag directamente en la base de datos.
 - **Contraseñas:** BCrypt con el `PasswordEncoder` de Spring Security.
 - **Sin refresh tokens:** al caducar, el cliente debe volver a hacer login.

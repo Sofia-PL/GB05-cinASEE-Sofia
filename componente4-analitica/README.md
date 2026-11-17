@@ -30,7 +30,7 @@ eventos:
 | Fuente | Qué aporta | Cómo |
 |---|---|---|
 | **C2 Reservas** | Entradas vendidas, reservas e ingresos | `GET /reservations/stats`, `GET /reservations/box-office-data` |
-| **C1 Cartelera** | Aforo de salas, títulos, géneros, distribuidora | Feign a `/rooms`, `/movies`, `/sessions` |
+| **C1 Cartelera** | Aforo de salas, títulos y géneros | Feign a `/rooms`, `/movies`, `/sessions` |
 | **C3 Usuarios** | Perfil, puntos, historial de compras | Feign a `/users/{id}` |
 | **RabbitMQ** | Hechos de venta (`analytics_events`) | Consumo de `payment.completed` |
 
@@ -109,12 +109,22 @@ curl "http://localhost:8084/api/metrics/occupancy?cinemaId=1&screenId=2001&dayOf
 }
 ```
 
-- `totalCapacity` → Componente 1 (`GET /rooms/{id}` o suma de `/rooms`).
+- `totalCapacity` → Componente 1. Con `screenId`, el aforo de esa sala
+  (`GET /rooms/{id}`); sin `screenId`, la suma del aforo de las salas del cine
+  (`GET /rooms?cinemaId=`) o de todas las salas (`GET /rooms`).
 - `totalTicketsSold` → Componente 2 (`GET /reservations/stats`).
 - `dayOfWeek` (1 = lunes … 7 = domingo) y la franja se filtran en C4 sobre
   `showStartTime`, usando `app.analytics.time-zone`.
-- `cinemaId` se acepta por compatibilidad con el OpenAPI, pero **no filtra**: el
-  catálogo del Componente 1 no modela cines.
+- `cinemaId` **sí filtra**. Como C2 devuelve la venta por `roomId`, C4 primero
+  pide a C1 las salas del cine (`GET /rooms?cinemaId=`) y después descarta las
+  filas de C2 cuyo `roomId` no pertenece a ese conjunto. El aforo se calcula con
+  esas mismas salas.
+- Si `screenId` no está entre las salas del cine, C4 consulta `GET /rooms/{id}`:
+  si la sala existe pero es de otro cine, devuelve aforo `0` y deja un
+  `log.warn`.
+- Si C1 no responde, C4 usa un aforo estimado (150 si se pide una sala, 500
+  para el total) y **no** filtra la venta por cine, con `log.warn`. Si el cine
+  no tiene salas, el aforo es `0` y la ocupación resultante también.
 
 ### Box Office
 
@@ -137,9 +147,10 @@ curl "http://localhost:8084/api/reports/box-office?startDate=2026-11-01&endDate=
 
 - Tickets, reservas e ingresos → Componente 2.
 - Título → Componente 1.
-- **Limitación:** `distributorId` no se puede aplicar porque el catálogo guarda
-  la distribuidora como texto (`"Warner Bros."`), no como id numérico. Se
-  registra un aviso y se devuelve el informe sin ese filtro.
+- **Limitación:** `distributorId` no se puede aplicar porque el catálogo ya no
+  expone la distribuidora: el merge eliminó `Movie.distributor`. Se registra un
+  aviso y se devuelve el informe sin ese filtro; el campo `distributor` llega
+  `null`.
 
 ### Recomendaciones
 
@@ -224,11 +235,16 @@ errores se registran y no se relanzan para no bloquear la cola.
 
 - **C2 como fuente principal, eventos como respaldo:** se evita duplicar la
   lógica de ventas y se mantiene el histórico para recomendaciones.
-- **`cinemaId` sin efecto (C1 no modela cines):** el catálogo solo tiene
-  películas, salas y sesiones, así que el parámetro se mantiene por
-  compatibilidad con el OpenAPI pero no filtra. Hoy se usa `cinemaId = 1`.
-- **`distributorId` sin efecto:** el catálogo guarda la distribuidora como
-  texto. Para que funcione habría que añadir `distributorId` a `Movie` en C1.
+- **`cinemaId` filtrado en C4, no en C2:** C4 cruza las salas de C1 con la venta
+  por `roomId` de C2, así que el filtro es correcto pero requiere una llamada
+  extra al catálogo. C2 sigue sin recibir `cinemaId`; si en el futuro lo
+  expone, C4 podrá pedirle la venta ya agregada por cine y ahorrarse el cruce.
+- **Aforo estimado si C1 falla:** para no romper el informe, C4 devuelve una
+  ocupación orientativa y avisa por log en lugar de propagar el error. Es una
+  decisión consciente: un informe con datos parciales es preferible a un `500`.
+- **`distributorId` sin efecto:** el catálogo ya no guarda la distribuidora
+  (`Movie.distributor` se eliminó). Para que funcione habría que reintroducirla
+  en C1, preferiblemente con id numérico.
 - **Sin perfil de test aislado:** el único test es
   `AnaliticaApplicationTests.contextLoads`, un `@SpringBootTest` que necesita
   PostgreSQL. Sin la base de datos levantada, `mvn test` falla al crear el
