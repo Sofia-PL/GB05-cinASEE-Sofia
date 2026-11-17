@@ -12,7 +12,7 @@ spring:
             - id: componente1-cartelera
               uri: ${COMPONENTE1_URI:http://localhost:8081}
               predicates:
-                - Path=/api/v1/movies/**,/api/v1/rooms/**,/api/v1/sessions/**
+                - Path=/api/v1/cinemas/**,/api/v1/movies/**,/api/v1/rooms/**,/api/v1/sessions/**
             - id: componente2-reservas
               uri: ${COMPONENTE2_URI:http://localhost:8082}
               predicates:
