@@ -23,7 +23,9 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -50,6 +52,8 @@ class UserServiceImplTest {
                 1250,
                 List.of("CIENCIA_FICCION")
         );
+        user.setPhone("+34 600 000 000");
+        user.setHomeCinema("CineAsee Centro");
         when(userRepository.findById(42L)).thenReturn(Optional.of(user));
 
         UserProfile profile = userService.getUserProfile(42L);
@@ -60,6 +64,47 @@ class UserServiceImplTest {
         assertEquals("CLIENTE_REGISTRADO", profile.getRole());
         assertEquals(1250, profile.getLoyaltyPoints());
         assertEquals(List.of("CIENCIA_FICCION"), profile.getPreferredGenres());
+        assertEquals("+34 600 000 000", profile.getPhone());
+        assertEquals("CineAsee Centro", profile.getHomeCinema());
+        assertEquals(null, profile.getCinemaId());
+        assertFalse(profile.getCanReviewRoleRequests());
+    }
+
+    @Test
+    void cinemaManagerCanReviewRoleRequests() {
+        User user = user(
+                7L,
+                "staff@cinasee.com",
+                "Taquillero",
+                Role.STAFF_TAQUILLA,
+                0,
+                List.of()
+        );
+        user.setCinemaId(1L);
+        user.setCinemaManager(true);
+        when(userRepository.findById(7L)).thenReturn(Optional.of(user));
+
+        UserProfile profile = userService.getUserProfile(7L);
+
+        assertEquals(1L, profile.getCinemaId());
+        assertTrue(profile.getCanReviewRoleRequests());
+    }
+
+    @Test
+    void adminCanReviewRoleRequests() {
+        User user = user(
+                1L,
+                "admin@cinasee.com",
+                "Administrador",
+                Role.ADMIN,
+                0,
+                List.of()
+        );
+        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
+
+        UserProfile profile = userService.getUserProfile(1L);
+
+        assertTrue(profile.getCanReviewRoleRequests());
     }
 
     @Test
@@ -82,12 +127,33 @@ class UserServiceImplTest {
         UpdateUserProfileRequest request = new UpdateUserProfileRequest();
         request.setFullName("  María Gómez  ");
         request.setPreferredGenres(List.of(" ACCION ", "ACCION", "COMEDIA", " "));
+        request.setPhone("  +34 600 000 000  ");
+        request.setHomeCinema("  CineAsee Centro  ");
 
         userService.updateUserProfile(42L, request);
 
         assertEquals("María Gómez", user.getFullName());
         assertEquals(List.of("ACCION", "COMEDIA"), user.getPreferredGenres());
+        assertEquals("+34 600 000 000", user.getPhone());
+        assertEquals("CineAsee Centro", user.getHomeCinema());
         verify(userRepository).save(user);
+    }
+
+    @Test
+    void updateUserProfileCanClearPhoneAndHomeCinema() {
+        User user = user(42L, "cliente@cinasee.com", "María", Role.CLIENTE_REGISTRADO, 0, List.of());
+        user.setPhone("+34 600 000 000");
+        user.setHomeCinema("CineAsee Centro");
+        when(userRepository.findById(42L)).thenReturn(Optional.of(user));
+
+        UpdateUserProfileRequest request = new UpdateUserProfileRequest();
+        request.setPhone("   ");
+        request.setHomeCinema("");
+
+        userService.updateUserProfile(42L, request);
+
+        assertEquals(null, user.getPhone());
+        assertEquals(null, user.getHomeCinema());
     }
 
     @Test

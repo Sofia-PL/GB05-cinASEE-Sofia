@@ -56,7 +56,10 @@ class UserControllerTest {
         mockMvc.perform(get("/users/42").with(userJwt(42L, "CLIENTE_REGISTRADO")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(42))
-                .andExpect(jsonPath("$.email").value("cliente42@cinasee.com"));
+                .andExpect(jsonPath("$.email").value("cliente42@cinasee.com"))
+                .andExpect(jsonPath("$.phone").value("+34 600 000 000"))
+                .andExpect(jsonPath("$.homeCinema").value("CineAsee Centro"))
+                .andExpect(jsonPath("$.canReviewRoleRequests").value(false));
     }
 
     @Test
@@ -97,10 +100,21 @@ class UserControllerTest {
         mockMvc.perform(put("/users/42")
                         .with(userJwt(42L, "CLIENTE_REGISTRADO"))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"fullName\":\"María Gómez\",\"preferredGenres\":[\"ACCION\"]}"))
+                        .content("""
+                                {
+                                  "fullName": "María Gómez",
+                                  "preferredGenres": ["ACCION"],
+                                  "phone": "+34 600 000 000",
+                                  "homeCinema": "CineAsee Centro"
+                                }
+                                """))
                 .andExpect(status().isOk());
 
-        verify(userService).updateUserProfile(org.mockito.ArgumentMatchers.eq(42L), any(UpdateUserProfileRequest.class));
+        org.mockito.ArgumentCaptor<UpdateUserProfileRequest> captor =
+                org.mockito.ArgumentCaptor.forClass(UpdateUserProfileRequest.class);
+        verify(userService).updateUserProfile(org.mockito.ArgumentMatchers.eq(42L), captor.capture());
+        org.junit.jupiter.api.Assertions.assertEquals("+34 600 000 000", captor.getValue().getPhone());
+        org.junit.jupiter.api.Assertions.assertEquals("CineAsee Centro", captor.getValue().getHomeCinema());
     }
 
     @Test
@@ -148,6 +162,9 @@ class UserControllerTest {
                 100
         );
         profile.setPreferredGenres(List.of("ACCION"));
+        profile.setPhone("+34 600 000 000");
+        profile.setHomeCinema("CineAsee Centro");
+        profile.setCanReviewRoleRequests(false);
         return profile;
     }
 

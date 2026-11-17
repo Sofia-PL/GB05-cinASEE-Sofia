@@ -55,6 +55,10 @@ public class SecurityConfig {
                         // Los tokens de invitado (VISITANTE) no pueden acceder a datos de usuario
                         .requestMatchers("/users/**")
                         .hasAnyRole("CLIENTE_REGISTRADO", "STAFF_TAQUILLA", "ADMIN")
+                        // Las solicitudes de rol requieren una cuenta real; los permisos
+                        // finos (quién revisa qué) se comprueban en el servicio.
+                        .requestMatchers("/role-requests/**")
+                        .hasAnyRole("CLIENTE_REGISTRADO", "STAFF_TAQUILLA", "ADMIN")
                         // El resto de la API requiere un JWT válido
                         .anyRequest().authenticated()
                 )

@@ -56,6 +56,27 @@ public class User {
     @Column(nullable = false)
     private Integer loyaltyPoints = 0;
 
+    @Column(length = 30)
+    private String phone;
+
+    @Column(length = 120)
+    private String homeCinema;
+
+    /**
+     * Cine al que está asignado el usuario cuando tiene un rol interno.
+     * Es nulo para los clientes registrados.
+     */
+    @Column
+    private Long cinemaId;
+
+    /**
+     * Marca al taquillero "original" de un cine: además de vender entradas,
+     * puede revisar las solicitudes STAFF_TAQUILLA de su propio cine.
+     */
+    @Builder.Default
+    @Column(nullable = false)
+    private boolean cinemaManager = false;
+
     @Builder.Default
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(
