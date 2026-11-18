@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import initialCines from '../../assets/cines.json';
-import { getSeatLayout } from '../usuario/CompraPage';
+import { getSeatLayout } from '../../utils/butacas';
 
 const LS_CINES_KEY = 'cinasee_admin_cines';
 const LS_SALAS_KEY_PREFIX = 'cinasee_admin_salas_';
@@ -34,7 +34,6 @@ function loadSalasForCine(cine) {
   return Array.from({ length: cine.rooms || 6 }, (_, i) => {
     const num = i + 1;
     const layout = getSeatLayout(cine.id, num);
-    const total = layout.filas * layout.cols;
     const inoperativos = num === 3 ? 4 : 0;
     return {
       id: `${cine.id}-${num}`,
@@ -92,16 +91,22 @@ export default function AdminSalasPage() {
   // Guardar ID del cine administrado
   useEffect(() => {
     localStorage.setItem(LS_ACTIVE_CINE, String(selectedCineId));
-    setSalas(loadSalasForCine(cineActivo));
+  }, [selectedCineId]);
+
+  /** Al elegir otro cine se cargan sus salas y sus datos en el formulario */
+  function cambiarCine(id) {
+    const cine = cines.find((c) => c.id === id) || cines[0];
+    setSelectedCineId(id);
+    setSalas(loadSalasForCine(cine));
     setCineForm({
-      name: cineActivo.name,
-      address: cineActivo.address,
-      city: cineActivo.city,
-      phone: cineActivo.phone,
-      email: cineActivo.email,
-      schedule: cineActivo.schedule,
+      name: cine.name,
+      address: cine.address,
+      city: cine.city,
+      phone: cine.phone,
+      email: cine.email,
+      schedule: cine.schedule,
     });
-  }, [selectedCineId, cineActivo]);
+  }
 
   // Persistir salas del cine actual
   useEffect(() => {
@@ -225,7 +230,7 @@ export default function AdminSalasPage() {
           <select
             className="admin-select"
             value={selectedCineId}
-            onChange={(e) => setSelectedCineId(Number(e.target.value))}
+            onChange={(e) => cambiarCine(Number(e.target.value))}
             style={{ fontWeight: 700, minWidth: '240px' }}
           >
             {cines.map((c) => (

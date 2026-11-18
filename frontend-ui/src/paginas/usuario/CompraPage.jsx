@@ -1,67 +1,45 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
+import { useAuth } from '../../context/useAuth';
+import { getSeatLayout, getOcupadasSet } from '../../utils/butacas';
+import { obtenerSala, TIPOS_SALA } from '../../api/cartelera';
+import {
+  obtenerButacasOcupadas,
+  crearReserva,
+  cancelarReserva,
+  iniciarPagoRedsys,
+  irARedsys,
+  guardarPagoEnCurso,
+  nombreButaca,
+  DESCUENTOS,
+} from '../../api/reservas';
 
-/* =========================================================
-   Matriz de butacas personalizada por CINE y por SALA
-   ========================================================= */
-export function getSeatLayout(cineId, sala) {
-  const c = Number(cineId) || 1;
-  const s = Number(sala) || 1;
+/* ---------------------------------------------------------
+   Compra REAL vs compra de DEMOSTRACIÓN
+   - Real: la sesión viene de la Cartelera (Comp. 1) y trae showId.
+     Las butacas, la reserva y el pago (Redsys) van contra Reservas (Comp. 2).
+   - Demostración: sesiones inventadas, mapa pseudoaleatorio y pago simulado.
+   --------------------------------------------------------- */
+const SS_COMPRA_KEY = 'cinasee_compra';
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-  if (s === 5 || (c <= 2 && s === 1)) {
-    return {
-      filas: 12,
-      cols: 16,
-      tipo: 'Sala IMAX Gran Pantalla',
-      descripcion: 'Proyección Láser 4K y Sonido Inmersivo',
-    };
-  }
-
-  if (s === 4) {
-    return {
-      filas: 6,
-      cols: 8,
-      tipo: 'Sala VIP Luxury',
-      descripcion: 'Butacas reclinables y mayor espacio individual',
-    };
-  }
-
-  if (s === 3) {
-    const filas = 9 + (c % 2);
-    const cols = 12 + (c % 3);
-    return {
-      filas,
-      cols,
-      tipo: 'Sala 3D RealD',
-      descripcion: 'Proyección tridimensional de alta definición',
-    };
-  }
-
-  const filas = 8 + ((c + s) % 3);
-  const cols = 10 + ((c * 2 + s) % 4);
+/** Layout de una sala real de Cartelera con el mismo formato que getSeatLayout */
+function layoutDeSala(room) {
+  const formato = TIPOS_SALA[room.roomType] || room.roomType || '';
   return {
-    filas,
-    cols,
-    tipo: `Sala ${s} Estándar`,
-    descripcion: 'Sonido digital envolvente y butacas ergonómicas',
+    filas: room.rowsCount,
+    cols: room.columnsCount,
+    tipo: room.name || `Sala ${room.id}`,
+    descripcion: [formato && `Formato ${formato}`, room.wheelchairAccessible && 'accesible en silla de ruedas']
+      .filter(Boolean)
+      .join(' · ') || 'Sala de proyección',
   };
 }
 
-export function getOcupadasSet(cineId, peliculaId, sala, hora) {
-  const { filas, cols } = getSeatLayout(cineId, sala);
-  const total = filas * cols;
-  const horaNum = parseInt((hora || '16:00').replace(':', ''), 10);
-  const seed = (Number(cineId) * 23 + Number(peliculaId) * 17 + Number(sala) * 11 + horaNum) % 10000;
-
-  const ocupadas = new Set();
-  let s = seed;
-  const cantOcupadas = Math.floor(total * 0.28);
-  while (ocupadas.size < cantOcupadas) {
-    s = (s * 1664525 + 1013904223) % (2 ** 32);
-    ocupadas.add(Math.abs(s) % total);
-  }
-  return ocupadas;
+function formatoEuros(valor) {
+  return Number(valor || 0).toFixed(2);
 }
+
 
 const PASOS = ['Sesión', 'Entradas', 'Butacas', 'Pago'];
 
@@ -83,10 +61,72 @@ function Stepper({ paso }) {
   );
 }
 
-function PasoResumen({ data, onNext }) {
+/* ---------------------------------------------------------
+   Identificación para la compra real: Reservas exige un token
+   del Comp. 3 (cliente registrado o invitado con su correo).
+   --------------------------------------------------------- */
+function BloqueIdentidad({ identidad, guestEmail, setGuestEmail, onInvitado, onLogin, error, cargando }) {
+  if (identidad === 'cliente') {
+    return (
+      <div className="cinasee-aviso cinasee-aviso--ok">
+        Has iniciado sesión: la compra se asociará a tu cuenta y sumará puntos de fidelización.
+      </div>
+    );
+  }
+  if (identidad === 'invitado') {
+    return (
+      <div className="cinasee-aviso cinasee-aviso--ok">
+        Compra como invitado. Te identificamos con el correo <strong>{guestEmail}</strong>.
+      </div>
+    );
+  }
+
+  return (
+    <div className="compra-identidad">
+      <h3 className="compra-identidad-title">¿Cómo quieres comprar?</h3>
+      {identidad === 'demo' && (
+        <p className="compra-identidad-texto">
+          Has entrado con un perfil de prueba (acceso rápido), que no existe en el servidor.
+          Inicia sesión con una cuenta real o continúa como invitado.
+        </p>
+      )}
+      <div className="compra-identidad-opciones">
+        <div className="compra-identidad-opcion">
+          <p className="compra-identidad-texto">Con tu cuenta CinASEE acumulas puntos y ves tus entradas en tu perfil.</p>
+          <button className="home-button" type="button" onClick={onLogin}>
+            Iniciar sesión
+          </button>
+        </div>
+        <form
+          className="compra-identidad-opcion"
+          onSubmit={(e) => { e.preventDefault(); onInvitado(); }}
+          noValidate
+        >
+          <div className="login-field">
+            <label htmlFor="compra-guest-email">Comprar como invitado</label>
+            <input
+              id="compra-guest-email"
+              type="email"
+              placeholder="tu.correo@email.com"
+              value={guestEmail}
+              onChange={(e) => setGuestEmail(e.target.value)}
+            />
+          </div>
+          <button className="home-button home-button-dark" type="submit" disabled={cargando}>
+            {cargando ? 'Conectando…' : 'Continuar como invitado'}
+          </button>
+        </form>
+      </div>
+      {error && <div className="cinasee-error" role="alert">{error}</div>}
+    </div>
+  );
+}
+
+function PasoResumen({ data, onNext, layoutReal, identidadProps, listo, errorSala }) {
   const fecha = new Date(data.fecha);
   const fechaStr = fecha.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' });
-  const layout = getSeatLayout(data.cineId, data.sesion.sala);
+  const layout = layoutReal || getSeatLayout(data.cineId, data.sesion.sala);
+  const esReal = Boolean(identidadProps);
 
   return (
     <div className="compra-panel">
@@ -100,16 +140,35 @@ function PasoResumen({ data, onNext }) {
         <p><strong>Cine:</strong> {data.cineName}</p>
         <p><strong>Fecha:</strong> <span style={{ textTransform: 'capitalize' }}>{fechaStr}</span></p>
         <p><strong>Horario:</strong> {data.sesion.hora}</p>
-        <p><strong>Formato:</strong> {data.sesion.formato}</p>
-        <p><strong>Sala asignada:</strong> {layout.tipo} ({layout.descripcion})</p>
+        {data.sesion.formato &&<p><strong>Formato:</strong> {data.sesion.formato}</p>}
+        <p>
+          <strong>Sala asignada:</strong>{' '}
+          {esReal && !layoutReal
+            ? data.sesion.salaNombre || 'se muestra al identificarte'
+            : `${layout.tipo} (${layout.descripcion})`}
+        </p>
         <p><strong>Precio unitario:</strong> {data.sesion.precio.toFixed(2)} €</p>
+        {esReal && (
+          <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+            Los descuentos (día del espectador o fidelización) se calculan al reservar las butacas.
+          </p>
+        )}
       </div>
+
+      {esReal && <BloqueIdentidad {...identidadProps} />}
+      {errorSala && <div className="cinasee-error" role="alert">{errorSala}</div>}
 
       <div style={{ display: 'flex', gap: '14px', marginTop: '20px' }}>
         <button className="home-button home-button-dark" type="button" onClick={() => window.history.back()}>
           Cambiar sesión
         </button>
-        <button className="home-button" type="button" onClick={onNext} style={{ flex: 1, justifyContent: 'center' }}>
+        <button
+          className="home-button"
+          type="button"
+          onClick={onNext}
+          disabled={esReal && !listo}
+          style={{ flex: 1, justifyContent: 'center' }}
+        >
           Continuar a selección de entradas →
         </button>
       </div>
@@ -161,12 +220,19 @@ function PasoEntradas({ precio, cantidad, setCantidad, onNext, onPrev }) {
   );
 }
 
-function PasoButacas({ data, cantidad, seleccionadas, setSeleccionadas, onNext, onPrev }) {
+function PasoButacas({
+  data, cantidad, seleccionadas, setSeleccionadas, onNext, onPrev,
+  layoutReal, ocupadasReal, procesando, errorReserva,
+}) {
   const { cineId, sesion, peliculaId } = data;
-  const layout = getSeatLayout(cineId, sesion.sala);
+  const esReal = Boolean(layoutReal);
+  const layout = layoutReal || getSeatLayout(cineId, sesion.sala);
   const { filas, cols, tipo } = layout;
   const totalAsientos = filas * cols;
-  const ocupadasSet = getOcupadasSet(cineId, peliculaId, sesion.sala, sesion.hora);
+  // Real: butacas ocupadas (bloqueadas o vendidas) que devuelve Reservas
+  const ocupadasSet = esReal
+    ? ocupadasReal || new Set()
+    : getOcupadasSet(cineId, peliculaId, sesion.sala, sesion.hora);
 
   function toggleSeat(idx) {
     if (ocupadasSet.has(idx)) return;
@@ -178,7 +244,7 @@ function PasoButacas({ data, cantidad, seleccionadas, setSeleccionadas, onNext, 
   }
 
   function handleContinuar() {
-    if (seleccionadas.length !== cantidad) return;
+    if (seleccionadas.length !== cantidad || procesando) return;
     onNext();
   }
 
@@ -253,19 +319,23 @@ function PasoButacas({ data, cantidad, seleccionadas, setSeleccionadas, onNext, 
         ))}
       </div>
 
+      {errorReserva && <div className="cinasee-error" role="alert" style={{ marginTop: '20px' }}>{errorReserva}</div>}
+
       <div className="compra-nav-btns" style={{ marginTop: '24px' }}>
-        <button className="home-button home-button-dark" type="button" onClick={onPrev}>
+        <button className="home-button home-button-dark" type="button" onClick={onPrev} disabled={procesando}>
           Volver
         </button>
         <button
           className="home-button"
           type="button"
           onClick={handleContinuar}
-          disabled={seleccionadas.length < cantidad}
+          disabled={seleccionadas.length < cantidad || procesando}
         >
-          {seleccionadas.length < cantidad
-            ? `Selecciona ${cantidad - seleccionadas.length} butaca(s) más`
-            : 'Proceder al pago →'}
+          {procesando
+            ? 'Bloqueando butacas…'
+            : seleccionadas.length < cantidad
+              ? `Selecciona ${cantidad - seleccionadas.length} butaca(s) más`
+              : esReal ? 'Reservar butacas y pagar →' : 'Proceder al pago →'}
         </button>
       </div>
     </div>
@@ -550,20 +620,203 @@ function PasoPago({ data, cantidad, seleccionadas, onDone, onPrev }) {
   );
 }
 
+/* ---------------------------------------------------------
+   Paso 4 (compra real): las butacas ya están bloqueadas en
+   Reservas; se paga en la web de pruebas de Redsys.
+   --------------------------------------------------------- */
+function useCuentaAtras(hasta) {
+  const [ahora, setAhora] = useState(() => Date.now());
+  useEffect(() => {
+    const t = window.setInterval(() => setAhora(Date.now()), 1000);
+    return () => window.clearInterval(t);
+  }, []);
+  const restante = Math.max(0, new Date(hasta).getTime() - ahora);
+  return {
+    restante,
+    texto: `${Math.floor(restante / 60000)}:${String(Math.floor((restante % 60000) / 1000)).padStart(2, '0')}`,
+  };
+}
+
+function PasoPagoRedsys({ data, reserva, layout, token, onPrev }) {
+  const [estado, setEstado] = useState('idle');
+  const [error, setError] = useState('');
+  const { restante, texto } = useCuentaAtras(reserva.expiresAt);
+  const caducada = restante === 0;
+
+  const butacas = (reserva.seats || []).map((s) => nombreButaca(s.row, s.column));
+  const descuento = DESCUENTOS[reserva.discountApplied] || '';
+
+  async function handlePagar() {
+    setError('');
+    setEstado('redirigiendo');
+    try {
+      const formulario = await iniciarPagoRedsys(reserva.id, token);
+      // Lo que necesita la página de vuelta para confirmar el pago y mostrar las entradas
+      guardarPagoEnCurso({
+        reservationId: reserva.id,
+        token,
+        pelicula: data.peliculaTitle,
+        cine: data.cineName,
+        sala: layout.tipo,
+        fecha: data.fecha,
+        hora: data.sesion.hora,
+        butacas,
+        total: formatoEuros(reserva.totalAmount),
+      });
+      irARedsys(formulario);
+    } catch (err) {
+      setEstado('idle');
+      setError(err.message);
+    }
+  }
+
+  if (estado === 'redirigiendo') {
+    return (
+      <div className="compra-panel" style={{ textAlign: 'center', padding: '60px 20px' }}>
+        <h2>Conectando con la pasarela segura de Redsys…</h2>
+        <p style={{ color: 'var(--text-muted)' }}>En unos segundos se abrirá la página de pago. No cierres esta ventana.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="compra-panel">
+      <h2 className="compra-panel-title">4. Confirmación y pago</h2>
+
+      <div className="compra-resumen compra-resumen--small" style={{ marginBottom: '16px' }}>
+        <p><strong>{data.peliculaTitle}</strong> en {data.cineName}</p>
+        <p>Sesión {data.sesion.hora} · {layout.tipo} · Butacas: <strong>{butacas.join(', ')}</strong></p>
+        <p>Precio por entrada: {formatoEuros(reserva.unitPrice)} €{descuento && ` · ${descuento}`}</p>
+        <p className="compra-total-grande">Importe total: <strong>{formatoEuros(reserva.totalAmount)} €</strong></p>
+      </div>
+
+      <div className={`cinasee-aviso${caducada ? ' cinasee-aviso--error' : ''}`}>
+        {caducada
+          ? 'El tiempo de reserva ha terminado y las butacas se han liberado. Vuelve a elegirlas.'
+          : <>Tus butacas están reservadas durante <strong>{texto}</strong> minutos. Completa el pago antes de que termine el tiempo.</>}
+      </div>
+
+      <div className="compra-redsys">
+        <p className="compra-redsys-title">Pago seguro con Redsys</p>
+        <p className="compra-redsys-texto">
+          Al pulsar el botón irás a la página de pago de Redsys, donde introducirás la tarjeta.
+          CinASEE no recibe ni guarda los datos de tu tarjeta.
+        </p>
+        <div className="compra-redsys-test">
+          <strong>Entorno de pruebas (no se cobra dinero real).</strong> Usa la tarjeta de prueba de Redsys:
+          <ul>
+            <li>Número: <code>4548 8120 4940 0004</code></li>
+            <li>Caducidad: <code>12/49</code> (cualquier fecha futura) · CVV: <code>123</code></li>
+            <li>Código de autenticación (CIP): <code>123456</code></li>
+          </ul>
+        </div>
+      </div>
+
+      {error && <div className="cinasee-error" role="alert">{error}</div>}
+
+      <div className="compra-nav-btns" style={{ marginTop: '20px' }}>
+        <button className="home-button home-button-dark" type="button" onClick={onPrev}>
+          Modificar butacas
+        </button>
+        <button
+          className="home-button"
+          type="button"
+          onClick={handlePagar}
+          disabled={caducada}
+          style={{ flex: 1, justifyContent: 'center' }}
+        >
+          Pagar {formatoEuros(reserva.totalAmount)} € con Redsys
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** Datos de la sesión elegida: del estado de la navegación o, si se recarga o se vuelve del login, de sessionStorage */
+function leerDatosCompra(state) {
+  if (state?.sesion) {
+    try {
+      sessionStorage.setItem(SS_COMPRA_KEY, JSON.stringify(state));
+    } catch {
+      // ignorar
+    }
+    return state;
+  }
+  try {
+    return JSON.parse(sessionStorage.getItem(SS_COMPRA_KEY) || 'null');
+  } catch {
+    return null;
+  }
+}
+
 export default function CompraPage() {
   const location = useLocation();
   const navigate = useNavigate();
-  const data = location.state;
+  const [data] = useState(() => leerDatosCompra(location.state));
+  const { user, tokenUsuario, obtenerTokenInvitado } = useAuth();
 
   const [paso, setPaso] = useState(0);
   const [cantidad, setCantidad] = useState(2);
   const [seleccionadas, setSeleccionadas] = useState([]);
+
+  // ---- Estado de la compra real (Reservas + Redsys) ----
+  const esReal = Boolean(data?.sesion?.showId);
+  const tokenCliente = tokenUsuario();
+  const [tokenInvitado, setTokenInvitado] = useState(null);   // solo tras pulsar "Continuar como invitado"
+  const token = tokenCliente || tokenInvitado;
+  const [guestEmail, setGuestEmail] = useState(user?.demo ? '' : user?.email || '');
+  const [identidadError, setIdentidadError] = useState('');
+  const [conectando, setConectando] = useState(false);
+  const [layoutReal, setLayoutReal] = useState(null);
+  const [errorSala, setErrorSala] = useState('');
+  const [ocupadasReal, setOcupadasReal] = useState(null);
+  const [reserva, setReserva] = useState(null);
+  const [procesando, setProcesando] = useState(false);
+  const [errorReserva, setErrorReserva] = useState('');
+
+  const identidad = !esReal
+    ? null
+    : tokenCliente
+      ? 'cliente'
+      : tokenInvitado
+        ? 'invitado'
+        : user?.demo
+          ? 'demo'
+          : 'ninguna';
+  const esInvitado = identidad === 'invitado';
 
   useEffect(() => {
     if (!data || !data.sesion) {
       navigate('/cartelera', { replace: true });
     }
   }, [data, navigate]);
+
+  // Con el token ya disponible se consulta la sala real (filas y columnas) en Cartelera
+  useEffect(() => {
+    if (!esReal || !token || !(identidad === 'cliente' || identidad === 'invitado')) return;
+    let cancelado = false;
+    obtenerSala(data.sesion.roomId, token)
+      .then((room) => {
+        if (cancelado) return;
+        setErrorSala('');
+        setLayoutReal(layoutDeSala(room));
+      })
+      .catch((err) => { if (!cancelado) setErrorSala(`No se pudo cargar la sala: ${err.message}`); });
+    return () => { cancelado = true; };
+  }, [esReal, token, identidad, data]);
+
+  // Butacas ocupadas en Reservas (se consultan al entrar en el paso de butacas)
+  const cargarOcupadas = useCallback(async () => {
+    if (!esReal || !layoutReal) return;
+    try {
+      const mapa = await obtenerButacasOcupadas(data.sesion.showId);
+      setOcupadasReal(new Set(
+        (mapa.occupiedSeats || []).map((s) => (s.row - 1) * layoutReal.cols + (s.column - 1))
+      ));
+    } catch (err) {
+      setErrorReserva(`No se pudo consultar el mapa de butacas: ${err.message}`);
+    }
+  }, [esReal, layoutReal, data]);
 
   if (!data || !data.sesion) return null;
 
@@ -575,6 +828,76 @@ export default function CompraPage() {
   function retroceder() {
     setPaso((p) => Math.max(0, p - 1));
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  async function continuarComoInvitado() {
+    setIdentidadError('');
+    if (!EMAIL_REGEX.test(guestEmail.trim())) {
+      setIdentidadError('Introduce un correo electrónico válido para recibir tus entradas.');
+      return;
+    }
+    setConectando(true);
+    try {
+      setGuestEmail(guestEmail.trim());
+      setTokenInvitado(await obtenerTokenInvitado());
+    } catch (err) {
+      setIdentidadError(err.message);
+    } finally {
+      setConectando(false);
+    }
+  }
+
+  function irALogin() {
+    navigate('/login', { state: { from: '/compra' } });
+  }
+
+  /** Paso 3 -> 4 en la compra real: bloquea las butacas creando la reserva */
+  async function reservarButacas() {
+    setErrorReserva('');
+    setProcesando(true);
+    try {
+      const seats = seleccionadas.map((idx) => ({
+        row: Math.floor(idx / layoutReal.cols) + 1,
+        column: (idx % layoutReal.cols) + 1,
+      }));
+      const nueva = await crearReserva(
+        { showId: data.sesion.showId, seats, ...(esInvitado ? { guestEmail } : {}) },
+        token
+      );
+      setReserva(nueva);
+      avanzar();
+    } catch (err) {
+      if (err.code === 'SEATS_UNAVAILABLE' || err.status === 409) {
+        const quitadas = err.details?.length
+          ? ` (${err.details.map((d) => {
+            const [r, c] = d.split('-').map(Number);
+            return r && c ? nombreButaca(r, c) : d;
+          }).join(', ')})`
+          : '';
+        setErrorReserva(`${err.message}${quitadas}. Elige otras butacas.`);
+        setSeleccionadas([]);
+        cargarOcupadas();
+      } else {
+        setErrorReserva(err.message);
+      }
+    } finally {
+      setProcesando(false);
+    }
+  }
+
+  /** Volver desde el pago: se cancela la reserva para liberar las butacas */
+  async function volverDelPago() {
+    if (reserva) {
+      try {
+        await cancelarReserva(reserva.id, token);
+      } catch {
+        // si ya caducó o no se puede cancelar, las butacas se liberan solas al expirar
+      }
+      setReserva(null);
+    }
+    setSeleccionadas([]);
+    retroceder();
+    cargarOcupadas();
   }
 
   function irPerfil() {
@@ -590,6 +913,18 @@ export default function CompraPage() {
           <PasoResumen
             data={data}
             onNext={avanzar}
+            layoutReal={layoutReal}
+            listo={Boolean(token && layoutReal)}
+            errorSala={errorSala}
+            identidadProps={esReal ? {
+              identidad,
+              guestEmail,
+              setGuestEmail,
+              onInvitado: continuarComoInvitado,
+              onLogin: irALogin,
+              error: identidadError,
+              cargando: conectando,
+            } : null}
           />
         )}
 
@@ -598,7 +933,7 @@ export default function CompraPage() {
             precio={data.sesion.precio}
             cantidad={cantidad}
             setCantidad={setCantidad}
-            onNext={() => { setSeleccionadas([]); avanzar(); }}
+            onNext={() => { setSeleccionadas([]); avanzar(); cargarOcupadas(); }}
             onPrev={retroceder}
           />
         )}
@@ -609,12 +944,26 @@ export default function CompraPage() {
             cantidad={cantidad}
             seleccionadas={seleccionadas}
             setSeleccionadas={setSeleccionadas}
-            onNext={avanzar}
-            onPrev={retroceder}
+            onNext={esReal ? reservarButacas : avanzar}
+            onPrev={() => { setErrorReserva(''); retroceder(); }}
+            layoutReal={esReal ? layoutReal : null}
+            ocupadasReal={ocupadasReal}
+            procesando={procesando}
+            errorReserva={errorReserva}
           />
         )}
 
-        {paso === 3 && (
+        {paso === 3 && esReal && reserva && (
+          <PasoPagoRedsys
+            data={data}
+            reserva={reserva}
+            layout={layoutReal}
+            token={token}
+            onPrev={volverDelPago}
+          />
+        )}
+
+        {paso === 3 && !esReal && (
           <PasoPago
             data={data}
             cantidad={cantidad}

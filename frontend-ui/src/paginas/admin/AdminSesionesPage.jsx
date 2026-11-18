@@ -76,8 +76,13 @@ export default function AdminSesionesPage() {
   // Persistir cine activo
   useEffect(() => {
     localStorage.setItem(LS_ACTIVE_CINE, String(selectedCineId));
-    setSesiones(loadSesionesForCine(selectedCineId, peliculas));
   }, [selectedCineId]);
+
+  /** Al elegir otro cine se cargan sus sesiones */
+  function cambiarCine(id) {
+    setSelectedCineId(id);
+    setSesiones(loadSesionesForCine(id, peliculas));
+  }
 
   // Persistir sesiones del cine actual
   useEffect(() => {
@@ -174,7 +179,7 @@ export default function AdminSesionesPage() {
           <select
             className="admin-select"
             value={selectedCineId}
-            onChange={(e) => setSelectedCineId(Number(e.target.value))}
+            onChange={(e) => cambiarCine(Number(e.target.value))}
             style={{ fontWeight: 700, minWidth: '240px' }}
           >
             {cines.map((c) => (

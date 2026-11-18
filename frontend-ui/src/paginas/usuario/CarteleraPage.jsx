@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import peliculas from '../../assets/peliculas.json';
-import { useCine } from '../../context/CineContext';
+import { useCine } from '../../context/useCine';
+import { obtenerPeliculas, adaptarPelicula, CINE_CARTELERA } from '../../api/cartelera';
 
 const GENRE_LABELS = {
   ACCION: 'Acción',
@@ -19,7 +20,29 @@ export default function CarteleraPage() {
   const { cineSeleccionado } = useCine();
   const [hoveredId, setHoveredId] = useState(null);
 
+  // Películas del Comp. 1 (Cartelera). Si no responde o no tiene ninguna, se usa el catálogo local.
+  const [catalogo, setCatalogo] = useState({ real: false, lista: peliculas });
+
+  useEffect(() => {
+    let cancelado = false;
+    obtenerPeliculas()
+      .then((lista) => {
+        if (!cancelado && Array.isArray(lista) && lista.length > 0) {
+          setCatalogo({ real: true, lista: lista.map(adaptarPelicula) });
+        }
+      })
+      .catch(() => {
+        // sin conexión: se queda el catálogo local de demostración
+      });
+    return () => { cancelado = true; };
+  }, []);
+
   function handleComprar(peliculaId) {
+    // Las sesiones reales de la Cartelera se venden en un único cine
+    if (catalogo.real) {
+      navigate(`/cines/${CINE_CARTELERA}?pelicula=${peliculaId}`);
+      return;
+    }
     if (cineSeleccionado) {
       navigate(`/cines/${cineSeleccionado.id}?pelicula=${peliculaId}`);
     } else {
@@ -49,7 +72,7 @@ export default function CarteleraPage() {
       </header>
 
       <div className="cartelera-grid">
-        {peliculas.map((movie) => {
+        {catalogo.lista.map((movie) => {
           const isHovered = hoveredId === movie.id;
           const durHoras = Math.floor(movie.durationMinutes / 60);
           const durMin = movie.durationMinutes % 60;
@@ -76,10 +99,12 @@ export default function CarteleraPage() {
                   </div>
                 )}
                 <div className="cartelera-poster-tags">
-                  <span className="cartelera-badge-tag">{movie.ageRating}</span>
-                  <span className="cartelera-badge-tag cartelera-badge-tag--dark">
-                    {durHoras}h {durMin}m
-                  </span>
+                  {movie.ageRating && <span className="cartelera-badge-tag">{movie.ageRating}</span>}
+                  {movie.durationMinutes > 0 && (
+                    <span className="cartelera-badge-tag cartelera-badge-tag--dark">
+                      {durHoras}h {durMin}m
+                    </span>
+                  )}
                 </div>
               </div>
 
@@ -104,7 +129,7 @@ export default function CarteleraPage() {
                     type="button"
                     onClick={() => handleComprar(movie.id)}
                   >
-                    {cineSeleccionado
+                    {!catalogo.real && cineSeleccionado
                       ? `Comprar en ${cineSeleccionado.name}`
                       : 'Comprar entradas'}
                   </button>

@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import peliculas from '../../assets/peliculas.json';
 import cines from '../../assets/cines.json';
-import { getSeatLayout, getOcupadasSet } from '../usuario/CompraPage';
+import { getSeatLayout, getOcupadasSet } from '../../utils/butacas';
 
 export default function TaquillaPage() {
   const [cineId, setCineId] = useState(cines[0].id);

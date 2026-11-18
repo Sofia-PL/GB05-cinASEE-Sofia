@@ -4,6 +4,7 @@ import { AuthProvider } from './context/AuthContext';
 import { CineProvider } from './context/CineContext';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
+import RutaProtegida from './components/RutaProtegida';
 
 // Importación de la página principal de Inicio
 import Inicio from './paginas/Inicio';
@@ -15,6 +16,7 @@ import PerfilPage from './paginas/usuario/PerfilPage';
 import Cines from './paginas/usuario/Cines';
 import CineDetalle from './paginas/usuario/CineDetalle';
 import CompraPage from './paginas/usuario/CompraPage';
+import PagoPage from './paginas/usuario/PagoPage';
 
 // Importaciones desde la subcarpeta 'empleados'
 import ValidacionQRPage from './paginas/empleados/ValidacionQRPage';
@@ -47,18 +49,20 @@ export default function App() {
               <Route path="/cines/:cineId" element={<CineDetalle />} />
               <Route path="/login" element={<LoginPage />} />
               <Route path="/registro" element={<LoginPage />} />
-              <Route path="/perfil" element={<PerfilPage />} />
+              <Route path="/perfil" element={<RutaProtegida><PerfilPage /></RutaProtegida>} />
               <Route path="/compra" element={<CompraPage />} />
+              {/* Vuelta desde la web de pago de Redsys (Comp. 2 · Reservas) */}
+              <Route path="/pago/redsys/vuelta" element={<PagoPage />} />
 
               {/* Rutas de Empleados */}
-              <Route path="/empleados/validar-qr" element={<ValidacionQRPage />} />
-              <Route path="/empleados/taquilla" element={<TaquillaPage />} />
+              <Route path="/empleados/validar-qr" element={<RutaProtegida roles={['STAFF', 'ADMIN']}><ValidacionQRPage /></RutaProtegida>} />
+              <Route path="/empleados/taquilla" element={<RutaProtegida roles={['STAFF', 'ADMIN']}><TaquillaPage /></RutaProtegida>} />
 
               {/* Rutas de Administrador */}
-              <Route path="/admin/peliculas" element={<AdminPeliculasPage />} />
-              <Route path="/admin/salas" element={<AdminSalasPage />} />
-              <Route path="/admin/sesiones" element={<AdminSesionesPage />} />
-              <Route path="/admin/metricas" element={<AdminMetricasPage />} />
+              <Route path="/admin/peliculas" element={<RutaProtegida roles={['ADMIN']}><AdminPeliculasPage /></RutaProtegida>} />
+              <Route path="/admin/salas" element={<RutaProtegida roles={['ADMIN']}><AdminSalasPage /></RutaProtegida>} />
+              <Route path="/admin/sesiones" element={<RutaProtegida roles={['ADMIN']}><AdminSesionesPage /></RutaProtegida>} />
+              <Route path="/admin/metricas" element={<RutaProtegida roles={['ADMIN']}><AdminMetricasPage /></RutaProtegida>} />
             </Routes>
           </main>
           {/* Pie de página con información de contacto, datos legales y enlaces */}

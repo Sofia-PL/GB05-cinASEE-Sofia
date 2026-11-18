@@ -1,10 +1,10 @@
-import { createContext, useContext, useState } from 'react';
+import { useState } from 'react';
 import cines from '../assets/cines.json';
+import { CineContext } from './useCine';
 
 /* =========================================================
    Contexto global: cine seleccionado por el usuario
    ========================================================= */
-const CineContext = createContext(null);
 
 export function CineProvider({ children }) {
   const [cineSeleccionado, setCineSeleccionado] = useState(() => {
@@ -30,7 +30,4 @@ export function CineProvider({ children }) {
   );
 }
 
-export function useCine() {
-  return useContext(CineContext);
-}
 

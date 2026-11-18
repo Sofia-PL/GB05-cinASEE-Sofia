@@ -1,8 +1,40 @@
 import { useState } from 'react';
+import { useAuth } from '../../context/useAuth';
+import { validarEntrada, nombreButaca } from '../../api/reservas';
 
 export default function ValidacionQRPage() {
+  const { tokenUsuario } = useAuth();
   const [codigo, setCodigo] = useState('');
   const [resultado, setResultado] = useState(null);
+  const [validando, setValidando] = useState(false);
+
+  /** Staff con cuenta real: la entrada se valida en Reservas (Comp. 2), que la marca como usada */
+  async function validarEnServidor(cleanCode, token) {
+    setValidando(true);
+    try {
+      const c = await validarEntrada(cleanCode, token);
+      const inicio = new Date(c.showStartTime);
+      setResultado({
+        valido: true,
+        ticket: {
+          id: c.ticketCode,
+          pelicula: `Reserva nº ${c.reservationId} · Sesión ${c.showId}`,
+          cine: 'CinASEE',
+          sala: `Sala ${c.roomId}`,
+          hora: `${inicio.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}, ${inicio.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}`,
+          butacas: [nombreButaca(c.row, c.column)],
+        },
+        mensaje: 'Entrada verificada con éxito y marcada como utilizada. Acceso permitido a la sala.',
+      });
+    } catch (err) {
+      setResultado({
+        valido: false,
+        mensaje: err.status === 404 ? 'Código no registrado en el sistema.' : err.message,
+      });
+    } finally {
+      setValidando(false);
+    }
+  }
 
   function handleValidar(e) {
     e?.preventDefault();
@@ -12,6 +44,12 @@ export default function ValidacionQRPage() {
         valido: false,
         mensaje: 'Por favor, introduce o escanea un código de ticket antes de validar.',
       });
+      return;
+    }
+
+    const token = tokenUsuario();
+    if (token) {
+      validarEnServidor(cleanCode, token);
       return;
     }
 
@@ -119,7 +157,7 @@ export default function ValidacionQRPage() {
         <form onSubmit={handleValidar} style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
           <input
             type="text"
-            placeholder="Introduce código (ej: CN-849201)"
+            placeholder="Introduce código (ej: QR-1-8-12-A1B2C3D4)"
             value={codigo}
             onChange={(e) => setCodigo(e.target.value)}
             style={{
@@ -133,8 +171,8 @@ export default function ValidacionQRPage() {
               letterSpacing: '0.05em'
             }}
           />
-          <button className="home-button" type="submit" style={{ padding: '0.8em 1.6em' }}>
-            Validar código
+          <button className="home-button" type="submit" disabled={validando} style={{ padding: '0.8em 1.6em' }}>
+            {validando ? 'Validando…' : 'Validar código'}
           </button>
           <button
             type="button"

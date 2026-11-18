@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '../../context/useAuth';
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -19,6 +19,12 @@ export default function LoginPage() {
   const [regData, setRegData] = useState({ name: '', email: '', password: '', confirm: '' });
 
   function redirigirSegunRol(rol) {
+    // Si se llegó al login desde la compra, se vuelve a ella para terminarla
+    const volverA = location.state?.from;
+    if (volverA) {
+      navigate(volverA, { replace: true });
+      return;
+    }
     if (rol === 'ADMIN') {
       navigate('/admin/peliculas');
     } else if (rol === 'STAFF') {
@@ -129,7 +135,7 @@ export default function LoginPage() {
 
     setCargando(true);
     try {
-      const result = register(nameTrim, emailTrim, pass, 'USER');
+      const result = await register(nameTrim, emailTrim, pass, 'USER');
       if (result.ok) {
         redirigirSegunRol('USER');
       } else {

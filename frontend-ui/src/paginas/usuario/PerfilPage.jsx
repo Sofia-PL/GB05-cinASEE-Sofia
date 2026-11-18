@@ -1,15 +1,54 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { useAuth } from '../../context/AuthContext';
-import { useCine } from '../../context/CineContext';
+import { useAuth } from '../../context/useAuth';
+import { useCine } from '../../context/useCine';
 import cines from '../../assets/cines.json';
+import { misReservas, nombreButaca } from '../../api/reservas';
+import { obtenerPelicula } from '../../api/cartelera';
+
+/* Reservas pagadas (Comp. 2) -> mismo formato que las entradas de la demo */
+async function cargarEntradasReales(token) {
+  const reservas = (await misReservas(token)).filter((r) => r.status === 'CONFIRMED');
+  const titulos = {};
+  await Promise.all([...new Set(reservas.map((r) => r.movieId))].map(async (movieId) => {
+    try {
+      titulos[movieId] = (await obtenerPelicula(movieId)).title;
+    } catch {
+      titulos[movieId] = `Película ${movieId}`;
+    }
+  }));
+  return reservas.map((r) => ({
+    id: `R-${r.id}`,
+    pelicula: titulos[r.movieId],
+    cine: 'CinASEE',
+    sala: `Sala ${r.roomId}`,
+    fecha: r.showStartTime,
+    hora: new Date(r.showStartTime).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),
+    butacas: (r.seats || []).map((s) => nombreButaca(s.row, s.column)),
+    codigos: (r.seats || []).map((s) => s.ticketCode).filter(Boolean),
+    total: Number(r.totalAmount).toFixed(2),
+    real: true,
+  }));
+}
+
+function leerEntradasLocales() {
+  try {
+    return JSON.parse(localStorage.getItem('cinasee_entradas') || '[]');
+  } catch {
+    return [];
+  }
+}
 
 export default function PerfilPage() {
-  const { user, logout, updateUser } = useAuth();
+  const { user, logout, updateUser, tokenUsuario } = useAuth();
+  const token = tokenUsuario();
+  const [errorEntradas, setErrorEntradas] = useState('');
   const { setCineSeleccionado } = useCine();
   const navigate = useNavigate();
 
-  const [entradas, setEntradas] = useState([]);
+  // Perfil de prueba: entradas guardadas en este navegador (la cuenta real las carga de Reservas)
+  const [entradas, setEntradas] = useState(() => (token ? [] : leerEntradasLocales()));
+  // El formulario parte de los datos del usuario conectado (la página exige sesión, ver RutaProtegida)
   const [nombre, setNombre] = useState(user?.name || '');
   const [email, setEmail] = useState(user?.email || '');
   const [telefono, setTelefono] = useState(user?.telefono || '');
@@ -18,24 +57,14 @@ export default function PerfilPage() {
   const [mensajeError, setMensajeError] = useState('');
 
   useEffect(() => {
-    if (user) {
-      setNombre(user.name || '');
-      setEmail(user.email || '');
-      setTelefono(user.telefono || '');
-      setCineHabitualId(user.cineHabitualId || '');
-    }
-  }, [user]);
-
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem('cinasee_entradas');
-      if (raw) {
-        setEntradas(JSON.parse(raw));
-      }
-    } catch {
-      setEntradas([]);
-    }
-  }, []);
+    // Cuenta real: entradas pagadas en Reservas (Comp. 2)
+    if (!token) return undefined;
+    let cancelado = false;
+    cargarEntradasReales(token)
+      .then((lista) => { if (!cancelado) setEntradas(lista); })
+      .catch((err) => { if (!cancelado) setErrorEntradas(`No se pudieron cargar tus entradas: ${err.message}`); });
+    return () => { cancelado = true; };
+  }, [token]);
 
   function handleLogout() {
     logout();
@@ -286,7 +315,7 @@ export default function PerfilPage() {
               Historial de compras y localizadores de acceso a sala
             </p>
           </div>
-          {entradas.length > 0 && (
+          {entradas.length > 0 && !token && (
             <button
               type="button"
               onClick={borrarHistorial}
@@ -303,6 +332,8 @@ export default function PerfilPage() {
             </button>
           )}
         </div>
+
+        {errorEntradas && <div className="cinasee-error" role="alert">{errorEntradas}</div>}
 
         {entradas.length === 0 ? (
           <div style={{
@@ -363,6 +394,13 @@ export default function PerfilPage() {
                   <p style={{ fontSize: '0.95rem', color: 'var(--granate)', fontWeight: 600 }}>
                     Butacas: {ticket.butacas.join(', ')}
                   </p>
+                  {ticket.codigos?.length > 0 && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '6px' }}>
+                      {ticket.codigos.map((c) => (
+                        <code key={c} className="perfil-codigo-entrada">{c}</code>
+                      ))}
+                    </div>
+                  )}
                   <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '8px' }}>
                     Importe: <strong>{ticket.total} €</strong>
                   </p>

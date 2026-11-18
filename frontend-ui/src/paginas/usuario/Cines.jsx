@@ -1,7 +1,7 @@
 import { useLocation, useNavigate } from 'react-router-dom';
 import cines from '../../assets/cines.json';
 import peliculas from '../../assets/peliculas.json';
-import { useCine } from '../../context/CineContext';
+import { useCine } from '../../context/useCine';
 
 export default function Cines() {
   const location = useLocation();

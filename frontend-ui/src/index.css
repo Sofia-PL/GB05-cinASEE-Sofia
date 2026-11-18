@@ -3031,3 +3031,173 @@ p {
   font-weight: 700;
   color: var(--burgundy);
 }
+/* =====================================================================
+   Conexión con el backend: avisos, identificación y pago con Redsys
+   (Comp. 2 · Reservas). Misma paleta que el resto de la compra.
+   ===================================================================== */
+.cinasee-aviso {
+  padding: 10px 16px;
+  border-radius: var(--radius-sm);
+  background: rgba(217, 164, 65, 0.1);
+  border: 1px solid rgba(217, 164, 65, 0.3);
+  color: var(--dark-burgundy);
+  font-size: 0.9rem;
+  margin-bottom: 16px;
+}
+
+.cinasee-aviso--ok {
+  background: rgba(40, 167, 69, 0.08);
+  border-color: rgba(40, 167, 69, 0.35);
+  color: #155724;
+}
+
+.cinasee-aviso--error,
+.cinasee-error {
+  background: #fde8e8;
+  border: 1px solid #f8b4b4;
+  color: #9b1c1c;
+}
+
+.cinasee-error {
+  padding: 10px 14px;
+  border-radius: 6px;
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+/* --- ¿Cómo quieres comprar? (cuenta o invitado) --- */
+.compra-identidad {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 20px;
+  border-radius: var(--radius-sm);
+  border: 1px dashed rgba(217, 164, 65, 0.5);
+  background: rgba(247, 235, 221, 0.35);
+}
+
+.compra-identidad-title {
+  color: var(--burgundy);
+  font-size: 1.15rem;
+}
+
+.compra-identidad-texto {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.compra-identidad-opciones {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.compra-identidad-opcion {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px;
+  border-radius: var(--radius-sm);
+  background: white;
+  border: 1px solid rgba(217, 164, 65, 0.25);
+}
+
+/* --- Bloque de pago con Redsys --- */
+.compra-redsys {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 20px;
+  border-radius: var(--radius-sm);
+  background: var(--grad-card);
+  color: var(--cream);
+  box-shadow: var(--shadow-md);
+}
+
+.compra-redsys-title {
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  color: var(--gold-light);
+  letter-spacing: 0.02em;
+}
+
+.compra-redsys-texto {
+  font-size: 0.9rem;
+  color: rgba(247, 235, 221, 0.85);
+}
+
+.compra-redsys-test {
+  padding: 12px 14px;
+  border-radius: 6px;
+  border: 1px solid rgba(217, 164, 65, 0.45);
+  background: rgba(217, 164, 65, 0.1);
+  font-size: 0.85rem;
+  color: var(--cream);
+}
+
+.compra-redsys-test ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+
+.compra-redsys-test code,
+.compra-entrada-codigo code,
+.perfil-codigo-entrada {
+  font-family: monospace;
+  letter-spacing: 0.04em;
+}
+
+.compra-redsys-test code {
+  color: var(--gold-light);
+}
+
+/* --- Entradas emitidas tras el pago --- */
+.compra-entradas-qr {
+  width: 100%;
+  max-width: 520px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 18px;
+  border-radius: var(--radius-sm);
+  background: var(--grad-card);
+  box-shadow: var(--shadow-md);
+}
+
+.compra-entrada-codigo {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 10px 12px;
+  border-radius: 6px;
+  border: 1px dashed rgba(217, 164, 65, 0.5);
+  color: var(--cream);
+  font-size: 0.9rem;
+}
+
+.compra-entrada-codigo code {
+  color: var(--gold-light);
+  font-weight: 700;
+}
+
+.perfil-codigo-entrada {
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: var(--burgundy);
+  color: var(--cream);
+  font-size: 0.75rem;
+}
+
+.cinasee-aviso-link {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--granate);
+  font-weight: 700;
+  text-decoration: underline;
+  cursor: pointer;
+  font-size: inherit;
+}
