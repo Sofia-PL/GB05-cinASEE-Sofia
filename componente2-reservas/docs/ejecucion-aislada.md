@@ -203,6 +203,11 @@ Al terminar, Redsys devuelve el navegador a `http://localhost:8082/v1/reservatio
 que muestra **Pago confirmado** con las entradas. Si cancelas en Redsys o la tarjeta
 se deniega, muestra el motivo y la reserva sigue pendiente para reintentar.
 
+> **Con el frontend.** En el `docker-compose.yml` global, `REDSYS_URL_OK` y `REDSYS_URL_KO`
+> apuntan a `http://localhost:3000/pago/redsys/vuelta`: Redsys devuelve el navegador al
+> frontend, que reenvía la respuesta a `POST /v1/reservations/{id}/payment/redsys/confirm`
+> a través del gateway. En modo aislado se sigue usando la página propia de Reservas.
+
 Los datos del comercio (número `999008881`, terminal 1 y clave) son los **genéricos de
 prueba publicados por Redsys** y ya están en `application.yaml`: no hay que crear ni
 configurar nada.

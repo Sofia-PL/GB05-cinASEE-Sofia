@@ -1,0 +1,33 @@
+[
+  {
+    "id": 101,
+    "title": "Los Juegos del Hambre: Amanecer en la cosecha",
+    "synopsis": "Una nueva e intensa precuela que explora los oscuros orígenes de los Juegos del Hambre y los secretos de Panem en el quincuagésimo aniversario del torneo.",
+    "durationMinutes": 156,
+    "genre": "ACCION",
+    "ageRating": "+12",
+    "posterUrl": "/ljdh.jpe",
+    "inShowcase": true
+  },
+  {
+    "id": 102,
+    "title": "Godzilla Minus Zero",
+    "synopsis": "El icónico monstruo gigante regresa para sembrar el caos y la destrucción en una emocionante y brutal entrega que expande la escala de la saga clásica.",
+    "durationMinutes": 125,
+    "genre": "CIENCIA_FICCION",
+    "ageRating": "+16",
+    "posterUrl": "/godzilla.jpe",
+    "inShowcase": true
+  },
+ {
+    "id": 103,
+    "title": "La bola negra",
+    "synopsis": "Las vidas interconectadas de tres hombres en tres épocas distintas, íntimamente ligadas por la sexualidad, el deseo y la sombra de una obra inacabada de Federico García Lorca.",
+    "durationMinutes": 158,
+    "genre": "DRAMA",
+    "ageRating": "+16",
+    "posterUrl": "/la bola negra cabecera.jpe",
+    
+    "inShowcase": true
+  }
+]

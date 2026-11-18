@@ -201,6 +201,11 @@ services:
       # son credenciales reales). Para un comercio real: REDSYS_SECRET_KEY, REDSYS_MERCHANT_CODE...
       # como variables de entorno, nunca en el repositorio. "simulated" = pasarela simulada.
       PAYMENT_MODE: redsys
+      # Al terminar en Redsys, el navegador vuelve a la página del frontend, que confirma
+      # el pago llamando a POST /v1/reservations/{id}/payment/redsys/confirm (vía gateway).
+      # Sin frontend: quitar estas dos líneas y se usa la página propia de Reservas (:8082).
+      REDSYS_URL_OK: http://localhost:3000/pago/redsys/vuelta
+      REDSYS_URL_KO: http://localhost:3000/pago/redsys/vuelta
     restart: unless-stopped
 
 # ==========================================
@@ -295,6 +300,26 @@ services:
       JWT_JWK_SET_URI: http://componente3-usuarios:8083/v1/iam/.well-known/jwks.json
       JWT_ISSUER: http://localhost:8083/v1/iam
     restart: unless-stopped
+
+# ==========================================
+# FRONTEND (React + Vite servido con nginx)
+# ==========================================
+  # Web en http://localhost:3000. Solo habla con el gateway: el navegador llama a
+  # http://localhost:8080, por eso VITE_API_URL es localhost y no un nombre de Docker.
+  # Para desarrollar con recarga en caliente sigue valiendo "npm run dev" (mismo puerto 3000).
+  frontend:
+    build:
+      context: ./frontend-ui
+      args:
+        VITE_API_URL: http://localhost:8080
+    container_name: app-frontend
+    ports:
+      - "127.0.0.1:3000:80"
+    depends_on:
+      componente5-gateway:
+        condition: service_started
+    restart: unless-stopped
+
 
 # ==========================================
 volumes:

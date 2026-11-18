@@ -1,122 +1,74 @@
-import { useState } from 'react'
-import heroImg from './assets/hero.png'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import './App.css'
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
 
-function App() {
-  const [count, setCount] = useState(0)
+import { AuthProvider } from './context/AuthContext';
+import { CineProvider } from './context/CineContext';
+import Navbar from './components/Navbar';
+import Footer from './components/Footer';
+import RutaProtegida from './components/RutaProtegida';
 
+// Importación de la página principal de Inicio
+import Inicio from './paginas/Inicio';
+
+// Importaciones desde la subcarpeta 'usuario'
+import CarteleraPage from './paginas/usuario/CarteleraPage';
+import LoginPage from './paginas/usuario/LogInPage';
+import PerfilPage from './paginas/usuario/PerfilPage';
+import Cines from './paginas/usuario/Cines';
+import CineDetalle from './paginas/usuario/CineDetalle';
+import CompraPage from './paginas/usuario/CompraPage';
+import PagoPage from './paginas/usuario/PagoPage';
+
+// Importaciones desde la subcarpeta 'empleados'
+import ValidacionQRPage from './paginas/empleados/ValidacionQRPage';
+import TaquillaPage from './paginas/empleados/TaquillaVentaPage';
+
+// Importaciones desde la subcarpeta 'admin'
+import AdminPeliculasPage from './paginas/admin/AdminPeliculasPage';
+import AdminSalasPage from './paginas/admin/AdminSalasPage';
+import AdminSesionesPage from './paginas/admin/AdminSesionesPage';
+import AdminMetricasPage from './paginas/admin/AdminMetricasPage';
+
+export default function App() {
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.jsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
+    <AuthProvider>
+      <CineProvider>
+        <BrowserRouter>
+          {/* BARRA DE NAVEGACIÓN SUPERIOR (componente separado con scroll-aware) */}
+          <Navbar />
 
-      <div className="ticks"></div>
+          {/* Renderizado dinámico de las páginas según la URL */}
+          <main className="site-main">
+            <Routes>
+              {/* Página de inicio */}
+              <Route path="/" element={<Inicio />} />
 
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
+              {/* Rutas de Usuario / Cliente */}
+              <Route path="/cartelera" element={<CarteleraPage />} />
+              <Route path="/entradas" element={<CarteleraPage />} />
+              <Route path="/cines" element={<Cines />} />
+              <Route path="/cines/:cineId" element={<CineDetalle />} />
+              <Route path="/login" element={<LoginPage />} />
+              <Route path="/registro" element={<LoginPage />} />
+              <Route path="/perfil" element={<RutaProtegida><PerfilPage /></RutaProtegida>} />
+              <Route path="/compra" element={<CompraPage />} />
+              {/* Vuelta desde la web de pago de Redsys (Comp. 2 · Reservas) */}
+              <Route path="/pago/redsys/vuelta" element={<PagoPage />} />
 
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+              {/* Rutas de Empleados */}
+              <Route path="/empleados/validar-qr" element={<RutaProtegida roles={['STAFF', 'ADMIN']}><ValidacionQRPage /></RutaProtegida>} />
+              <Route path="/empleados/taquilla" element={<RutaProtegida roles={['STAFF', 'ADMIN']}><TaquillaPage /></RutaProtegida>} />
+
+              {/* Rutas de Administrador */}
+              <Route path="/admin/peliculas" element={<RutaProtegida roles={['ADMIN']}><AdminPeliculasPage /></RutaProtegida>} />
+              <Route path="/admin/salas" element={<RutaProtegida roles={['ADMIN']}><AdminSalasPage /></RutaProtegida>} />
+              <Route path="/admin/sesiones" element={<RutaProtegida roles={['ADMIN']}><AdminSesionesPage /></RutaProtegida>} />
+              <Route path="/admin/metricas" element={<RutaProtegida roles={['ADMIN']}><AdminMetricasPage /></RutaProtegida>} />
+            </Routes>
+          </main>
+          {/* Pie de página con información de contacto, datos legales y enlaces */}
+          <Footer />
+        </BrowserRouter>
+      </CineProvider>
+    </AuthProvider>
+  );
 }
-
-export default App
