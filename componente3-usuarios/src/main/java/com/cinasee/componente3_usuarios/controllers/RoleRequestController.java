@@ -46,7 +46,7 @@ public class RoleRequestController implements RoleRequestsApi {
      */
     @Override
     @PreAuthorize("hasAnyRole('ADMIN', 'STAFF_TAQUILLA')")
-    public ResponseEntity<List<RoleRequest>> listRoleRequests(String status, Long cinemaId) {
+    public ResponseEntity<List<RoleRequest>> listRoleRequests(String status, String cinemaId) {
         return ResponseEntity.ok(roleRequestService.listRoleRequests(currentUserId(), status, cinemaId));
     }
 

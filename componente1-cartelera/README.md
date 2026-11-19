@@ -8,7 +8,7 @@ vender; el Componente 2 consulta aquí antes de permitir una reserva.
 - **Puerto:** `8081`
 - **Ruta base:** `/api/v1`
 - **Base de datos:** MongoDB (`cine_catalog_db`)
-- **Colecciones:** `cinemas`, `movies`, `rooms`, `sessions` (+ `id_counters`)
+- **Colecciones:** `cinemas`, `movies`, `rooms`, `sessions`
 
 ---
 
@@ -38,11 +38,12 @@ com.cinasee.componente1_cartelera
 ├── controllers/  CinemaController, MovieController, RoomController, SessionController
 ├── models/       Documentos Mongo (Cinema, Movie, Room, Session) + requests
 ├── repositories/ CinemaRepository, MovieRepository, RoomRepository, SessionRepository
-└── services/     CinemaService, MovieService, RoomService, SessionService,
-                  SessionIdGenerator (contador atómico de sesiones)
+└── services/     CinemaService, MovieService, RoomService, SessionService
 ```
 
-Cada documento usa un `Long id` propio como `@Id` (no el `ObjectId` de Mongo).
+Los IDs de cines, películas y salas son UUID en formato texto; los IDs de
+sesiones son ULID de 26 caracteres. Sus referencias (`cinemaId`, `movieId` y
+`roomId`) también se almacenan como texto.
 
 ---
 
@@ -71,7 +72,7 @@ cd componente1-cartelera
 ./mvnw test
 ```
 
-Cuatro clases, todas en verde sin necesidad de MongoDB en marcha (los
+Las pruebas se ejecutan sin necesidad de MongoDB en marcha (los
 repositorios se simulan con Mockito):
 
 | Test | Qué cubre |
@@ -82,8 +83,8 @@ repositorios se simulan con Mockito):
 | `Componente1CarteleraApplicationTests` | Arranque del contexto |
 
 `CarteleraAcceptanceTest` simula `CinemaRepository`, `MovieRepository`,
-`RoomRepository`, `SessionRepository` y `SessionIdGenerator` con `@MockitoBean`,
-por eso no necesita MongoDB.
+`RoomRepository` y `SessionRepository` con `@MockitoBean`, por eso no necesita
+MongoDB.
 
 ---
 
@@ -120,7 +121,7 @@ Ejemplos:
 ```bash
 # Cartelera pública
 curl "http://localhost:8081/api/v1/cinemas?city=Madrid"
-curl "http://localhost:8081/api/v1/cinemas/1/rooms"
+curl "http://localhost:8081/api/v1/cinemas/550e8400-e29b-41d4-a716-446655440000/rooms"
 curl "http://localhost:8081/api/v1/movies?inShowcase=true"
 curl "http://localhost:8081/api/v1/sessions?date=2026-11-18"
 
@@ -128,10 +129,10 @@ curl "http://localhost:8081/api/v1/sessions?date=2026-11-18"
 curl -X POST http://localhost:8081/api/v1/rooms \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"cinemaId":1,"name":"Sala 4","roomType":"ESTANDAR_2D","rowsCount":10,"columnsCount":12}'
+  -d '{"cinemaId":"550e8400-e29b-41d4-a716-446655440000","name":"Sala 4","roomType":"ESTANDAR_2D","rowsCount":10,"columnsCount":12}'
 
 # Poner una sesión a la venta (necesario para que el C2 permita reservar)
-curl -X PATCH http://localhost:8081/api/v1/sessions/3001 \
+curl -X PATCH http://localhost:8081/api/v1/sessions/01ARZ3NDEKTSV4RRFFQ69G5FAV \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"status":"A_LA_VENTA"}'
@@ -201,27 +202,25 @@ JWKS (`JWT_JWK_SET_URI`) y el emisor (`JWT_ISSUER`).
 
 ---
 
-## 8. Decisiones y trabajo pendiente
+## 8. IDs y base de datos
 
-- **IDs:** las **sesiones** usan `SessionIdGenerator`, un contador atómico en
-  Mongo (`id_counters/_id="sessions"`) que evita colisiones. `MovieService`,
-  `RoomService` y `CinemaService` siguen usando `System.currentTimeMillis()`:
-  dos altas en el mismo milisegundo colisionan y los ids no son reproducibles
-  entre entornos. Lo ideal es extender el contador al resto de entidades.
-- **Contador de sesiones empieza en 1:** si se siembran sesiones con ids
-  `3001+`, hay que inicializar el contador en `3000`
-  (`db.id_counters.insertOne({_id:"sessions", value:3000})`) para que las
-  sesiones creadas por API no acaben colisionando al llegar a ese rango.
+- Los IDs nuevos de `Cinema`, `Movie` y `Room` se crean con
+  `UUID.randomUUID().toString()`; las sesiones crean ULIDs monotónicos con
+  `ulid-creator` al construir el documento.
+- C1 parte de una base MongoDB vacía y no incluye una migración para conservar
+  registros anteriores. Si hay datos creados con el esquema antiguo, elimina
+  las colecciones `cinemas`, `movies`, `rooms` y `sessions` antes de arrancar.
+- Para actualizar las bases relacionales de C2–C4, aplica sus scripts antes de
+  arrancar las versiones nuevas:
+  [C2 PostgreSQL](../componente2-reservas/docs/migrations/001-catalog-ids-to-varchar.sql),
+  [C3 MySQL](../componente3-usuarios/docs/migrations/001-catalog-ids-to-varchar.sql)
+  y [C4 PostgreSQL](../componente4-analitica/docs/migrations/001-catalog-ids-to-varchar.sql).
 - **Sin seed de cartelera:** la base arranca vacía y Mongo crea las colecciones
   al primer `POST`. El sistema no se puede demostrar de punta a punta sin datos.
   La lista concreta de cines, películas, salas y sesiones está en
   [`docs/seed-cartelera.md`](docs/seed-cartelera.md).
-- **Cines modelados; C4 ya los aprovecha, C2/C3 todavía no:** C1 tiene `Cinema`
-  y `Room.cinemaId`. C4 filtra la ocupación por cine cruzando
-  `GET /rooms?cinemaId=` con la venta por `roomId` de C2. En cambio, el
-  `cinemaId` de C3 sigue siendo un número libre que no se valida contra C1 y C2
-  trabaja por `sessionId`/`roomId` sin conocer el cine. Para el filtro de punta a
-  punta habría que propagar `cinemaId` a C2 y validarlo en C3.
+- **IDs externos:** los identificadores de cine, película, sala y sesión en
+  C2–C4 también son texto; cada consumidor documenta su propia migración.
 - **Sin `distributorId`:** el merge eliminó `Movie.distributor`; C4 conserva el
   campo `distributor` en su DTO/evento, pero llega `null`. Si se necesita el
   filtro, hay que reintroducir la distribuidora (idealmente con id) en C1.

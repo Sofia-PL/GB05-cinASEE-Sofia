@@ -2,6 +2,7 @@ package com.cinasee.componente2_reservas.dto;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
@@ -20,9 +21,8 @@ import java.util.List;
  * @param seats      entre 1 y 10 butacas.
  */
 public record CreateReservationRequest(
-        @NotNull(message = "El identificador de la sesión (showId) es obligatorio")
-        @Positive(message = "showId debe ser positivo")
-        Long showId,
+        @NotBlank(message = "El identificador de la sesión (showId) es obligatorio")
+        String showId,
 
         @Positive(message = "userId debe ser positivo")
         Long userId,

@@ -50,7 +50,7 @@ public class ReportService {
      * @param to     fecha máxima de la sesión (opcional, inclusiva)
      */
     @Transactional(readOnly = true)
-    public List<ShowStatsResponse> getShowStats(Long showId, Long roomId, LocalDate from, LocalDate to) {
+    public List<ShowStatsResponse> getShowStats(String showId, String roomId, LocalDate from, LocalDate to) {
         validateRange(from, to);
         Instant fromInstant = from != null ? startOfDay(from) : MIN_INSTANT;
         Instant toInstant = to != null ? startOfDay(to.plusDays(1)) : MAX_INSTANT;
@@ -71,7 +71,7 @@ public class ReportService {
      * @param movieId   filtra por película (opcional)
      */
     @Transactional(readOnly = true)
-    public BoxOfficeDataResponse getBoxOfficeData(LocalDate startDate, LocalDate endDate, Long movieId) {
+    public BoxOfficeDataResponse getBoxOfficeData(LocalDate startDate, LocalDate endDate, String movieId) {
         validateRange(startDate, endDate);
         if (ChronoUnit.DAYS.between(startDate, endDate) > MAX_BOX_OFFICE_DAYS) {
             throw new InvalidReservationException("El rango del informe no puede superar " + MAX_BOX_OFFICE_DAYS + " días");

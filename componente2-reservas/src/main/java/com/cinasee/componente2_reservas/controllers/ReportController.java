@@ -27,8 +27,8 @@ public class ReportController {
     /** Analytics -> Reservas -> GET /reservations/stats (cálculo de ocupación). */
     @GetMapping("/stats")
     public List<ShowStatsResponse> getReservationStats(
-            @RequestParam(required = false) Long showId,
-            @RequestParam(required = false) Long roomId,
+            @RequestParam(required = false) String showId,
+            @RequestParam(required = false) String roomId,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
         return reportService.getShowStats(showId, roomId, from, to);
@@ -39,7 +39,7 @@ public class ReportController {
     public BoxOfficeDataResponse getBoxOfficeData(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
-            @RequestParam(required = false) Long movieId) {
+            @RequestParam(required = false) String movieId) {
         return reportService.getBoxOfficeData(startDate, endDate, movieId);
     }
 }

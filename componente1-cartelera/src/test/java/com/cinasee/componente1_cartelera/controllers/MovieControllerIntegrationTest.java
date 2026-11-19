@@ -42,13 +42,13 @@ class MovieControllerIntegrationTest {
     @Test
     void listMoviesIsPublicAndReturnsJson() throws Exception {
         when(movieService.getAllMovies(null, null)).thenReturn(List.of(
-                Movie.builder().id(1L).title("Orgullo y prejuicio").durationMinutes(127).genre("DRAMA").build()
+                Movie.builder().id("movie-1").title("Orgullo y prejuicio").durationMinutes(127).genre("DRAMA").build()
         ));
 
         mockMvc.perform(get("/api/v1/movies").contextPath("/api/v1"))
                 .andExpect(status().isOk())
                 .andExpect(header().doesNotExist("Set-Cookie"))
-                .andExpect(jsonPath("$[0].id").value(1))
+                .andExpect(jsonPath("$[0].id").value("movie-1"))
                 .andExpect(jsonPath("$[0].title").value("Orgullo y prejuicio"));
     }
 
@@ -66,7 +66,7 @@ class MovieControllerIntegrationTest {
 
     @Test
     void movieDetailReturnsNotFoundWhenServiceHasNoMovie() throws Exception {
-        when(movieService.getMovieById(404L)).thenReturn(Optional.empty());
+        when(movieService.getMovieById("404")).thenReturn(Optional.empty());
 
         mockMvc.perform(get("/api/v1/movies/404").contextPath("/api/v1"))
                 .andExpect(status().isNotFound());
@@ -82,7 +82,7 @@ class MovieControllerIntegrationTest {
 
     @Test
     void authenticatedCreateValidatesRequestAndCreatesMovie() throws Exception {
-        Movie created = Movie.builder().id(15L).title("Nueva película").durationMinutes(90).genre("DRAMA").build();
+        Movie created = Movie.builder().id("movie-15").title("Nueva película").durationMinutes(90).genre("DRAMA").build();
         when(movieService.createMovie(any(CreateMovieRequest.class))).thenReturn(created);
 
         mockMvc.perform(post("/api/v1/movies").contextPath("/api/v1")
@@ -98,7 +98,7 @@ class MovieControllerIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(validMovieJson()))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.id").value(15))
+                .andExpect(jsonPath("$.id").value("movie-15"))
                 .andExpect(jsonPath("$.title").value("Nueva película"));
 
         verify(movieService).createMovie(any(CreateMovieRequest.class));

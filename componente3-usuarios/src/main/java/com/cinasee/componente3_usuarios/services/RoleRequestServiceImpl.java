@@ -50,7 +50,7 @@ public class RoleRequestServiceImpl implements RoleRequestService {
                     "El cine es obligatorio para solicitar STAFF_TAQUILLA"
             );
         }
-        if (request.getCinemaId() != null && request.getCinemaId() <= 0) {
+        if (request.getCinemaId() != null && request.getCinemaId().isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El cine indicado no es válido");
         }
         if (requester.getRole() == requestedRole) {
@@ -89,7 +89,7 @@ public class RoleRequestServiceImpl implements RoleRequestService {
     public List<com.cinasee.componente3_usuarios.dto.RoleRequest> listRoleRequests(
             Long reviewerId,
             String status,
-            Long cinemaId
+            String cinemaId
     ) {
         User reviewer = findUser(reviewerId);
         RoleRequestStatus statusFilter = parseStatus(status);
@@ -173,7 +173,7 @@ public class RoleRequestServiceImpl implements RoleRequestService {
 
     private List<com.cinasee.componente3_usuarios.dto.RoleRequest> listForAdmin(
             RoleRequestStatus status,
-            Long cinemaId
+            String cinemaId
     ) {
         List<RoleRequest> requests;
         if (cinemaId != null) {
@@ -189,7 +189,7 @@ public class RoleRequestServiceImpl implements RoleRequestService {
     }
 
     private List<com.cinasee.componente3_usuarios.dto.RoleRequest> listForCinemaManager(
-            Long cinemaId,
+            String cinemaId,
             RoleRequestStatus status
     ) {
         List<RoleRequest> requests = status == null

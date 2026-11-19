@@ -22,7 +22,7 @@ public interface ReservedSeatRepository extends JpaRepository<ReservedSeat, Long
      * (join fetch para evitar el problema N+1 al leer el estado de la reserva).
      */
     @Query("select s from ReservedSeat s join fetch s.reservation where s.showId = :showId")
-    List<ReservedSeat> findByShowIdWithReservation(@Param("showId") Long showId);
+    List<ReservedSeat> findByShowIdWithReservation(@Param("showId") String showId);
 
     /**
      * Busca una entrada por su código QR (validación en puerta) bloqueándola para

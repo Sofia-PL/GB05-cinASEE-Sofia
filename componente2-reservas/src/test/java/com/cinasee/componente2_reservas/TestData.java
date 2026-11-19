@@ -31,9 +31,9 @@ public final class TestData {
     public static final Instant NOW = Instant.parse("2026-10-08T12:00:00Z");
     public static final Clock FIXED_CLOCK = Clock.fixed(NOW, ZoneOffset.UTC);
 
-    public static final long SHOW_ID = 1024L;
-    public static final long MOVIE_ID = 101L;
-    public static final long ROOM_ID = 1L;
+    public static final String SHOW_ID = "01ARZ3NDEKTSV4RRFFQ69G5FAV";
+    public static final String MOVIE_ID = "movie-101";
+    public static final String ROOM_ID = "room-1";
     public static final long USER_ID = 5590L;
 
     /** Viernes 16/10/2026: sin descuento de día del espectador. */
@@ -73,7 +73,7 @@ public final class TestData {
         return session(SHOW_ID, "A_LA_VENTA", FRIDAY_SHOW, new BigDecimal("8.50"));
     }
 
-    public static CatalogSession session(long id, String status, String startTime, BigDecimal price) {
+    public static CatalogSession session(String id, String status, String startTime, BigDecimal price) {
         return new CatalogSession(id, MOVIE_ID, ROOM_ID, startTime, null, status, price);
     }
 

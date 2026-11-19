@@ -21,7 +21,7 @@ public class RoomController {
 
     @GetMapping
     public ResponseEntity<List<Room>> getRooms(
-            @RequestParam(required = false) Long cinemaId) {
+            @RequestParam(required = false) String cinemaId) {
         List<Room> rooms;
         if (cinemaId != null) {
             rooms = roomService.getRoomsByCinemaId(cinemaId);
@@ -38,7 +38,7 @@ public class RoomController {
     }
 
     @GetMapping("/{roomId}")
-    public ResponseEntity<Room> getRoomById(@PathVariable Long roomId) {
+    public ResponseEntity<Room> getRoomById(@PathVariable String roomId) {
         return roomService.getRoomById(roomId)
                 .map(ResponseEntity::ok)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Sala no encontrada con ID: " + roomId));

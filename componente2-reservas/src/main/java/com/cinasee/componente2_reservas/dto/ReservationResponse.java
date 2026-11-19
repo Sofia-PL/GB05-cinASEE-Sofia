@@ -17,9 +17,9 @@ import java.util.List;
  */
 public record ReservationResponse(
         Long id,
-        Long showId,
-        Long movieId,
-        Long roomId,
+        String showId,
+        String movieId,
+        String roomId,
         Instant showStartTime,
         Long userId,
         String guestEmail,

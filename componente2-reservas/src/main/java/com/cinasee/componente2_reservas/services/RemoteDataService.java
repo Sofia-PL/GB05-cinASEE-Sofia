@@ -37,13 +37,13 @@ public class RemoteDataService {
     private final UsuariosClient usuariosClient;
 
     /** Reservas -> Cartelera -> GET /sessions/{id}. */
-    public CatalogSession getSession(Long sessionId) {
+    public CatalogSession getSession(String sessionId) {
         return call("Cartelera", () -> carteleraClient.getSession(sessionId),
                 "La sesión " + sessionId + " no existe en Cartelera");
     }
 
     /** Reservas -> Cartelera -> GET /rooms/{id}. */
-    public CatalogRoom getRoom(Long roomId) {
+    public CatalogRoom getRoom(String roomId) {
         return call("Cartelera", () -> carteleraClient.getRoom(roomId),
                 "La sala " + roomId + " no existe en Cartelera");
     }

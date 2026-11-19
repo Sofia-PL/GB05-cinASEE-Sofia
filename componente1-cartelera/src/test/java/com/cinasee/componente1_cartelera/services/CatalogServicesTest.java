@@ -23,13 +23,14 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -45,8 +46,6 @@ class CatalogServicesTest {
     private SessionRepository sessionRepository;
     @Mock
     private CinemaRepository cinemaRepository;
-    @Mock
-    private SessionIdGenerator sessionIdGenerator;
 
     @InjectMocks
     private MovieService movieService;
@@ -57,13 +56,13 @@ class CatalogServicesTest {
 
     @Test
     void movieFilterByGenreAndShowcaseOnlyReturnsMoviesWithUpcomingSessions() {
-        Movie activeMovie = movie(1L);
-        Movie inactiveMovie = movie(2L);
+        Movie activeMovie = movie("movie-1");
+        Movie inactiveMovie = movie("movie-2");
         when(movieRepository.findByGenreIgnoreCase("DRAMA")).thenReturn(List.of(activeMovie, inactiveMovie));
         when(sessionRepository.findAll()).thenReturn(List.of(
-                session(10L, 1L, 7L, LocalDateTime.now().plusHours(1), LocalDateTime.now().plusHours(3), "PROGRAMADA"),
-                session(11L, 2L, 7L, LocalDateTime.now().plusHours(1), LocalDateTime.now().plusHours(3), "CANCELADA"),
-                session(12L, 2L, 7L, LocalDateTime.now().minusHours(3), LocalDateTime.now().minusHours(1), "FINALIZADA")
+                session("session-10", "movie-1", "room-7", LocalDateTime.now().plusHours(1), LocalDateTime.now().plusHours(3), "PROGRAMADA"),
+                session("session-11", "movie-2", "room-7", LocalDateTime.now().plusHours(1), LocalDateTime.now().plusHours(3), "CANCELADA"),
+                session("session-12", "movie-2", "room-7", LocalDateTime.now().minusHours(3), LocalDateTime.now().minusHours(1), "FINALIZADA")
         ));
 
         List<Movie> result = movieService.getAllMovies("DRAMA", true);
@@ -73,9 +72,9 @@ class CatalogServicesTest {
 
     @Test
     void createRoomCalculatesCapacityAndUsesDefaults() {
-        when(cinemaRepository.existsById(3L)).thenReturn(true);
+        when(cinemaRepository.existsById("cinema-3")).thenReturn(true);
         CreateRoomRequest request = CreateRoomRequest.builder()
-                .cinemaId(3L)
+                .cinemaId("cinema-3")
                 .name("Sala 1")
                 .roomType("ESTANDAR_2D")
                 .rowsCount(8)
@@ -86,18 +85,19 @@ class CatalogServicesTest {
         Room created = roomService.createRoom(request);
 
         assertEquals(96, created.getCapacity());
-        assertEquals(3L, created.getCinemaId());
+        assertEquals(UUID.fromString(created.getId()).toString(), created.getId());
+        assertEquals("cinema-3", created.getCinemaId());
         assertFalse(created.getWheelchairAccessible());
         assertEquals(0.0, created.getBasePrice());
-        verify(cinemaRepository).existsById(3L);
+        verify(cinemaRepository).existsById("cinema-3");
         verify(roomRepository).save(created);
     }
 
     @Test
     void createRoomRejectsUnknownCinema() {
-        when(cinemaRepository.existsById(99L)).thenReturn(false);
+        when(cinemaRepository.existsById("unknown-cinema")).thenReturn(false);
         CreateRoomRequest request = CreateRoomRequest.builder()
-                .cinemaId(99L)
+                .cinemaId("unknown-cinema")
                 .name("Sala 1")
                 .roomType("ESTANDAR_2D")
                 .rowsCount(8)
@@ -115,33 +115,32 @@ class CatalogServicesTest {
     @Test
     void createSessionAddsPreparationTimeToMovieDuration() {
         LocalDateTime start = LocalDate.now().plusDays(1).atTime(18, 30);
-        when(sessionIdGenerator.nextId()).thenReturn(123L);
-        when(movieRepository.findById(1L)).thenReturn(Optional.of(movie(1L)));
-        when(roomRepository.findById(2L)).thenReturn(Optional.of(room(2L)));
-        when(sessionRepository.findByRoomIdAndStatusNot(2L, "CANCELADA")).thenReturn(List.of());
+        when(movieRepository.findById("movie-1")).thenReturn(Optional.of(movie("movie-1")));
+        when(roomRepository.findById("room-2")).thenReturn(Optional.of(room("room-2")));
+        when(sessionRepository.findByRoomIdAndStatusNot("room-2", "CANCELADA")).thenReturn(List.of());
         when(sessionRepository.save(any(Session.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         Session created = sessionService.createSession(CreateSessionRequest.builder()
-                .movieId(1L).roomId(2L).startTime(start).ticketPrice(8.5).build());
+                .movieId("movie-1").roomId("room-2").startTime(start).ticketPrice(8.5).build());
 
         assertEquals(start, created.getStartTime());
         assertEquals(start.plusMinutes(147), created.getEndTime());
         assertEquals("PROGRAMADA", created.getStatus());
-        assertEquals(123L, created.getId());
+        assertTrue(created.getId().matches("[0-7][0-9A-HJKMNP-TV-Z]{25}"));
     }
 
     @Test
     void createSessionRejectsOverlappingTimesInSameRoom() {
         LocalDateTime start = LocalDate.now().plusDays(1).atTime(18, 30);
-        when(movieRepository.findById(1L)).thenReturn(Optional.of(movie(1L)));
-        when(roomRepository.findById(2L)).thenReturn(Optional.of(room(2L)));
-        when(sessionRepository.findByRoomIdAndStatusNot(2L, "CANCELADA")).thenReturn(List.of(
-                session(5L, 8L, 2L, start.plusMinutes(100), start.plusMinutes(200), "A_LA_VENTA")
+        when(movieRepository.findById("movie-1")).thenReturn(Optional.of(movie("movie-1")));
+        when(roomRepository.findById("room-2")).thenReturn(Optional.of(room("room-2")));
+        when(sessionRepository.findByRoomIdAndStatusNot("room-2", "CANCELADA")).thenReturn(List.of(
+                session("session-5", "movie-8", "room-2", start.plusMinutes(100), start.plusMinutes(200), "A_LA_VENTA")
         ));
 
         ResponseStatusException error = assertThrows(ResponseStatusException.class, () ->
                 sessionService.createSession(CreateSessionRequest.builder()
-                        .movieId(1L).roomId(2L).startTime(start).ticketPrice(8.5).build()));
+                        .movieId("movie-1").roomId("room-2").startTime(start).ticketPrice(8.5).build()));
 
         assertEquals(HttpStatus.CONFLICT, error.getStatusCode());
         verify(sessionRepository, never()).save(any(Session.class));
@@ -151,41 +150,41 @@ class CatalogServicesTest {
     void createSessionAllowsAdjacentScreenings() {
         LocalDateTime start = LocalDate.now().plusDays(1).atTime(18, 30);
         LocalDateTime end = start.plusMinutes(147);
-        when(movieRepository.findById(1L)).thenReturn(Optional.of(movie(1L)));
-        when(roomRepository.findById(2L)).thenReturn(Optional.of(room(2L)));
-        when(sessionRepository.findByRoomIdAndStatusNot(2L, "CANCELADA")).thenReturn(List.of(
-                session(5L, 8L, 2L, end, end.plusHours(2), "A_LA_VENTA")
+        when(movieRepository.findById("movie-1")).thenReturn(Optional.of(movie("movie-1")));
+        when(roomRepository.findById("room-2")).thenReturn(Optional.of(room("room-2")));
+        when(sessionRepository.findByRoomIdAndStatusNot("room-2", "CANCELADA")).thenReturn(List.of(
+                session("session-5", "movie-8", "room-2", end, end.plusHours(2), "A_LA_VENTA")
         ));
         when(sessionRepository.save(any(Session.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         Session created = sessionService.createSession(CreateSessionRequest.builder()
-                .movieId(1L).roomId(2L).startTime(start).ticketPrice(8.5).build());
+                .movieId("movie-1").roomId("room-2").startTime(start).ticketPrice(8.5).build());
 
         assertEquals(start, created.getStartTime());
     }
 
     @Test
     void createSessionReturnsNotFoundWhenMovieDoesNotExist() {
-        when(movieRepository.findById(anyLong())).thenReturn(Optional.empty());
+        when(movieRepository.findById(anyString())).thenReturn(Optional.empty());
 
         ResponseStatusException error = assertThrows(ResponseStatusException.class, () ->
                 sessionService.createSession(CreateSessionRequest.builder()
-                        .movieId(99L).roomId(2L).startTime(LocalDateTime.now()).ticketPrice(8.5).build()));
+                        .movieId("missing-movie").roomId("room-2").startTime(LocalDateTime.now()).ticketPrice(8.5).build()));
 
         assertEquals(HttpStatus.NOT_FOUND, error.getStatusCode());
         assertTrue(error.getReason().contains("Película no encontrada"));
-        verify(roomRepository, never()).findById(anyLong());
+        verify(roomRepository, never()).findById(anyString());
     }
 
-    private static Movie movie(Long id) {
+    private static Movie movie(String id) {
         return Movie.builder().id(id).title("Película " + id).durationMinutes(127).genre("DRAMA").build();
     }
 
-    private static Room room(Long id) {
-        return Room.builder().id(id).cinemaId(3L).name("Sala " + id).build();
+    private static Room room(String id) {
+        return Room.builder().id(id).cinemaId("cinema-3").name("Sala " + id).build();
     }
 
-    private static Session session(Long id, Long movieId, Long roomId, LocalDateTime start,
+    private static Session session(String id, String movieId, String roomId, LocalDateTime start,
                                    LocalDateTime end, String status) {
         return Session.builder().id(id).movieId(movieId).roomId(roomId).startTime(start).endTime(end).status(status).build();
     }

@@ -7,7 +7,7 @@
         "status": 200,
         "headers": { "Content-Type": "application/json" },
         "jsonBody": {
-          "id": 1024, "movieId": 101, "roomId": 1,
+          "id": "1024", "movieId": "101", "roomId": "1",
           "startTime": "2030-01-18T18:30:00", "endTime": "2030-01-18T20:57:00",
           "status": "A_LA_VENTA", "ticketPrice": 8.50
         }
@@ -20,7 +20,7 @@
         "status": 200,
         "headers": { "Content-Type": "application/json" },
         "jsonBody": {
-          "id": 1025, "movieId": 102, "roomId": 1,
+          "id": "1025", "movieId": "102", "roomId": "1",
           "startTime": "2030-01-16T20:00:00", "endTime": "2030-01-16T22:10:00",
           "status": "A_LA_VENTA", "ticketPrice": 8.50
         }
@@ -33,7 +33,7 @@
         "status": 200,
         "headers": { "Content-Type": "application/json" },
         "jsonBody": {
-          "id": 2048, "movieId": 101, "roomId": 1,
+          "id": "2048", "movieId": "101", "roomId": "1",
           "startTime": "2030-02-01T18:30:00", "endTime": "2030-02-01T20:57:00",
           "status": "PROGRAMADA", "ticketPrice": 8.50
         }
@@ -47,7 +47,7 @@
     {
       "name": "Cartelera - sesión inexistente (Reservas responde 404)",
       "priority": 10,
-      "request": { "method": "GET", "urlPathPattern": "/api/v1/sessions/[0-9]+" },
+      "request": { "method": "GET", "urlPathPattern": "/api/v1/sessions/[A-Za-z0-9-]+" },
       "response": {
         "status": 404,
         "headers": { "Content-Type": "application/json" },
@@ -61,7 +61,7 @@
         "status": 200,
         "headers": { "Content-Type": "application/json" },
         "jsonBody": {
-          "id": 1, "name": "Sala 1", "roomType": "ESTANDAR_2D", "capacity": 150,
+          "id": "1", "name": "Sala 1", "roomType": "ESTANDAR_2D", "capacity": 150,
           "rowsCount": 10, "columnsCount": 15, "wheelchairAccessible": true, "basePrice": 7.50
         }
       }

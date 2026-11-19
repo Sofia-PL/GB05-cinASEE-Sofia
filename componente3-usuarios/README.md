@@ -273,6 +273,9 @@ email ya existe, no modifica nada.
 | `usuario@cinasee.com` | `Usuario123!` | `CLIENTE_REGISTRADO` | — |
 
 Se desactiva con `APP_SEED_ENABLED=false` (recomendado en producción).
+En una base migrada, `"1"` conserva su relación histórica; en una instalación
+nueva con cines UUID, configura `APP_SEED_STAFF_CINEMA_ID` con el UUID real del
+cine antes de iniciar el servicio.
 
 ---
 
@@ -309,7 +312,7 @@ Payload que consume este componente:
   "eventId": "3f2c7a1e-...",
   "reservationId": 8901,
   "userId": 42,
-  "movieId": 1024,
+  "movieId": "550e8400-e29b-41d4-a716-446655440001",
   "amount": 18.50,
   "currency": "EUR",
   "purchaseDate": "2026-09-20T18:30:00Z",
@@ -370,3 +373,11 @@ la DLQ (`default-requeue-rejected: false`).
   solicitudes hasta que se cambie el flag directamente en la base de datos.
 - **Contraseñas:** BCrypt con el `PasswordEncoder` de Spring Security.
 - **Sin refresh tokens:** al caducar, el cliente debe volver a hacer login.
+# Migración de IDs de Cartelera
+
+Los IDs de cine y película recibidos desde C1 se almacenan como texto. Antes de
+desplegar esta versión sobre una base existente, detén el servicio, haz un
+backup verificado y ejecuta
+[`docs/migrations/001-catalog-ids-to-varchar.sql`](docs/migrations/001-catalog-ids-to-varchar.sql)
+en MySQL. Los valores históricos se conservan como cadenas decimales; la
+migración no reasigna IDs.

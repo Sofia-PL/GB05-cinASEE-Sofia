@@ -99,7 +99,7 @@ curl "http://localhost:8084/api/metrics/occupancy?cinemaId=1&screenId=2001&dayOf
 
 ```json
 {
-  "cinemaId": 1,
+  "cinemaId": "550e8400-e29b-41d4-a716-446655440000",
   "screenId": 2001,
   "dayOfWeek": 3,
   "timeRange": "16:00-23:00",
@@ -136,7 +136,7 @@ curl "http://localhost:8084/api/reports/box-office?startDate=2026-11-01&endDate=
 ```json
 {
   "distributorId": null,
-  "movieId": 1001,
+  "movieId": "550e8400-e29b-41d4-a716-446655440001",
   "movieTitle": "Dune: Parte Tres",
   "period": { "startDate": "2026-11-01", "endDate": "2026-11-30" },
   "totalTicketsSold": 120,
@@ -252,3 +252,11 @@ errores se registran y no se relanzan para no bloquear la cola.
   o añadir un perfil de test con H2.
 - **Zona horaria explícita:** evita que un contenedor en UTC desplace las franjas
   horarias de las sesiones.
+# Migración de IDs de Cartelera
+
+Los IDs de cine, sala, sesión y película del Componente 1 se almacenan como
+texto. Antes de desplegar esta versión sobre una base existente, detén el
+servicio, haz un backup verificado y ejecuta
+[`docs/migrations/001-catalog-ids-to-varchar.sql`](docs/migrations/001-catalog-ids-to-varchar.sql)
+en PostgreSQL. Los valores históricos se conservan como cadenas decimales; la
+migración no reasigna IDs.

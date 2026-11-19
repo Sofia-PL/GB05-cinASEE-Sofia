@@ -36,26 +36,26 @@ public class CinemaController {
     }
 
     @GetMapping("/{cinemaId}")
-    public ResponseEntity<Cinema> getCinemaById(@PathVariable Long cinemaId) {
+    public ResponseEntity<Cinema> getCinemaById(@PathVariable String cinemaId) {
         return cinemaService.getCinemaById(cinemaId)
                 .map(ResponseEntity::ok)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Cine no encontrado con ID: " + cinemaId));
     }
 
     @PutMapping("/{cinemaId}")
-    public ResponseEntity<Cinema> updateCinema(@PathVariable Long cinemaId, @RequestBody @Valid CreateCinemaRequest request) {
+    public ResponseEntity<Cinema> updateCinema(@PathVariable String cinemaId, @RequestBody @Valid CreateCinemaRequest request) {
         Cinema updatedCinema = cinemaService.updateCinema(cinemaId, request);
         return ResponseEntity.ok(updatedCinema);
     }
 
     @DeleteMapping("/{cinemaId}")
-    public ResponseEntity<Void> deleteCinema(@PathVariable Long cinemaId) {
+    public ResponseEntity<Void> deleteCinema(@PathVariable String cinemaId) {
         cinemaService.deleteCinema(cinemaId);
         return ResponseEntity.noContent().build();
     }
 
     @GetMapping("/{cinemaId}/rooms")
-    public ResponseEntity<List<Room>> getRoomsByCinema(@PathVariable Long cinemaId) {
+    public ResponseEntity<List<Room>> getRoomsByCinema(@PathVariable String cinemaId) {
         // Verificar que el cine existe
         cinemaService.getCinemaById(cinemaId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Cine no encontrado con ID: " + cinemaId));

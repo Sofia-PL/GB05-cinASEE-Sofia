@@ -23,11 +23,11 @@ public class RoomService {
         return roomRepository.findAll();
     }
 
-    public List<Room> getRoomsByCinemaId(Long cinemaId) {
+    public List<Room> getRoomsByCinemaId(String cinemaId) {
         return roomRepository.findByCinemaId(cinemaId);
     }
 
-    public Optional<Room> getRoomById(Long roomId) {
+    public Optional<Room> getRoomById(String roomId) {
         return roomRepository.findById(roomId);
     }
 
@@ -38,10 +38,8 @@ public class RoomService {
         }
 
         int capacity = request.getRowsCount() * request.getColumnsCount();
-        Long nextId = System.currentTimeMillis();
-
         Room room = Room.builder()
-                .id(nextId)
+                .id(java.util.UUID.randomUUID().toString())
                 .cinemaId(request.getCinemaId())
                 .name(request.getName())
                 .roomType(request.getRoomType())

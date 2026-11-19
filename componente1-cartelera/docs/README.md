@@ -40,7 +40,7 @@ erDiagram
     Movie ||--o{ Session : "se proyecta en (1:N)"
 
     Cinema {
-        Long id PK
+        String id PK "UUID"
         String name "Nombre del cine"
         String address "Dirección"
         String city "Ciudad"
@@ -48,8 +48,8 @@ erDiagram
     }
 
     Room {
-        Long id PK
-        Long cinemaId FK "Asociada a un cine"
+        String id PK "UUID"
+        String cinemaId FK "UUID del cine asociado"
         String name "Nombre o código de sala"
         String roomType "ESTANDAR_2D, DIGITAL_3D, IMAX, VIP, 4DX"
         Integer capacity "Filas x Columnas"
@@ -60,7 +60,7 @@ erDiagram
     }
 
     Movie {
-        Long id PK
+        String id PK "UUID"
         String title "Título comercial"
         String synopsis "Sinopsis o argumento"
         Integer durationMinutes "Duración en min (>0)"
@@ -71,9 +71,9 @@ erDiagram
     }
 
     Session {
-        Long id PK
-        Long movieId FK "Película programada"
-        Long roomId FK "Sala asignada"
+        String id PK "ULID"
+        String movieId FK "UUID de la película"
+        String roomId FK "UUID de la sala"
         LocalDateTime startTime "Hora de inicio"
         LocalDateTime endTime "Inicio + duración + 20 min"
         String status "PROGRAMADA, A_LA_VENTA, EN_CURSO, FINALIZADA, CANCELADA"
@@ -164,6 +164,11 @@ Las clases anotadas con `@Document` usan las colecciones `cinemas`, `movies`, `r
 `sessions`. MongoDB crea la base y cada colección al persistir los primeros
 documentos; por tanto, que no aparezcan colecciones en una instalación nueva no
 significa necesariamente que exista un error.
+
+Los IDs de cine, película y sala son UUID de texto; el ID de sesión es un ULID.
+C1 parte de una base vacía y no incluye una migración para conservar datos
+anteriores. Si hubiera registros del esquema antiguo, elimina las colecciones
+`cinemas`, `movies`, `rooms` y `sessions` antes de arrancar la nueva versión.
 
 La URI predeterminada para ejecutar la aplicación fuera de Docker es
 `mongodb://localhost:27017/cine_catalog_db`. En Docker Compose se configura

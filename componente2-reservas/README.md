@@ -110,7 +110,7 @@ curl -X POST http://localhost:8082/v1/reservations \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
-    "showId": 3001,
+    "showId": "01ARZ3NDEKTSV4RRFFQ69G5FAV",
     "seats": [{"row": 4, "column": 7}, {"row": 4, "column": 8}],
     "guestEmail": "invitado@example.com"
   }'
@@ -197,14 +197,14 @@ conoce e ignora el resto (`@JsonIgnoreProperties(ignoreUnknown = true)`).
   "eventId": "3f2c7a1e-9b1d-4f2a-8c3e-1a2b3c4d5e6f",
   "reservationId": 8901,
   "userId": 42,
-  "movieId": 1024,
+  "movieId": "550e8400-e29b-41d4-a716-446655440001",
   "amount": 18.50,
   "currency": "EUR",
   "purchaseDate": "2026-09-20T18:30:00Z",
   "occurredAt": "2026-09-20T18:30:05Z",
-  "showId": 3001,
-  "sessionId": 3001,
-  "roomId": 2001,
+  "showId": "01ARZ3NDEKTSV4RRFFQ69G5FAV",
+  "sessionId": "01ARZ3NDEKTSV4RRFFQ69G5FAV",
+  "roomId": "550e8400-e29b-41d4-a716-446655440002",
   "ticketsCount": 2,
   "totalAmount": 18.50,
   "showStartTime": "2026-09-21T18:00:00Z",
@@ -228,9 +228,9 @@ conoce e ignora el resto (`@JsonIgnoreProperties(ignoreUnknown = true)`).
 ```json
 [
   {
-    "showId": 3001,
-    "movieId": 1001,
-    "roomId": 2001,
+    "showId": "01ARZ3NDEKTSV4RRFFQ69G5FAV",
+    "movieId": "550e8400-e29b-41d4-a716-446655440001",
+    "roomId": "550e8400-e29b-41d4-a716-446655440002",
     "showStartTime": "2026-11-18T15:00:00Z",
     "ticketsSold": 42,
     "reservations": 21,
@@ -250,7 +250,7 @@ Filtros opcionales: `showId`, `roomId`, `from`, `to` (fechas ISO, inclusivas).
   "endDate": "2026-11-30",
   "currency": "EUR",
   "movies": [
-    { "movieId": 1001, "totalTicketsSold": 120, "reservations": 60, "grossRevenue": 1020.00 }
+    { "movieId": "550e8400-e29b-41d4-a716-446655440001", "totalTicketsSold": 120, "reservations": 60, "grossRevenue": 1020.00 }
   ]
 }
 ```
@@ -323,3 +323,11 @@ describe lo que ya existe.
   y RabbitMQ reales.
 - **Check-in:** valida el código de la entrada y marca `checked_in_at`; no
   comprueba la hora de la sesión.
+# Migración de IDs de Cartelera
+
+Los identificadores de sesión, película y sala del Componente 1 se consumen y
+almacenan como texto. Antes de desplegar esta versión sobre una base existente,
+detén el servicio, haz un backup verificado y ejecuta
+[`docs/migrations/001-catalog-ids-to-varchar.sql`](docs/migrations/001-catalog-ids-to-varchar.sql)
+en PostgreSQL. Los valores históricos se conservan como cadenas decimales; la
+migración no reasigna IDs.

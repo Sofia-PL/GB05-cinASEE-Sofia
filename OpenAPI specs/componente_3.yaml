@@ -429,11 +429,10 @@ components:
             Identificador de la reserva pagada. Pertenece al Componente 2 (Reservas y Pagos).
           example: 8901
         movieId:
-          type: integer
-          format: int64
+          type: string
           description: >
             Identificador de la película visionada. Pertenece al Componente 1 (Cartelera).
-          example: 1024
+          example: "1024"
         purchaseDate:
           type: string
           format: date-time

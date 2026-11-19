@@ -80,13 +80,13 @@ class UserServiceImplTest {
                 0,
                 List.of()
         );
-        user.setCinemaId(1L);
+        user.setCinemaId("cinema-1");
         user.setCinemaManager(true);
         when(userRepository.findById(7L)).thenReturn(Optional.of(user));
 
         UserProfile profile = userService.getUserProfile(7L);
 
-        assertEquals(1L, profile.getCinemaId());
+        assertEquals("cinema-1", profile.getCinemaId());
         assertTrue(profile.getCanReviewRoleRequests());
     }
 
@@ -163,7 +163,7 @@ class UserServiceImplTest {
         PurchaseHistory history = PurchaseHistory.builder()
                 .reservationId(8901L)
                 .userId(42L)
-                .movieId(1024L)
+                .movieId("movie-1024")
                 .purchaseDate(OffsetDateTime.parse("2026-09-20T18:30:00Z"))
                 .amount(new BigDecimal("18.50"))
                 .build();
@@ -174,7 +174,7 @@ class UserServiceImplTest {
 
         assertEquals(1, result.size());
         assertEquals(8901L, result.get(0).getReservationId());
-        assertEquals(1024L, result.get(0).getMovieId());
+        assertEquals("movie-1024", result.get(0).getMovieId());
         assertEquals(18.50f, result.get(0).getAmount(), 0.001f);
         assertEquals(OffsetDateTime.parse("2026-09-20T18:30:00Z"), result.get(0).getPurchaseDate());
     }

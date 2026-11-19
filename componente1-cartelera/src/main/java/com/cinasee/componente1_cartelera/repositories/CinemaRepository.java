@@ -7,6 +7,6 @@ import org.springframework.stereotype.Repository;
 import java.util.List;
 
 @Repository
-public interface CinemaRepository extends MongoRepository<Cinema, Long> {
+public interface CinemaRepository extends MongoRepository<Cinema, String> {
     List<Cinema> findByCityIgnoreCase(String city);
 }

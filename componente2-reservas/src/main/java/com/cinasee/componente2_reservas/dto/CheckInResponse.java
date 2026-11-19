@@ -8,8 +8,8 @@ import java.time.Instant;
 public record CheckInResponse(
         String ticketCode,
         Long reservationId,
-        Long showId,
-        Long roomId,
+        String showId,
+        String roomId,
         Integer row,
         Integer column,
         Instant showStartTime,

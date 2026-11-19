@@ -17,8 +17,8 @@ public interface AnalyticsEventRepository extends JpaRepository<AnalyticsEvent, 
            "AND (:roomId IS NULL OR e.roomId = :roomId) " +
            "AND (:dayOfWeek IS NULL OR e.dayOfWeek = :dayOfWeek)")
     Long sumTicketsSold(
-            @Param("cinemaId") Long cinemaId,
-            @Param("roomId") Long roomId,
+            @Param("cinemaId") String cinemaId,
+            @Param("roomId") String roomId,
             @Param("dayOfWeek") Integer dayOfWeek
     );
 
@@ -26,8 +26,8 @@ public interface AnalyticsEventRepository extends JpaRepository<AnalyticsEvent, 
            "WHERE e.cinemaId = :cinemaId " +
            "AND (:roomId IS NULL OR e.roomId = :roomId)")
     Double avgTicketsSoldPerEvent(
-            @Param("cinemaId") Long cinemaId,
-            @Param("roomId") Long roomId
+            @Param("cinemaId") String cinemaId,
+            @Param("roomId") String roomId
     );
 
     @Query("SELECT e.movieId, e.movieTitle, e.distributor, " +
@@ -40,7 +40,7 @@ public interface AnalyticsEventRepository extends JpaRepository<AnalyticsEvent, 
     List<Object[]> findBoxOfficeAggregate(
             @Param("start") LocalDateTime start,
             @Param("end") LocalDateTime end,
-            @Param("movieId") Long movieId,
+            @Param("movieId") String movieId,
             @Param("distributorId") Long distributorId
     );
 
@@ -48,7 +48,7 @@ public interface AnalyticsEventRepository extends JpaRepository<AnalyticsEvent, 
            "FROM AnalyticsEvent e " +
            "WHERE e.cinemaId = :cinemaId " +
            "GROUP BY e.roomId")
-    List<Object[]> findRoomAggregationsByCinema(@Param("cinemaId") Long cinemaId);
+    List<Object[]> findRoomAggregationsByCinema(@Param("cinemaId") String cinemaId);
 
     @Query("SELECT e.genre, COUNT(e), SUM(e.ticketsSold) " +
            "FROM AnalyticsEvent e " +

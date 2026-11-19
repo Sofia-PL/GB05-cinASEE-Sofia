@@ -100,7 +100,7 @@ public class AnalyticsService {
      * @param startTime hora local de inicio de franja, formato HH:mm (opcional)
      * @param endTime   hora local de fin de franja, formato HH:mm (opcional)
      */
-    public OccupancyMetricDTO calculateOccupancy(Long cinemaId, Long screenId, Integer dayOfWeek,
+    public OccupancyMetricDTO calculateOccupancy(String cinemaId, String screenId, Integer dayOfWeek,
                                                  String startTime, String endTime) {
         List<RoomDTO> cinemaRooms = fetchRooms(cinemaId);
         int totalCapacity = resolveCapacity(cinemaId, screenId, cinemaRooms);
@@ -131,7 +131,7 @@ public class AnalyticsService {
      * responde, para distinguir "cine sin salas" (lista vacía) de "no se pudo
      * consultar" (null).
      */
-    private List<RoomDTO> fetchRooms(Long cinemaId) {
+    private List<RoomDTO> fetchRooms(String cinemaId) {
         try {
             return cinemaId != null
                     ? carteleraClient.getRoomsByCinema(cinemaId)
@@ -145,7 +145,7 @@ public class AnalyticsService {
     }
 
     /** Aforo: sala concreta o suma de las salas del cine. Siempre desde C1. */
-    private int resolveCapacity(Long cinemaId, Long screenId, List<RoomDTO> cinemaRooms) {
+    private int resolveCapacity(String cinemaId, String screenId, List<RoomDTO> cinemaRooms) {
         if (screenId != null) {
             RoomDTO room = cinemaRooms == null ? null : cinemaRooms.stream()
                     .filter(r -> screenId.equals(r.getId()))
@@ -189,7 +189,7 @@ public class AnalyticsService {
      * Entradas vendidas: fuente principal Reservas (C2). Si C2 no responde, se
      * cae a los eventos locales de RabbitMQ para no romper el informe.
      */
-    private int resolveTicketsSold(Long cinemaId, Long screenId, Integer dayOfWeek,
+    private int resolveTicketsSold(String cinemaId, String screenId, Integer dayOfWeek,
                                    String startTime, String endTime, List<RoomDTO> cinemaRooms) {
         try {
             List<ShowStatsDTO> stats = reservasClient.getShowStats(null, screenId, null, null);
@@ -197,7 +197,7 @@ public class AnalyticsService {
                 return 0;
             }
 
-            Set<Long> cinemaRoomIds = cinemaRoomIds(cinemaId, cinemaRooms);
+            Set<String> cinemaRoomIds = cinemaRoomIds(cinemaId, cinemaRooms);
 
             long total = stats.stream()
                     .filter(row -> screenId == null || screenId.equals(row.roomId()))
@@ -221,7 +221,7 @@ public class AnalyticsService {
      * (no hay cine o C1 no respondió); un conjunto vacío significa que el cine
      * no tiene salas y, por tanto, no puede tener ventas.
      */
-    private Set<Long> cinemaRoomIds(Long cinemaId, List<RoomDTO> cinemaRooms) {
+    private Set<String> cinemaRoomIds(String cinemaId, List<RoomDTO> cinemaRooms) {
         if (cinemaId == null || cinemaRooms == null) {
             return null;
         }
@@ -231,7 +231,7 @@ public class AnalyticsService {
                 .collect(Collectors.toSet());
     }
 
-    private boolean belongsToCinema(Long roomId, Long cinemaId, Set<Long> cinemaRoomIds) {
+    private boolean belongsToCinema(String roomId, String cinemaId, Set<String> cinemaRoomIds) {
         if (cinemaId == null || cinemaRoomIds == null) {
             return true;
         }
@@ -274,7 +274,7 @@ public class AnalyticsService {
      * Informe de taquilla. Los tickets e ingresos vienen del Componente 2;
      * el título se resuelve con el catálogo del Componente 1.
      */
-    public BoxOfficeReportDTO generateBoxOfficeReport(Long distributorId, Long movieId,
+    public BoxOfficeReportDTO generateBoxOfficeReport(Long distributorId, String movieId,
                                                       LocalDate startDate, LocalDate endDate) {
         if (startDate != null && endDate != null && startDate.isAfter(endDate)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
@@ -294,7 +294,7 @@ public class AnalyticsService {
         }
     }
 
-    private BoxOfficeReportDTO buildReportFromReservations(Long distributorId, Long movieId,
+    private BoxOfficeReportDTO buildReportFromReservations(Long distributorId, String movieId,
                                                            LocalDate start, LocalDate end,
                                                            BoxOfficeDataDTO data) {
         List<BoxOfficeDataDTO.MovieBoxOfficeDTO> rows =
@@ -337,7 +337,7 @@ public class AnalyticsService {
     }
 
     /** Respaldo: cálculo a partir de los eventos de RabbitMQ persistidos en C4. */
-    private BoxOfficeReportDTO buildReportFromEvents(Long distributorId, Long movieId,
+    private BoxOfficeReportDTO buildReportFromEvents(Long distributorId, String movieId,
                                                      LocalDate start, LocalDate end) {
         List<Object[]> rows = analyticsEventRepository.findBoxOfficeAggregate(
                 start.atStartOfDay(),
@@ -380,7 +380,7 @@ public class AnalyticsService {
                 .build();
     }
 
-    private String resolveMovieTitle(Long movieId) {
+    private String resolveMovieTitle(String movieId) {
         if (movieId == null) {
             return "Resumen General Box Office";
         }
@@ -429,7 +429,7 @@ public class AnalyticsService {
             allMovies = Collections.emptyList();
         }
 
-        Set<Long> watchedMovieIds = history.stream()
+        Set<String> watchedMovieIds = history.stream()
                 .map(PurchaseHistoryItemDTO::getMovieId)
                 .filter(Objects::nonNull)
                 .collect(Collectors.toSet());

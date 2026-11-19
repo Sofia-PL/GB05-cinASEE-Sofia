@@ -52,14 +52,14 @@ ignora los campos que no conoce.
   "eventId": "3f2c7a1e-9b1d-4c7a-8f2e-1a2b3c4d5e6f",
   "reservationId": 8901,
   "userId": 5590,
-  "movieId": 101,
+  "movieId": "550e8400-e29b-41d4-a716-446655440001",
   "amount": 15.30,
   "currency": "EUR",
   "purchaseDate": "2026-10-08T12:03:00Z",
   "occurredAt": "2026-10-08T12:03:00Z",
-  "showId": 1024,
-  "sessionId": 1024,
-  "roomId": 1,
+  "showId": "01ARZ3NDEKTSV4RRFFQ69G5FAV",
+  "sessionId": "01ARZ3NDEKTSV4RRFFQ69G5FAV",
+  "roomId": "550e8400-e29b-41d4-a716-446655440002",
   "ticketsCount": 2,
   "totalAmount": 15.30,
   "showStartTime": "2026-10-16T18:30:00Z",
@@ -86,7 +86,7 @@ ignora los campos que no conoce.
 | `timestamp` | | ✔ | Inicio de la sesión en **hora local del cine** (Europe/Madrid, sin zona). El Comp. 4 lo usa para el día de la semana y la franja horaria |
 
 Campos que el Comp. 4 tiene pero Reservas no envía, porque no son datos suyos:
-`cinemaId` (Analítica pone 1 por defecto), y `movieTitle` y `genre`, que
+`cinemaId` (Analítica usa `"1"` por defecto), y `movieTitle` y `genre`, que
 Analítica obtiene de Cartelera a partir de `movieId`. Los campos `distributor` y
 `distributorId` quedan a `null`: el catálogo ya no guarda la distribuidora
 (`Movie.distributor` se eliminó).
@@ -104,8 +104,8 @@ Se publica cuando una reserva pagada se anula y se devuelve (`DELETE /reservatio
   "eventId": "…",
   "reservationId": 8901,
   "userId": 5590,
-  "movieId": 101,
-  "showId": 1024,
+  "movieId": "550e8400-e29b-41d4-a716-446655440001",
+  "showId": "01ARZ3NDEKTSV4RRFFQ69G5FAV",
   "amount": 15.30,
   "currency": "EUR",
   "ticketsCount": 2,

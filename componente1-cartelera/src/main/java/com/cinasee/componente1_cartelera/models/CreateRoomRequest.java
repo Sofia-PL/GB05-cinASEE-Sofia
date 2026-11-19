@@ -15,7 +15,7 @@ import lombok.NoArgsConstructor;
 public class CreateRoomRequest {
 
     @NotNull(message = "El ID del cine es obligatorio")
-    private Long cinemaId;
+    private String cinemaId;
 
     @NotBlank(message = "El nombre de la sala es obligatorio")
     private String name;

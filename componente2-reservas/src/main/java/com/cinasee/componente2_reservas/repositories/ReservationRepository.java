@@ -53,7 +53,7 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
               and r.expiresAt <= :now
               and (r.paymentStartedAt is null or r.paymentStartedAt <= :graceLimit)
             """)
-    List<Reservation> findExpiredByShowForUpdate(@Param("showId") Long showId,
+    List<Reservation> findExpiredByShowForUpdate(@Param("showId") String showId,
                                                  @Param("status") ReservationStatus status,
                                                  @Param("now") Instant now,
                                                  @Param("graceLimit") Instant graceLimit);

@@ -27,9 +27,9 @@ public interface CarteleraClient {
 
     /** Reservas -> Cartelera -> GET /sessions/{sessionId}: estado del pase, sala y precio. */
     @GetMapping("/sessions/{sessionId}")
-    CatalogSession getSession(@PathVariable("sessionId") Long sessionId);
+    CatalogSession getSession(@PathVariable("sessionId") String sessionId);
 
     /** Reservas -> Cartelera -> GET /rooms/{roomId}: dimensiones de la sala para validar butacas. */
     @GetMapping("/rooms/{roomId}")
-    CatalogRoom getRoom(@PathVariable("roomId") Long roomId);
+    CatalogRoom getRoom(@PathVariable("roomId") String roomId);
 }

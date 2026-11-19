@@ -24,7 +24,7 @@ public interface CarteleraClient {
     );
 
     @GetMapping("/movies/{movieId}")
-    MovieDTO getMovieById(@PathVariable("movieId") Long movieId);
+    MovieDTO getMovieById(@PathVariable("movieId") String movieId);
 
     @GetMapping("/rooms")
     List<RoomDTO> getAllRooms();
@@ -34,18 +34,18 @@ public interface CarteleraClient {
      * Componente 1, que devuelve lista vacía si el cine no tiene salas.
      */
     @GetMapping("/rooms")
-    List<RoomDTO> getRoomsByCinema(@RequestParam("cinemaId") Long cinemaId);
+    List<RoomDTO> getRoomsByCinema(@RequestParam("cinemaId") String cinemaId);
 
     @GetMapping("/rooms/{roomId}")
-    RoomDTO getRoomById(@PathVariable("roomId") Long roomId);
+    RoomDTO getRoomById(@PathVariable("roomId") String roomId);
 
     @GetMapping("/sessions")
     List<SessionDTO> getSessions(
             @RequestParam(value = "date", required = false) String date,
-            @RequestParam(value = "movieId", required = false) Long movieId
+            @RequestParam(value = "movieId", required = false) String movieId
     );
 
     @GetMapping("/sessions/{sessionId}")
-    SessionDTO getSessionById(@PathVariable("sessionId") Long sessionId);
+    SessionDTO getSessionById(@PathVariable("sessionId") String sessionId);
 }
 

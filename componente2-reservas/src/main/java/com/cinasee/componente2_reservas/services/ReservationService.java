@@ -139,7 +139,7 @@ public class ReservationService {
      * haya borrado, para no mostrar como ocupada una butaca que en realidad está libre.
      */
     @Transactional(readOnly = true)
-    public SeatMapResponse getSeatMap(Long showId) {
+    public SeatMapResponse getSeatMap(String showId) {
         Instant now = clock.instant();
         List<SeatMapResponse.OccupiedSeat> occupied = reservedSeatRepository.findByShowIdWithReservation(showId).stream()
                 .filter(seat -> isActive(seat, now))

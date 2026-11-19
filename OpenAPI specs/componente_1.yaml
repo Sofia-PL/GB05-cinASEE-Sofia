@@ -122,9 +122,8 @@ paths:
           required: true
           description: Identificador único del cine.
           schema:
-            type: integer
-            format: int64
-          example: 1
+            type: string
+          example: "1"
       responses:
         '200':
           description: Cine encontrado.
@@ -145,8 +144,7 @@ paths:
           in: path
           required: true
           schema:
-            type: integer
-            format: int64
+            type: string
       requestBody:
         required: true
         content:
@@ -169,8 +167,7 @@ paths:
           in: path
           required: true
           schema:
-            type: integer
-            format: int64
+            type: string
       responses:
         '204':
           description: Cine eliminado correctamente.
@@ -190,9 +187,8 @@ paths:
           required: true
           description: Identificador único del cine.
           schema:
-            type: integer
-            format: int64
-          example: 1
+            type: string
+          example: "1"
       responses:
         '200':
           description: Lista de salas del cine obtenida con éxito.
@@ -292,9 +288,8 @@ paths:
           required: true
           description: Identificador único de la película.
           schema:
-            type: integer
-            format: int64
-          example: 101
+            type: string
+          example: "101"
       responses:
         '200':
           description: Película encontrada.
@@ -316,8 +311,7 @@ paths:
           in: path
           required: true
           schema:
-            type: integer
-            format: int64
+            type: string
       requestBody:
         required: true
         content:
@@ -339,8 +333,7 @@ paths:
           in: path
           required: true
           schema:
-            type: integer
-            format: int64
+            type: string
       responses:
         '204':
           description: Película eliminada correctamente.
@@ -366,9 +359,8 @@ paths:
           required: false
           description: Filtrar salas por ID de cine.
           schema:
-            type: integer
-            format: int64
-          example: 1
+            type: string
+          example: "1"
       responses:
         '200':
           description: Lista de salas obtenida con éxito.
@@ -395,7 +387,7 @@ paths:
             schema:
               $ref: '#/components/schemas/CreateRoomRequest'
             example:
-              cinemaId: 1
+              cinemaId: "550e8400-e29b-41d4-a716-446655440000"
               name: "Sala 1 - Principal"
               roomType: "ESTANDAR_2D"
               rowsCount: 10
@@ -428,9 +420,8 @@ paths:
           required: true
           description: Identificador único de la sala.
           schema:
-            type: integer
-            format: int64
-          example: 1
+            type: string
+          example: "1"
       responses:
         '200':
           description: Sala encontrada.
@@ -470,9 +461,8 @@ paths:
           required: false
           description: Filtrar sesiones por ID de película.
           schema:
-            type: integer
-            format: int64
-          example: 101
+            type: string
+          example: "101"
       responses:
         '200':
           description: Lista de sesiones programadas.
@@ -504,8 +494,8 @@ paths:
             schema:
               $ref: '#/components/schemas/CreateSessionRequest'
             example:
-              movieId: 101
-              roomId: 1
+              movieId: "550e8400-e29b-41d4-a716-446655440001"
+              roomId: "550e8400-e29b-41d4-a716-446655440002"
               startTime: "2026-10-15T18:30:00Z"
               ticketPrice: 8.50
       responses:
@@ -541,9 +531,8 @@ paths:
           required: true
           description: Identificador único de la sesión.
           schema:
-            type: integer
-            format: int64
-          example: 5001
+            type: string
+          example: "5001"
       responses:
         '200':
           description: Detalles de la sesión recuperados.
@@ -566,8 +555,7 @@ paths:
           in: path
           required: true
           schema:
-            type: integer
-            format: int64
+            type: string
       requestBody:
         required: true
         content:
@@ -576,8 +564,7 @@ paths:
               type: object
               properties:
                 roomId:
-                  type: integer
-                  format: int64
+                  type: string
                 startTime:
                   type: string
                   format: date-time
@@ -610,10 +597,9 @@ components:
         - city
       properties:
         id:
-          type: integer
-          format: int64
+          type: string
           description: Identificador único del cine.
-          example: 1
+          example: "1"
         name:
           type: string
           description: Nombre comercial del cine.
@@ -669,10 +655,9 @@ components:
         - ageRating
       properties:
         id:
-          type: integer
-          format: int64
+          type: string
           description: Identificador único de la película.
-          example: 101
+          example: "101"
         title:
           type: string
           description: Título de la película.
@@ -763,15 +748,13 @@ components:
         - columnsCount
       properties:
         id:
-          type: integer
-          format: int64
+          type: string
           description: Identificador único de la sala.
-          example: 1
+          example: "1"
         cinemaId:
-          type: integer
-          format: int64
+          type: string
           description: Identificador del cine al que pertenece la sala.
-          example: 1
+          example: "550e8400-e29b-41d4-a716-446655440000"
         name:
           type: string
           description: Nombre o código de la sala.
@@ -816,10 +799,9 @@ components:
         - columnsCount
       properties:
         cinemaId:
-          type: integer
-          format: int64
+          type: string
           description: Identificador del cine al que se asocia la nueva sala.
-          example: 1
+          example: "550e8400-e29b-41d4-a716-446655440000"
         name:
           type: string
           description: Nombre identificativo o código alfanumérico de la sala.
@@ -866,20 +848,17 @@ components:
         - ticketPrice
       properties:
         id:
-          type: integer
-          format: int64
+          type: string
           description: Identificador único de la sesión.
-          example: 5001
+          example: "5001"
         movieId:
-          type: integer
-          format: int64
+          type: string
           description: Identificador de la película proyectada (Orgullo y Prejuicio).
-          example: 101
+          example: "550e8400-e29b-41d4-a716-446655440001"
         roomId:
-          type: integer
-          format: int64
+          type: string
           description: Identificador de la sala donde se proyecta.
-          example: 1
+          example: "1"
         startTime:
           type: string
           format: date-time
@@ -911,15 +890,13 @@ components:
         - ticketPrice
       properties:
         movieId:
-          type: integer
-          format: int64
+          type: string
           description: ID de la película que se va a proyectar.
-          example: 101
+          example: "550e8400-e29b-41d4-a716-446655440001"
         roomId:
-          type: integer
-          format: int64
+          type: string
           description: ID de la sala asignada.
-          example: 1
+          example: "550e8400-e29b-41d4-a716-446655440002"
         startTime:
           type: string
           format: date-time

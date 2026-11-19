@@ -49,7 +49,7 @@ public class RoleRequest {
      * opcional para ADMIN, que es global.
      */
     @Column
-    private Long cinemaId;
+    private String cinemaId;
 
     @Column(length = 500)
     private String motivation;

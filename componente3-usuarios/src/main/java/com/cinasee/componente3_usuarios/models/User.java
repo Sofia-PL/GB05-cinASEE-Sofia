@@ -67,7 +67,7 @@ public class User {
      * Es nulo para los clientes registrados.
      */
     @Column
-    private Long cinemaId;
+    private String cinemaId;
 
     /**
      * Marca al taquillero "original" de un cine: además de vender entradas,

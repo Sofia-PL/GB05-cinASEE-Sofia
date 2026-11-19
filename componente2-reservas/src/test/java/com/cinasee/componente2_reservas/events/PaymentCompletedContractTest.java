@@ -36,7 +36,7 @@ class PaymentCompletedContractTest {
     /** Copia del record del Componente 3 (componente3_usuarios.events.PaymentCompletedEvent). */
     @JsonIgnoreProperties(ignoreUnknown = true)
     record UsuariosPaymentCompletedEvent(
-            String eventId, Long reservationId, Long userId, Long movieId, BigDecimal amount,
+            String eventId, Long reservationId, Long userId, String movieId, BigDecimal amount,
             String currency, OffsetDateTime purchaseDate, OffsetDateTime occurredAt) {
     }
 
@@ -46,10 +46,10 @@ class PaymentCompletedContractTest {
     static class AnaliticaPaymentCompletedEvent {
         private Long reservationId;
         private Long userId;
-        private Long cinemaId;
-        private Long roomId;
-        private Long sessionId;
-        private Long movieId;
+        private String cinemaId;
+        private String roomId;
+        private String sessionId;
+        private String movieId;
         private String movieTitle;
         private String genre;
         private String distributor;
@@ -61,9 +61,9 @@ class PaymentCompletedContractTest {
 
     /** Evento tal como lo construye OutboxService: sesión el viernes 16/10/2026 a las 18:30 UTC. */
     private static final PaymentCompletedEvent EVENT = new PaymentCompletedEvent(
-            "evt-1", 8901L, 5590L, 101L, new BigDecimal("15.30"), "EUR",
+            "evt-1", 8901L, 5590L, "movie-101", new BigDecimal("15.30"), "EUR",
             Instant.parse("2026-10-08T12:03:00Z"), Instant.parse("2026-10-08T12:03:01Z"),
-            1024L, 1024L, 1L, 2, new BigDecimal("15.30"),
+            "01ARZ3NDEKTSV4RRFFQ69G5FAV", "01ARZ3NDEKTSV4RRFFQ69G5FAV", "room-1", 2, new BigDecimal("15.30"),
             Instant.parse("2026-10-16T18:30:00Z"),
             LocalDateTime.ofInstant(Instant.parse("2026-10-16T18:30:00Z"), ZoneId.of("Europe/Madrid")));
 
@@ -85,7 +85,7 @@ class PaymentCompletedContractTest {
 
         assertThat(received.reservationId()).isEqualTo(8901L);
         assertThat(received.userId()).isEqualTo(5590L);
-        assertThat(received.movieId()).isEqualTo(101L);
+        assertThat(received.movieId()).isEqualTo("movie-101");
         assertThat(received.amount()).isEqualByComparingTo("15.30");
         assertThat(received.purchaseDate().toInstant()).isEqualTo(Instant.parse("2026-10-08T12:03:00Z"));
     }
@@ -95,9 +95,9 @@ class PaymentCompletedContractTest {
         var received = (AnaliticaPaymentCompletedEvent) deliverTo(AnaliticaPaymentCompletedEvent.class);
 
         assertThat(received.getReservationId()).isEqualTo(8901L);
-        assertThat(received.getSessionId()).isEqualTo(1024L);
-        assertThat(received.getRoomId()).isEqualTo(1L);
-        assertThat(received.getMovieId()).isEqualTo(101L);
+        assertThat(received.getSessionId()).isEqualTo("01ARZ3NDEKTSV4RRFFQ69G5FAV");
+        assertThat(received.getRoomId()).isEqualTo("room-1");
+        assertThat(received.getMovieId()).isEqualTo("movie-101");
         assertThat(received.getTicketsCount()).isEqualTo(2);
         assertThat(received.getTotalAmount()).isEqualTo(15.30);
         // Hora local de la sesión en Madrid (UTC+2 en octubre): viernes a las 20:30
@@ -108,8 +108,8 @@ class PaymentCompletedContractTest {
     @Test
     void compraDeInvitado_userIdNuloEnAmbos() {
         PaymentCompletedEvent guest = new PaymentCompletedEvent(
-                "evt-2", 1L, null, 101L, BigDecimal.TEN, "EUR", TestData.NOW, TestData.NOW,
-                1024L, 1024L, 1L, 1, BigDecimal.TEN, TestData.NOW, LocalDateTime.parse("2026-10-08T14:00:00"));
+                "evt-2",                 1L, null, "movie-101", BigDecimal.TEN, "EUR", TestData.NOW, TestData.NOW,
+                "01ARZ3NDEKTSV4RRFFQ69G5FAV", "01ARZ3NDEKTSV4RRFFQ69G5FAV", "room-1", 1, BigDecimal.TEN, TestData.NOW, LocalDateTime.parse("2026-10-08T14:00:00"));
         String json = JsonMapper.builder().build().writeValueAsString(guest);
 
         assertThat(json).contains("\"userId\":null");

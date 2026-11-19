@@ -57,7 +57,7 @@ class RoleRequestControllerTest {
                         .content("""
                                 {
                                   "requestedRole": "STAFF_TAQUILLA",
-                                  "cinemaId": 1,
+                                  "cinemaId": "cinema-1",
                                   "motivation": "Trabajo en taquilla"
                                 }
                                 """))
@@ -84,7 +84,7 @@ class RoleRequestControllerTest {
                                 .jwt(token -> token.subject("guest:abc").claim("role", "VISITANTE"))
                                 .authorities(new SimpleGrantedAuthority("ROLE_VISITANTE")))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"requestedRole\":\"STAFF_TAQUILLA\",\"cinemaId\":1}"))
+                        .content("{\"requestedRole\":\"STAFF_TAQUILLA\",\"cinemaId\":\"cinema-1\"}"))
                 .andExpect(status().isForbidden());
 
         verify(roleRequestService, never()).createRoleRequest(any(), any());
@@ -92,12 +92,12 @@ class RoleRequestControllerTest {
 
     @Test
     void cinemaManagerCanListRequestsOfOwnCinema() throws Exception {
-        when(roleRequestService.listRoleRequests(7L, "PENDING", 1L))
+        when(roleRequestService.listRoleRequests(7L, "PENDING", "cinema-1"))
                 .thenReturn(List.of(pendingRequest()));
 
         mockMvc.perform(get("/role-requests")
                         .param("status", "PENDING")
-                        .param("cinemaId", "1")
+                        .param("cinemaId", "cinema-1")
                         .with(userJwt(7L, "STAFF_TAQUILLA")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].id").value(10));
@@ -156,7 +156,7 @@ class RoleRequestControllerTest {
                 RoleRequest.StatusEnum.PENDING,
                 OffsetDateTime.parse("2026-11-09T10:00:00Z")
         );
-        dto.setCinemaId(1L);
+        dto.setCinemaId("cinema-1");
         dto.setMotivation("Trabajo en taquilla");
         return dto;
     }

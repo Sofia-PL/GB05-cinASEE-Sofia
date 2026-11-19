@@ -39,8 +39,8 @@ public interface ReservasClient {
 
     @GetMapping("/reservations/stats")
     List<ShowStatsDTO> getShowStats(
-            @RequestParam(value = "showId", required = false) Long showId,
-            @RequestParam(value = "roomId", required = false) Long roomId,
+            @RequestParam(value = "showId", required = false) String showId,
+            @RequestParam(value = "roomId", required = false) String roomId,
             @RequestParam(value = "from", required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam(value = "to", required = false)
@@ -53,6 +53,6 @@ public interface ReservasClient {
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
             @RequestParam("endDate")
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
-            @RequestParam(value = "movieId", required = false) Long movieId
+            @RequestParam(value = "movieId", required = false) String movieId
     );
 }

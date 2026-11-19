@@ -113,7 +113,7 @@ public class ReservationController {
 
     /** getSeatMap: butacas ocupadas de una sesión (público, sin token). */
     @GetMapping("/shows/{showId}/seats")
-    public SeatMapResponse getSeatMap(@PathVariable Long showId) {
+    public SeatMapResponse getSeatMap(@PathVariable String showId) {
         return reservationService.getSeatMap(showId);
     }
 }

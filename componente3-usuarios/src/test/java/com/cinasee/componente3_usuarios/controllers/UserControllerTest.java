@@ -171,7 +171,7 @@ class UserControllerTest {
     private static PurchaseHistoryItem historyItem() {
         return new PurchaseHistoryItem(
                 8901L,
-                1024L,
+                "movie-1024",
                 OffsetDateTime.parse("2026-09-20T18:30:00Z"),
                 18.5f
         );

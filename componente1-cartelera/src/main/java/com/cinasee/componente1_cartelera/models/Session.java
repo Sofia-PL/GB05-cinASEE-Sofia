@@ -1,5 +1,6 @@
 package com.cinasee.componente1_cartelera.models;
 
+import com.github.f4b6a3.ulid.UlidCreator;
 import jakarta.validation.constraints.Min;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -17,9 +18,10 @@ import java.time.LocalDateTime;
 @Document(collection = "sessions")
 public class Session {
     @Id
-    private Long id;
-    private Long movieId;
-    private Long roomId;
+    @Builder.Default
+    private String id = UlidCreator.getMonotonicUlid().toString();
+    private String movieId;
+    private String roomId;
     private LocalDateTime startTime;
     private LocalDateTime endTime;
     private String status; // PROGRAMADA, A_LA_VENTA, EN_CURSO, FINALIZADA, CANCELADA

@@ -54,7 +54,7 @@ class RoleRequestServiceImplTest {
         RoleRequestCreateRequest request = new RoleRequestCreateRequest(
                 RoleRequestCreateRequest.RequestedRoleEnum.STAFF_TAQUILLA
         );
-        request.setCinemaId(1L);
+        request.setCinemaId("cinema-1");
         request.setMotivation("  Trabajo en taquilla  ");
 
         com.cinasee.componente3_usuarios.dto.RoleRequest result =
@@ -63,7 +63,7 @@ class RoleRequestServiceImplTest {
         assertEquals(10L, result.getId());
         assertEquals(3L, result.getUserId());
         assertEquals(com.cinasee.componente3_usuarios.dto.RoleRequest.StatusEnum.PENDING, result.getStatus());
-        assertEquals(1L, result.getCinemaId());
+        assertEquals("cinema-1", result.getCinemaId());
         assertEquals("Trabajo en taquilla", result.getMotivation());
     }
 
@@ -112,7 +112,7 @@ class RoleRequestServiceImplTest {
         RoleRequestCreateRequest request = new RoleRequestCreateRequest(
                 RoleRequestCreateRequest.RequestedRoleEnum.STAFF_TAQUILLA
         );
-        request.setCinemaId(1L);
+        request.setCinemaId("cinema-1");
 
         ResponseStatusException exception = assertThrows(
                 ResponseStatusException.class,
@@ -126,7 +126,7 @@ class RoleRequestServiceImplTest {
     void adminListsAllRequests() {
         when(userRepository.findById(1L)).thenReturn(Optional.of(user(1L, Role.ADMIN, null, false)));
         when(roleRequestRepository.findAllByOrderByCreatedAtDesc())
-                .thenReturn(List.of(roleRequest(10L, 3L, Role.STAFF_TAQUILLA, 1L, RoleRequestStatus.PENDING)));
+                .thenReturn(List.of(roleRequest(10L, 3L, Role.STAFF_TAQUILLA, "cinema-1", RoleRequestStatus.PENDING)));
 
         List<com.cinasee.componente3_usuarios.dto.RoleRequest> result =
                 roleRequestService.listRoleRequests(1L, null, null);
@@ -138,30 +138,30 @@ class RoleRequestServiceImplTest {
     @Test
     void cinemaManagerOnlyListsStaffRequestsOfOwnCinema() {
         when(userRepository.findById(7L)).thenReturn(
-                Optional.of(user(7L, Role.STAFF_TAQUILLA, 1L, true))
+                Optional.of(user(7L, Role.STAFF_TAQUILLA, "cinema-1", true))
         );
         when(roleRequestRepository.findByCinemaIdAndRequestedRoleAndStatusOrderByCreatedAtDesc(
-                1L,
+                "cinema-1",
                 Role.STAFF_TAQUILLA,
                 RoleRequestStatus.PENDING
-        )).thenReturn(List.of(roleRequest(10L, 3L, Role.STAFF_TAQUILLA, 1L, RoleRequestStatus.PENDING)));
+        )).thenReturn(List.of(roleRequest(10L, 3L, Role.STAFF_TAQUILLA, "cinema-1", RoleRequestStatus.PENDING)));
 
         List<com.cinasee.componente3_usuarios.dto.RoleRequest> result =
-                roleRequestService.listRoleRequests(7L, "PENDING", 1L);
+                roleRequestService.listRoleRequests(7L, "PENDING", "cinema-1");
 
         assertEquals(1, result.size());
-        assertEquals(1L, result.get(0).getCinemaId());
+        assertEquals("cinema-1", result.get(0).getCinemaId());
     }
 
     @Test
     void cinemaManagerCannotListAnotherCinema() {
         when(userRepository.findById(7L)).thenReturn(
-                Optional.of(user(7L, Role.STAFF_TAQUILLA, 1L, true))
+                Optional.of(user(7L, Role.STAFF_TAQUILLA, "cinema-1", true))
         );
 
         ResponseStatusException exception = assertThrows(
                 ResponseStatusException.class,
-                () -> roleRequestService.listRoleRequests(7L, "PENDING", 2L)
+                () -> roleRequestService.listRoleRequests(7L, "PENDING", "cinema-2")
         );
 
         assertEquals(HttpStatus.FORBIDDEN, exception.getStatusCode());
@@ -171,7 +171,7 @@ class RoleRequestServiceImplTest {
     void adminCanApproveAndUpdatesRequesterRoleAndCinema() {
         User reviewer = user(1L, Role.ADMIN, null, false);
         User requester = user(3L, Role.CLIENTE_REGISTRADO, null, false);
-        RoleRequest pending = roleRequest(10L, 3L, Role.STAFF_TAQUILLA, 1L, RoleRequestStatus.PENDING);
+        RoleRequest pending = roleRequest(10L, 3L, Role.STAFF_TAQUILLA, "cinema-1", RoleRequestStatus.PENDING);
 
         when(userRepository.findById(1L)).thenReturn(Optional.of(reviewer));
         when(roleRequestRepository.findById(10L)).thenReturn(Optional.of(pending));
@@ -190,14 +190,14 @@ class RoleRequestServiceImplTest {
         assertEquals(1L, result.getReviewedBy());
         assertEquals("Aprobado", result.getReviewComment());
         assertEquals(Role.STAFF_TAQUILLA, requester.getRole());
-        assertEquals(1L, requester.getCinemaId());
+        assertEquals("cinema-1", requester.getCinemaId());
         verify(userRepository).save(requester);
     }
 
     @Test
     void rejectionDoesNotChangeRequesterRole() {
         User reviewer = user(1L, Role.ADMIN, null, false);
-        RoleRequest pending = roleRequest(10L, 3L, Role.STAFF_TAQUILLA, 1L, RoleRequestStatus.PENDING);
+        RoleRequest pending = roleRequest(10L, 3L, Role.STAFF_TAQUILLA, "cinema-1", RoleRequestStatus.PENDING);
 
         when(userRepository.findById(1L)).thenReturn(Optional.of(reviewer));
         when(roleRequestRepository.findById(10L)).thenReturn(Optional.of(pending));
@@ -216,8 +216,8 @@ class RoleRequestServiceImplTest {
 
     @Test
     void cinemaManagerCannotReviewRequestFromAnotherCinema() {
-        User reviewer = user(7L, Role.STAFF_TAQUILLA, 1L, true);
-        RoleRequest pending = roleRequest(10L, 3L, Role.STAFF_TAQUILLA, 2L, RoleRequestStatus.PENDING);
+        User reviewer = user(7L, Role.STAFF_TAQUILLA, "cinema-1", true);
+        RoleRequest pending = roleRequest(10L, 3L, Role.STAFF_TAQUILLA, "cinema-2", RoleRequestStatus.PENDING);
 
         when(userRepository.findById(7L)).thenReturn(Optional.of(reviewer));
         when(roleRequestRepository.findById(10L)).thenReturn(Optional.of(pending));
@@ -236,8 +236,8 @@ class RoleRequestServiceImplTest {
 
     @Test
     void cinemaManagerCannotReviewAdminRequest() {
-        User reviewer = user(7L, Role.STAFF_TAQUILLA, 1L, true);
-        RoleRequest pending = roleRequest(10L, 3L, Role.ADMIN, 1L, RoleRequestStatus.PENDING);
+        User reviewer = user(7L, Role.STAFF_TAQUILLA, "cinema-1", true);
+        RoleRequest pending = roleRequest(10L, 3L, Role.ADMIN, "cinema-1", RoleRequestStatus.PENDING);
 
         when(userRepository.findById(7L)).thenReturn(Optional.of(reviewer));
         when(roleRequestRepository.findById(10L)).thenReturn(Optional.of(pending));
@@ -257,7 +257,7 @@ class RoleRequestServiceImplTest {
     @Test
     void userCannotReviewOwnRequest() {
         User reviewer = user(3L, Role.ADMIN, null, false);
-        RoleRequest pending = roleRequest(10L, 3L, Role.STAFF_TAQUILLA, 1L, RoleRequestStatus.PENDING);
+        RoleRequest pending = roleRequest(10L, 3L, Role.STAFF_TAQUILLA, "cinema-1", RoleRequestStatus.PENDING);
 
         when(userRepository.findById(3L)).thenReturn(Optional.of(reviewer));
         when(roleRequestRepository.findById(10L)).thenReturn(Optional.of(pending));
@@ -277,7 +277,7 @@ class RoleRequestServiceImplTest {
     @Test
     void cannotReviewRequestThatIsNoLongerPending() {
         User reviewer = user(1L, Role.ADMIN, null, false);
-        RoleRequest reviewed = roleRequest(10L, 3L, Role.STAFF_TAQUILLA, 1L, RoleRequestStatus.APPROVED);
+        RoleRequest reviewed = roleRequest(10L, 3L, Role.STAFF_TAQUILLA, "cinema-1", RoleRequestStatus.APPROVED);
 
         when(userRepository.findById(1L)).thenReturn(Optional.of(reviewer));
         when(roleRequestRepository.findById(10L)).thenReturn(Optional.of(reviewed));
@@ -294,7 +294,7 @@ class RoleRequestServiceImplTest {
         assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
     }
 
-    private User user(Long id, Role role, Long cinemaId, boolean cinemaManager) {
+    private User user(Long id, Role role, String cinemaId, boolean cinemaManager) {
         return User.builder()
                 .id(id)
                 .email("user" + id + "@cinasee.com")
@@ -312,7 +312,7 @@ class RoleRequestServiceImplTest {
             Long id,
             Long userId,
             Role requestedRole,
-            Long cinemaId,
+            String cinemaId,
             RoleRequestStatus status
     ) {
         return RoleRequest.builder()

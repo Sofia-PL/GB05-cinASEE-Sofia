@@ -27,6 +27,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -105,7 +106,7 @@ class ReservationServiceTest {
         assertThatThrownBy(() -> service.createReservation(
                 TestData.request(TestData.USER_ID, null, TestData.seats(1, 1)), TestData.OTHER_CLIENT))
                 .isInstanceOf(ForbiddenOperationException.class);
-        verify(remoteDataService, never()).getSession(anyLong());
+        verify(remoteDataService, never()).getSession(anyString());
     }
 
     @Test

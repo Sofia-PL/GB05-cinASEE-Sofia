@@ -14,7 +14,7 @@ import org.springframework.data.mongodb.core.mapping.Document;
 @Document(collection = "cinemas")
 public class Cinema {
     @Id
-    private Long id;
+    private String id;
     private String name;
     private String address;
     private String city;

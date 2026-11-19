@@ -8,11 +8,11 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 @Repository
-public interface SessionRepository extends MongoRepository<Session, Long> {
-    List<Session> findByMovieId(Long movieId);
-    List<Session> findByRoomId(Long roomId);
-    List<Session> findByRoomIdAndStatusNot(Long roomId, String status);
+public interface SessionRepository extends MongoRepository<Session, String> {
+    List<Session> findByMovieId(String movieId);
+    List<Session> findByRoomId(String roomId);
+    List<Session> findByRoomIdAndStatusNot(String roomId, String status);
     List<Session> findByStartTimeBetween(LocalDateTime start, LocalDateTime end);
-    List<Session> findByMovieIdAndStartTimeBetween(Long movieId, LocalDateTime start, LocalDateTime end);
+    List<Session> findByMovieIdAndStartTimeBetween(String movieId, LocalDateTime start, LocalDateTime end);
 }
 

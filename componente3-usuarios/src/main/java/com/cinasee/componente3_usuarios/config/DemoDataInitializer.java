@@ -33,7 +33,7 @@ public class DemoDataInitializer implements CommandLineRunner {
     private final String staffPassword;
     private final String userEmail;
     private final String userPassword;
-    private final Long staffCinemaId;
+    private final String staffCinemaId;
 
     public DemoDataInitializer(
             UserRepository userRepository,
@@ -44,7 +44,7 @@ public class DemoDataInitializer implements CommandLineRunner {
             @Value("${app.seed.staff-password:Staff123!}") String staffPassword,
             @Value("${app.seed.user-email:usuario@cinasee.com}") String userEmail,
             @Value("${app.seed.user-password:Usuario123!}") String userPassword,
-            @Value("${app.seed.staff-cinema-id:1}") Long staffCinemaId
+            @Value("${app.seed.staff-cinema-id:1}") String staffCinemaId
     ) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
@@ -69,7 +69,7 @@ public class DemoDataInitializer implements CommandLineRunner {
             String password,
             String fullName,
             Role role,
-            Long cinemaId,
+            String cinemaId,
             boolean cinemaManager
     ) {
         String normalizedEmail = email.trim().toLowerCase(Locale.ROOT);

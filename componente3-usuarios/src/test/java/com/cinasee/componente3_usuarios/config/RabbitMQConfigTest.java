@@ -61,7 +61,7 @@ class RabbitMQConfigTest {
                   "eventId": "evt-8901",
                   "reservationId": 8901,
                   "userId": 42,
-                  "movieId": 1024,
+                  "movieId": "movie-1024",
                   "amount": 18.50,
                   "currency": "EUR",
                   "purchaseDate": "2026-09-20T18:30:00Z",
@@ -85,7 +85,7 @@ class RabbitMQConfigTest {
         assertEquals("evt-8901", event.eventId());
         assertEquals(8901L, event.reservationId());
         assertEquals(42L, event.userId());
-        assertEquals(1024L, event.movieId());
+        assertEquals("movie-1024", event.movieId());
         assertEquals(new BigDecimal("18.50"), event.amount());
         assertEquals(OffsetDateTime.parse("2026-09-20T18:30:00Z"), event.purchaseDate());
     }

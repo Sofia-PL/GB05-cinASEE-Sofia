@@ -64,7 +64,7 @@ public class ReservedSeat {
 
     /** Se duplica el showId de la reserva para poder declarar el UNIQUE en esta tabla. */
     @Column(name = "show_id", nullable = false)
-    private Long showId;
+    private String showId;
 
     @Column(name = "seat_row", nullable = false)
     private Integer seatRow;

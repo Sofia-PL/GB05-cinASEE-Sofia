@@ -133,7 +133,7 @@ $auth   = @{ Authorization = "Bearer $token" }
 
 # Reservar dos butacas
 $r = Invoke-RestMethod -Method Post "$base/reservations" -Headers $auth -ContentType "application/json" `
-     -Body '{"showId":1024,"seats":[{"row":8,"column":12},{"row":8,"column":13}]}'
+     -Body '{"showId":"1024","seats":[{"row":8,"column":12},{"row":8,"column":13}]}'
 $r   # status PENDING_PAYMENT, totalAmount 15.30 (8,50 € − 10 % x 2), expiresAt = ahora + 10 min
 
 # Pagar

@@ -20,8 +20,8 @@ public class AnalyticsController {
 
     @GetMapping("/metrics/occupancy")
     public ResponseEntity<OccupancyMetricDTO> getOccupancyRates(
-            @RequestParam("cinemaId") Long cinemaId,
-            @RequestParam(value = "screenId", required = false) Long screenId,
+            @RequestParam("cinemaId") String cinemaId,
+            @RequestParam(value = "screenId", required = false) String screenId,
             @RequestParam(value = "dayOfWeek", required = false) Integer dayOfWeek,
             @RequestParam(value = "startTime", required = false) String startTime,
             @RequestParam(value = "endTime", required = false) String endTime) {
@@ -34,7 +34,7 @@ public class AnalyticsController {
     @GetMapping("/reports/box-office")
     public ResponseEntity<BoxOfficeReportDTO> getBoxOfficeReport(
             @RequestParam(value = "distributorId", required = false) Long distributorId,
-            @RequestParam(value = "movieId", required = false) Long movieId,
+            @RequestParam(value = "movieId", required = false) String movieId,
             @RequestParam(value = "startDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
             @RequestParam(value = "endDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
 

@@ -24,14 +24,13 @@ public class CinemaService {
         return cinemaRepository.findAll();
     }
 
-    public Optional<Cinema> getCinemaById(Long cinemaId) {
+    public Optional<Cinema> getCinemaById(String cinemaId) {
         return cinemaRepository.findById(cinemaId);
     }
 
     public Cinema createCinema(CreateCinemaRequest request) {
-        Long nextId = System.currentTimeMillis();
         Cinema cinema = Cinema.builder()
-                .id(nextId)
+                .id(java.util.UUID.randomUUID().toString())
                 .name(request.getName())
                 .address(request.getAddress())
                 .city(request.getCity())
@@ -40,7 +39,7 @@ public class CinemaService {
         return cinemaRepository.save(cinema);
     }
 
-    public Cinema updateCinema(Long cinemaId, CreateCinemaRequest request) {
+    public Cinema updateCinema(String cinemaId, CreateCinemaRequest request) {
         Cinema cinema = cinemaRepository.findById(cinemaId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Cine no encontrado con ID: " + cinemaId));
 
@@ -52,7 +51,7 @@ public class CinemaService {
         return cinemaRepository.save(cinema);
     }
 
-    public void deleteCinema(Long cinemaId) {
+    public void deleteCinema(String cinemaId) {
         if (!cinemaRepository.existsById(cinemaId)) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Cine no encontrado con ID: " + cinemaId);
         }

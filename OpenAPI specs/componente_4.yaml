@@ -75,18 +75,16 @@ paths:
           required: true
           description: Identificador del cine para el cual se calculan las métricas.
           schema:
-            type: integer
-            format: int64
-          example: 10
+            type: string
+          example: "10"
 
         - name: screenId
           in: query
           required: false
           description: Identificador de la sala específica (opcional).
           schema:
-            type: integer
-            format: int64
-          example: 3
+            type: string
+          example: "550e8400-e29b-41d4-a716-446655440002"
 
         - name: dayOfWeek
           in: query
@@ -122,8 +120,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/OccupancyReportResponse'
               example:
-                cinemaId: 10
-                screenId: 3
+                cinemaId: "550e8400-e29b-41d4-a716-446655440000"
+                screenId: "550e8400-e29b-41d4-a716-446655440002"
                 dayOfWeek: 5
                 timeRange: "18:00-22:00"
                 totalCapacity: 200
@@ -185,9 +183,8 @@ paths:
           required: false
           description: Identificador de la película.
           schema:
-            type: integer
-            format: int64
-          example: 1004
+            type: string
+          example: "1004"
 
         - name: startDate
           in: query
@@ -216,7 +213,7 @@ paths:
                 $ref: '#/components/schemas/BoxOfficeReport'
               example:
                 distributorId: 52
-                movieId: 1004
+                movieId: "550e8400-e29b-41d4-a716-446655440001"
                 movieTitle: "El Gran Cineaste"
                 period:
                   startDate: "2026-10-01"
@@ -288,11 +285,11 @@ paths:
               example:
                 userId: 184
                 recommendations:
-                  - movieId: 201
+                  - movieId: "550e8400-e29b-41d4-a716-446655440001"
                     title: "Sci-Fi Adventure"
                     matchScore: 0.95
                     reason: "Basado en tu preferencia por Ciencia Ficción"
-                  - movieId: 305
+                  - movieId: "550e8400-e29b-41d4-a716-446655440001"
                     title: "Misterio en la Noche"
                     matchScore: 0.88
                     reason: "Similar a películas que has visto recientemente"
@@ -324,15 +321,13 @@ components:
         - occupancyPercentage
       properties:
         cinemaId:
-          type: integer
-          format: int64
+          type: string
           description: Identificador único del cine consultado.
-          example: 10
+          example: "10"
         screenId:
-          type: integer
-          format: int64
+          type: string
           description: Identificador de la sala (si se filtró por una concreta).
-          example: 3
+          example: "550e8400-e29b-41d4-a716-446655440002"
         dayOfWeek:
           type: integer
           description: Día de la semana (1-7).
@@ -378,10 +373,9 @@ components:
           description: Identificador de la distribuidora.
           example: 52
         movieId:
-          type: integer
-          format: int64
+          type: string
           description: Identificador de la película.
-          example: 1004
+          example: "1004"
         movieTitle:
           type: string
           description: Título comercial de la película.
@@ -428,10 +422,9 @@ components:
         - matchScore
       properties:
         movieId:
-          type: integer
-          format: int64
+          type: string
           description: Identificador de la película recomendada.
-          example: 201
+          example: "201"
         title:
           type: string
           description: Título de la película recomendada.

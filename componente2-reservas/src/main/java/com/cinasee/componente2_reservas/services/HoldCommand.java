@@ -10,9 +10,9 @@ import java.util.List;
  * Se construye en {@link ReservationService} y lo consume {@link SeatLockService}.
  */
 public record HoldCommand(
-        Long showId,
-        Long movieId,
-        Long roomId,
+        String showId,
+        String movieId,
+        String roomId,
         Instant showStartTime,
         Long userId,
         String guestEmail,

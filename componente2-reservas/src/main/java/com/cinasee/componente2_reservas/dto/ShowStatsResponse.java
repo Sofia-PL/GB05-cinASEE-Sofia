@@ -11,9 +11,9 @@ import java.time.Instant;
  * Con showStartTime puede filtrar por día de la semana y franja horaria.
  */
 public record ShowStatsResponse(
-        Long showId,
-        Long movieId,
-        Long roomId,
+        String showId,
+        String movieId,
+        String roomId,
         Instant showStartTime,
         long ticketsSold,
         long reservations,

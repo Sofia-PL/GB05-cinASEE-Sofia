@@ -49,7 +49,7 @@ public class PaymentEventListener {
             AnalyticsEvent analyticsEvent = AnalyticsEvent.builder()
                     .reservationId(event.getReservationId())
                     .userId(event.getUserId())
-                    .cinemaId(event.getCinemaId() != null ? event.getCinemaId() : 1L)
+                    .cinemaId(event.getCinemaId() != null ? event.getCinemaId() : "1")
                     .roomId(event.getRoomId())
                     .sessionId(event.getSessionId())
                     .movieId(event.getMovieId())

@@ -33,7 +33,7 @@ public class MovieService {
 
         if (Boolean.TRUE.equals(inShowcase)) {
             LocalDateTime now = LocalDateTime.now();
-            Set<Long> activeMovieIds = sessionRepository.findAll().stream()
+            Set<String> activeMovieIds = sessionRepository.findAll().stream()
                     .filter(session -> !"CANCELADA".equalsIgnoreCase(session.getStatus()))
                     .filter(session -> session.getEndTime() != null && session.getEndTime().isAfter(now))
                     .map(Session::getMovieId)
@@ -47,14 +47,13 @@ public class MovieService {
         return movies;
     }
 
-    public Optional<Movie> getMovieById(Long movieId) {
+    public Optional<Movie> getMovieById(String movieId) {
         return movieRepository.findById(movieId);
     }
 
     public Movie createMovie(CreateMovieRequest request) {
-        Long nextId = System.currentTimeMillis();
         Movie movie = Movie.builder()
-                .id(nextId)
+                .id(java.util.UUID.randomUUID().toString())
                 .title(request.getTitle())
                 .synopsis(request.getSynopsis())
                 .durationMinutes(request.getDurationMinutes())
@@ -66,7 +65,7 @@ public class MovieService {
         return movieRepository.save(movie);
     }
 
-    public Movie updateMovie(Long movieId, CreateMovieRequest request) {
+    public Movie updateMovie(String movieId, CreateMovieRequest request) {
         Movie movie = movieRepository.findById(movieId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Película no encontrada con ID: " + movieId));
 
@@ -81,7 +80,7 @@ public class MovieService {
         return movieRepository.save(movie);
     }
 
-    public void deleteMovie(Long movieId) {
+    public void deleteMovie(String movieId) {
         if (!movieRepository.existsById(movieId)) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Película no encontrada con ID: " + movieId);
         }

@@ -36,7 +36,7 @@ class PricingServiceTest {
 
     @Test
     void diaDelEspectador_aplica20PorCientoEnMiercoles() {
-        CatalogSession wednesday = TestData.session(1L, "A_LA_VENTA", TestData.WEDNESDAY_SHOW, new BigDecimal("8.50"));
+        CatalogSession wednesday = TestData.session("session-1", "A_LA_VENTA", TestData.WEDNESDAY_SHOW, new BigDecimal("8.50"));
 
         PriceQuote quote = pricingService.quote(wednesday, TestData.room(), null, at(TestData.WEDNESDAY_SHOW), 2);
 
@@ -76,7 +76,7 @@ class PricingServiceTest {
 
     @Test
     void descuentosNoAcumulables_seAplicaElMayor() {
-        CatalogSession wednesday = TestData.session(1L, "A_LA_VENTA", TestData.WEDNESDAY_SHOW, new BigDecimal("10.00"));
+        CatalogSession wednesday = TestData.session("session-1", "A_LA_VENTA", TestData.WEDNESDAY_SHOW, new BigDecimal("10.00"));
 
         PriceQuote quote = pricingService.quote(wednesday, TestData.room(), TestData.user(5000),
                 at(TestData.WEDNESDAY_SHOW), 1);
@@ -88,7 +88,7 @@ class PricingServiceTest {
 
     @Test
     void sinPrecioEnLaSesion_usaElPrecioBaseDeLaSala() {
-        CatalogSession noPrice = TestData.session(1L, "A_LA_VENTA", TestData.FRIDAY_SHOW, null);
+        CatalogSession noPrice = TestData.session("session-1", "A_LA_VENTA", TestData.FRIDAY_SHOW, null);
 
         PriceQuote quote = pricingService.quote(noPrice, TestData.room(), null, at(TestData.FRIDAY_SHOW), 1);
 
@@ -97,7 +97,7 @@ class PricingServiceTest {
 
     @Test
     void redondeoHalfUpACentimos() {
-        CatalogSession odd = TestData.session(1L, "A_LA_VENTA", TestData.WEDNESDAY_SHOW, new BigDecimal("8.33"));
+        CatalogSession odd = TestData.session("session-1", "A_LA_VENTA", TestData.WEDNESDAY_SHOW, new BigDecimal("8.33"));
 
         PriceQuote quote = pricingService.quote(odd, TestData.room(), null, at(TestData.WEDNESDAY_SHOW), 3);
 
@@ -108,7 +108,7 @@ class PricingServiceTest {
 
     @Test
     void precioNegativo_esUnDatoIncoherenteDeCartelera() {
-        CatalogSession broken = TestData.session(1L, "A_LA_VENTA", TestData.FRIDAY_SHOW, new BigDecimal("-1"));
+        CatalogSession broken = TestData.session("session-1", "A_LA_VENTA", TestData.FRIDAY_SHOW, new BigDecimal("-1"));
 
         assertThatThrownBy(() -> pricingService.quote(broken, TestData.room(), null, at(TestData.FRIDAY_SHOW), 1))
                 .isInstanceOf(InvalidStateException.class);

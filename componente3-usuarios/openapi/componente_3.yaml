@@ -330,7 +330,7 @@ paths:
               $ref: '#/components/schemas/RoleRequestCreateRequest'
             example:
               requestedRole: "STAFF_TAQUILLA"
-              cinemaId: 1
+              cinemaId: "1"
               motivation: "Trabajo en la taquilla del cine 1"
       responses:
         '201':
@@ -365,8 +365,7 @@ paths:
           required: false
           description: Filtra por cine. Solo lo puede usar un ADMIN global.
           schema:
-            type: integer
-            format: int64
+            type: string
       responses:
         '200':
           description: Listado de solicitudes visibles para el usuario.
@@ -566,12 +565,11 @@ components:
           description: Cine habitual del usuario para consultar cartelera y recomendaciones.
           example: "CineAsee Centro"
         cinemaId:
-          type: integer
-          format: int64
+          type: string
           description: >
             Cine asignado al usuario cuando tiene rol STAFF_TAQUILLA o ADMIN.
             Es nulo para los clientes registrados.
-          example: 1
+          example: "1"
         canReviewRoleRequests:
           type: boolean
           description: >
@@ -595,11 +593,10 @@ components:
             Identificador de la reserva pagada. Pertenece al Componente 2 (Reservas y Pagos).
           example: 8901
         movieId:
-          type: integer
-          format: int64
+          type: string
           description: >
             Identificador de la película visionada. Pertenece al Componente 1 (Cartelera).
-          example: 1024
+          example: "1024"
         purchaseDate:
           type: string
           format: date-time
@@ -629,12 +626,11 @@ components:
             se solicita STAFF_TAQUILLA.
           example: "STAFF_TAQUILLA"
         cinemaId:
-          type: integer
-          format: int64
+          type: string
           description: >
             Cine para el que se solicita el rol. Obligatorio para
             STAFF_TAQUILLA; opcional para ADMIN (que es global).
-          example: 1
+          example: "1"
         motivation:
           type: string
           maxLength: 500
@@ -682,10 +678,9 @@ components:
           description: Rol solicitado.
           example: "STAFF_TAQUILLA"
         cinemaId:
-          type: integer
-          format: int64
+          type: string
           description: Cine asociado a la solicitud.
-          example: 1
+          example: "1"
         motivation:
           type: string
           description: Motivo indicado por el solicitante.

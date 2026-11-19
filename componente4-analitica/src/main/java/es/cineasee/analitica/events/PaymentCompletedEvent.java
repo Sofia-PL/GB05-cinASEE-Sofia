@@ -15,10 +15,10 @@ import java.time.LocalDateTime;
 public class PaymentCompletedEvent implements Serializable {
     private Long reservationId;
     private Long userId;
-    private Long cinemaId;
-    private Long roomId;
-    private Long sessionId;
-    private Long movieId;
+    private String cinemaId;
+    private String roomId;
+    private String sessionId;
+    private String movieId;
     private String movieTitle;
     private String genre;
     private String distributor;

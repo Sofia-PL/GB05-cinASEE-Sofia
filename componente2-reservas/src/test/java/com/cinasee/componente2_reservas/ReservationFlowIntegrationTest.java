@@ -205,7 +205,7 @@ class ReservationFlowIntegrationTest {
         JsonNode payload = jsonMapper.readTree(event.getPayload());
         assertThat(payload.get("reservationId").asLong()).isEqualTo(reservation.id());
         assertThat(payload.get("userId").asLong()).isEqualTo(TestData.USER_ID);
-        assertThat(payload.get("movieId").asLong()).isEqualTo(TestData.MOVIE_ID);
+        assertThat(payload.get("movieId").asString()).isEqualTo(TestData.MOVIE_ID);
         assertThat(payload.get("amount").decimalValue()).isEqualByComparingTo("17.00");
         assertThat(payload.get("currency").asString()).isEqualTo("EUR");
         assertThat(payload.get("purchaseDate").asString()).isEqualTo("2026-10-08T12:03:00Z");

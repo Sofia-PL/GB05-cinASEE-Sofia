@@ -8,7 +8,6 @@ import com.cinasee.componente1_cartelera.repositories.CinemaRepository;
 import com.cinasee.componente1_cartelera.repositories.MovieRepository;
 import com.cinasee.componente1_cartelera.repositories.RoomRepository;
 import com.cinasee.componente1_cartelera.repositories.SessionRepository;
-import com.cinasee.componente1_cartelera.services.SessionIdGenerator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -25,10 +24,11 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.atomic.AtomicLong;
+import java.util.UUID;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -53,13 +53,11 @@ class CarteleraAcceptanceTest {
     private RoomRepository roomRepository;
     @MockitoBean
     private SessionRepository sessionRepository;
-    @MockitoBean
-    private SessionIdGenerator sessionIdGenerator;
 
-    private Map<Long, Cinema> cinemas;
-    private Map<Long, Movie> movies;
-    private Map<Long, Room> rooms;
-    private Map<Long, Session> sessions;
+    private Map<String, Cinema> cinemas;
+    private Map<String, Movie> movies;
+    private Map<String, Room> rooms;
+    private Map<String, Session> sessions;
 
     @BeforeEach
     void setUpRepositories() {
@@ -67,19 +65,17 @@ class CarteleraAcceptanceTest {
         movies = new HashMap<>();
         rooms = new HashMap<>();
         sessions = new HashMap<>();
-        AtomicLong sessionIds = new AtomicLong();
-        when(sessionIdGenerator.nextId()).thenAnswer(invocation -> sessionIds.incrementAndGet());
         when(cinemaRepository.findAll()).thenAnswer(invocation -> new ArrayList<>(cinemas.values()));
-        when(cinemaRepository.findById(anyLong())).thenAnswer(invocation -> Optional.ofNullable(cinemas.get(invocation.getArgument(0))));
-        when(cinemaRepository.existsById(anyLong())).thenAnswer(invocation -> cinemas.containsKey(invocation.getArgument(0)));
+        when(cinemaRepository.findById(org.mockito.ArgumentMatchers.anyString())).thenAnswer(invocation -> Optional.ofNullable(cinemas.get(invocation.getArgument(0))));
+        when(cinemaRepository.existsById(org.mockito.ArgumentMatchers.anyString())).thenAnswer(invocation -> cinemas.containsKey(invocation.getArgument(0)));
         when(cinemaRepository.save(any(Cinema.class))).thenAnswer(invocation -> {
             Cinema cinema = invocation.getArgument(0);
             cinemas.put(cinema.getId(), cinema);
             return cinema;
         });
         when(movieRepository.findAll()).thenAnswer(invocation -> new ArrayList<>(movies.values()));
-        when(movieRepository.findById(anyLong())).thenAnswer(invocation -> Optional.ofNullable(movies.get(invocation.getArgument(0))));
-        when(movieRepository.existsById(anyLong())).thenAnswer(invocation -> movies.containsKey(invocation.getArgument(0)));
+        when(movieRepository.findById(org.mockito.ArgumentMatchers.anyString())).thenAnswer(invocation -> Optional.ofNullable(movies.get(invocation.getArgument(0))));
+        when(movieRepository.existsById(org.mockito.ArgumentMatchers.anyString())).thenAnswer(invocation -> movies.containsKey(invocation.getArgument(0)));
         when(movieRepository.save(any(Movie.class))).thenAnswer(invocation -> {
             Movie movie = invocation.getArgument(0);
             movies.put(movie.getId(), movie);
@@ -88,11 +84,11 @@ class CarteleraAcceptanceTest {
         org.mockito.Mockito.doAnswer(invocation -> {
             movies.remove(invocation.getArgument(0));
             return null;
-        }).when(movieRepository).deleteById(anyLong());
+        }).when(movieRepository).deleteById(org.mockito.ArgumentMatchers.anyString());
 
         when(roomRepository.findAll()).thenAnswer(invocation -> new ArrayList<>(rooms.values()));
-        when(roomRepository.findById(anyLong())).thenAnswer(invocation -> Optional.ofNullable(rooms.get(invocation.getArgument(0))));
-        when(roomRepository.existsById(anyLong())).thenAnswer(invocation -> rooms.containsKey(invocation.getArgument(0)));
+        when(roomRepository.findById(org.mockito.ArgumentMatchers.anyString())).thenAnswer(invocation -> Optional.ofNullable(rooms.get(invocation.getArgument(0))));
+        when(roomRepository.existsById(org.mockito.ArgumentMatchers.anyString())).thenAnswer(invocation -> rooms.containsKey(invocation.getArgument(0)));
         when(roomRepository.save(any(Room.class))).thenAnswer(invocation -> {
             Room room = invocation.getArgument(0);
             rooms.put(room.getId(), room);
@@ -100,8 +96,8 @@ class CarteleraAcceptanceTest {
         });
 
         when(sessionRepository.findAll()).thenAnswer(invocation -> new ArrayList<>(sessions.values()));
-        when(sessionRepository.findById(anyLong())).thenAnswer(invocation -> Optional.ofNullable(sessions.get(invocation.getArgument(0))));
-        when(sessionRepository.findByRoomIdAndStatusNot(anyLong(), any())).thenAnswer(invocation -> sessions.values().stream()
+        when(sessionRepository.findById(org.mockito.ArgumentMatchers.anyString())).thenAnswer(invocation -> Optional.ofNullable(sessions.get(invocation.getArgument(0))));
+        when(sessionRepository.findByRoomIdAndStatusNot(org.mockito.ArgumentMatchers.anyString(), any())).thenAnswer(invocation -> sessions.values().stream()
                 .filter(session -> invocation.getArgument(0).equals(session.getRoomId()))
                 .filter(session -> !invocation.getArgument(1).equals(session.getStatus()))
                 .toList());
@@ -128,7 +124,8 @@ class CarteleraAcceptanceTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.name").value("Cine de aceptación"))
                 .andReturn();
-        long cinemaId = jsonMapper.readTree(cinemaResult.getResponse().getContentAsString()).get("id").asLong();
+        String cinemaId = jsonMapper.readTree(cinemaResult.getResponse().getContentAsString()).get("id").asText();
+        assertEquals(UUID.fromString(cinemaId).toString(), cinemaId);
 
         MvcResult movieResult = mockMvc.perform(post("/api/v1/movies").contextPath("/api/v1")
                         .with(jwt().jwt(token -> token.subject("acceptance-test")))
@@ -144,14 +141,15 @@ class CarteleraAcceptanceTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.title").value("Película de prueba"))
                 .andReturn();
-        long movieId = jsonMapper.readTree(movieResult.getResponse().getContentAsString()).get("id").asLong();
+        String movieId = jsonMapper.readTree(movieResult.getResponse().getContentAsString()).get("id").asText();
+        assertEquals(UUID.fromString(movieId).toString(), movieId);
 
         MvcResult roomResult = mockMvc.perform(post("/api/v1/rooms").contextPath("/api/v1")
                         .with(jwt().jwt(token -> token.subject("acceptance-test")))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
-                                  "cinemaId": %d,
+                                  "cinemaId": "%s",
                                   "name": "Sala de aceptación",
                                   "roomType": "ESTANDAR_2D",
                                   "rowsCount": 8,
@@ -162,7 +160,8 @@ class CarteleraAcceptanceTest {
                 .andExpect(jsonPath("$.cinemaId").value(cinemaId))
                 .andExpect(jsonPath("$.capacity").value(80))
                 .andReturn();
-        long roomId = jsonMapper.readTree(roomResult.getResponse().getContentAsString()).get("id").asLong();
+        String roomId = jsonMapper.readTree(roomResult.getResponse().getContentAsString()).get("id").asText();
+        assertEquals(UUID.fromString(roomId).toString(), roomId);
 
         LocalDateTime start = LocalDateTime.now().plusDays(2).withSecond(0).withNano(0);
         MvcResult sessionResult = mockMvc.perform(post("/api/v1/sessions").contextPath("/api/v1")
@@ -173,7 +172,8 @@ class CarteleraAcceptanceTest {
                 .andExpect(jsonPath("$.status").value("PROGRAMADA"))
                 .andExpect(jsonPath("$.endTime").value(start.plusMinutes(120).toString() + ":00"))
                 .andReturn();
-        long sessionId = jsonMapper.readTree(sessionResult.getResponse().getContentAsString()).get("id").asLong();
+        String sessionId = jsonMapper.readTree(sessionResult.getResponse().getContentAsString()).get("id").asText();
+        assertTrue(sessionId.matches("[0-7][0-9A-HJKMNP-TV-Z]{25}"));
 
         mockMvc.perform(post("/api/v1/sessions").contextPath("/api/v1")
                         .with(jwt().jwt(token -> token.subject("acceptance-test")))
@@ -191,11 +191,11 @@ class CarteleraAcceptanceTest {
                 .andExpect(jsonPath("$[0].id").value(movieId));
     }
 
-    private static String sessionRequest(long movieId, long roomId, LocalDateTime start) {
+    private static String sessionRequest(String movieId, String roomId, LocalDateTime start) {
         return """
                 {
-                  "movieId": %d,
-                  "roomId": %d,
+                  "movieId": "%s",
+                  "roomId": "%s",
                   "startTime": "%s",
                   "ticketPrice": 8.5
                 }

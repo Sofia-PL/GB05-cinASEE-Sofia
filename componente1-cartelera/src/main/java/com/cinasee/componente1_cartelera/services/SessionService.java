@@ -29,9 +29,8 @@ public class SessionService {
     private final SessionRepository sessionRepository;
     private final MovieRepository movieRepository;
     private final RoomRepository roomRepository;
-    private final SessionIdGenerator sessionIdGenerator;
 
-    public List<Session> getAllSessions(LocalDate date, Long movieId) {
+    public List<Session> getAllSessions(LocalDate date, String movieId) {
         List<Session> sessions = sessionRepository.findAll();
 
         if (date != null) {
@@ -53,7 +52,7 @@ public class SessionService {
         return sessions;
     }
 
-    public Optional<Session> getSessionById(Long sessionId) {
+    public Optional<Session> getSessionById(String sessionId) {
         return sessionRepository.findById(sessionId);
     }
 
@@ -76,7 +75,6 @@ public class SessionService {
         }
 
         Session session = Session.builder()
-                .id(sessionIdGenerator.nextId())
                 .movieId(movie.getId())
                 .roomId(room.getId())
                 .startTime(startTime)
@@ -88,11 +86,11 @@ public class SessionService {
         return sessionRepository.save(session);
     }
 
-    public Session updateSessionStatus(Long sessionId, UpdateSessionRequest request) {
+    public Session updateSessionStatus(String sessionId, UpdateSessionRequest request) {
         Session session = sessionRepository.findById(sessionId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Sesión no encontrada con ID: " + sessionId));
 
-        Long targetRoomId = request.getRoomId() != null ? request.getRoomId() : session.getRoomId();
+        String targetRoomId = request.getRoomId() != null ? request.getRoomId() : session.getRoomId();
         LocalDateTime targetStartTime = request.getStartTime() != null ? request.getStartTime() : session.getStartTime();
 
         // Si cambia la sala o la hora de inicio, recalcular fin y validar solapamiento
@@ -125,7 +123,7 @@ public class SessionService {
         return sessionRepository.save(session);
     }
 
-    private boolean checkRoomOverlap(Long roomId, LocalDateTime start, LocalDateTime end, Long excludeSessionId) {
+    private boolean checkRoomOverlap(String roomId, LocalDateTime start, LocalDateTime end, String excludeSessionId) {
         List<Session> roomSessions = sessionRepository.findByRoomIdAndStatusNot(roomId, "CANCELADA");
 
         return roomSessions.stream()

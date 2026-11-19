@@ -15,8 +15,8 @@ import org.springframework.data.mongodb.core.mapping.Document;
 @Document(collection = "rooms")
 public class Room {
     @Id
-    private Long id;
-    private Long cinemaId;
+    private String id;
+    private String cinemaId;
     private String name;
     private String roomType; // ESTANDAR_2D, DIGITAL_3D, IMAX, VIP, 4DX
     private Integer capacity;

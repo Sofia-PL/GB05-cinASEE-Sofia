@@ -13,7 +13,7 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 public class PurchaseHistoryItemDTO {
     private Long reservationId;
-    private Long movieId;
+    private String movieId;
     private LocalDateTime purchaseDate;
     private Double amount;
 }

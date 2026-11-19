@@ -20,9 +20,9 @@ import java.math.BigDecimal;
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record CatalogSession(
-        Long id,
-        Long movieId,
-        Long roomId,
+        String id,
+        String movieId,
+        String roomId,
         String startTime,
         String endTime,
         String status,

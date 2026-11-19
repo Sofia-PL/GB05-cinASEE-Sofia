@@ -12,9 +12,9 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 public class SessionDTO {
-    private Long id;
-    private Long movieId;
-    private Long roomId;
+    private String id;
+    private String movieId;
+    private String roomId;
     private LocalDateTime startTime;
     private LocalDateTime endTime;
     private String status;

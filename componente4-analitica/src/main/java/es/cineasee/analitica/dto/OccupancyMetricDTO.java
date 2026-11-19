@@ -10,8 +10,8 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class OccupancyMetricDTO {
-    private Long cinemaId;
-    private Long screenId;
+    private String cinemaId;
+    private String screenId;
     private Integer dayOfWeek;
     private String timeRange;
     private Integer totalCapacity;

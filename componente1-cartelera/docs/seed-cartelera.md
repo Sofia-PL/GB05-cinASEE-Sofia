@@ -11,45 +11,29 @@ películas, salas y sesiones con ids fijos y fechas relativas al día de arranqu
 
 ## 1. Decisiones que hay que tomar antes de escribir código
 
-### 1.1 IDs fijos, no marcas de tiempo
+### 1.1 IDs de texto
 
-Hoy `MovieService`, `RoomService` y `CinemaService` hacen:
+La API crea IDs UUID para cines, películas y salas, y ULID para sesiones. Un
+seed determinista puede usar IDs de texto fijos; los valores numéricos de las
+tablas siguientes deben persistirse como cadenas (por ejemplo, `"1001"`).
+Esto conserva relaciones estables para una demo y no cambia cómo se generan
+IDs de altas normales.
 
-```java
-Long nextId = System.currentTimeMillis();
-```
+La base de C1 debe estar vacía al iniciar esta versión. Si contiene registros
+del esquema anterior, elimina las colecciones antes de cargar el seed; no se
+conservan ni migran esos datos.
 
-Eso provoca colisiones si se crean dos documentos en el mismo milisegundo y hace
-que los ids cambien en cada entorno. Las **sesiones** ya usan
-`SessionIdGenerator` (contador atómico en `id_counters`), pero el resto no.
-
-**Para el seed se usan ids fijos** y se reservan rangos:
+Para el seed se reservan rangos de texto:
 
 | Entidad | Rango | Ejemplo |
 |---|---|---|
-| Cines | `1` – `999` | `1` |
-| Películas | `1001` – `1999` | `1001` |
-| Salas | `2001` – `2999` | `2001` |
-| Sesiones | `3001` – `3999` | `3001` |
+| Cines | `"1"` – `"999"` | `"1"` |
+| Películas | `"1001"` – `"1999"` | `"1001"` |
+| Salas | `"2001"` – `"2999"` | `"2001"` |
+| Sesiones | `"3001"` – `"3999"` | `"3001"` |
 
-El seed escribe directamente con los repositorios, así que no pasa por
-`System.currentTimeMillis()` ni por `SessionIdGenerator`.
-
-> **Importante con las sesiones:** `SessionIdGenerator` arranca su contador en
-> `1`. Si el seed inserta sesiones `3001+` y luego se crea una por API, el
-> generador irá por `1, 2, 3…` hasta chocar con el rango sembrado. Tras el seed,
-> inicializa el contador:
->
-> ```javascript
-> db.id_counters.updateOne(
->   { _id: "sessions" },
->   { $set: { value: 3000 } },
->   { upsert: true }
-> );
-> ```
-
-Para el alta normal (API) lo recomendable es extender ese mismo contador a
-cines, películas y salas, en lugar de usar el timestamp.
+El seed escribe directamente con los repositorios y puede asignar sus IDs de
+texto fijos. El servicio API genera UUID/ULID para las altas nuevas.
 
 ### 1.2 Seed idempotente y desactivable
 
@@ -150,7 +134,7 @@ Campos adicionales:
 | 1 | CinAsee Madrid | Gran Vía 1 | Madrid | 910000001 |
 | 2 | CinAsee Barcelona | Passeig de Gràcia 2 | Barcelona | 930000002 |
 
-> El cine `1` debe existir porque el seed de C3 asigna `cinemaId = 1` al staff
+> El cine `"1"` debe existir porque el seed de C3 asigna `cinemaId = "1"` al staff
 > (`staff@cinasee.com`). Si se cambia ese id, hay que cambiar también
 > `APP_SEED_STAFF_CINEMA_ID` en C3.
 
@@ -256,11 +240,11 @@ public class CatalogDataInitializer implements CommandLineRunner {
     }
 
     private void seedCinemas() {
-        cinema(1L, "CinAsee Madrid", "Gran Vía 1", "Madrid", "910000001");
-        cinema(2L, "CinAsee Barcelona", "Passeig de Gràcia 2", "Barcelona", "930000002");
+        cinema("1", "CinAsee Madrid", "Gran Vía 1", "Madrid", "910000001");
+        cinema("2", "CinAsee Barcelona", "Passeig de Gràcia 2", "Barcelona", "930000002");
     }
 
-    private void cinema(Long id, String name, String address, String city, String phone) {
+    private void cinema(String id, String name, String address, String city, String phone) {
         if (cinemaRepository.existsById(id)) {
             return;
         }
@@ -274,17 +258,17 @@ public class CatalogDataInitializer implements CommandLineRunner {
     }
 
     private void seedMovies() {
-        movie(1001L, "Dune: Parte Tres", "CIENCIA_FICCION", 165, "+12");
-        movie(1002L, "Oppenheimer", "DRAMA", 180, "+16");
-        movie(1003L, "Barbie", "COMEDIA", 114, "+7");
-        movie(1004L, "Spider-Man: Across the Spider-Verse", "ANIMACION", 140, "+7");
-        movie(1005L, "El Padrino", "DRAMA", 175, "+18");
-        movie(1006L, "Interstellar", "CIENCIA_FICCION", 169, "+12");
-        movie(1007L, "Coco", "ANIMACION", 105, "+0");
-        movie(1008L, "John Wick 4", "ACCION", 169, "+18");
+        movie("1001", "Dune: Parte Tres", "CIENCIA_FICCION", 165, "+12");
+        movie("1002", "Oppenheimer", "DRAMA", 180, "+16");
+        movie("1003", "Barbie", "COMEDIA", 114, "+7");
+        movie("1004", "Spider-Man: Across the Spider-Verse", "ANIMACION", 140, "+7");
+        movie("1005", "El Padrino", "DRAMA", 175, "+18");
+        movie("1006", "Interstellar", "CIENCIA_FICCION", 169, "+12");
+        movie("1007", "Coco", "ANIMACION", 105, "+0");
+        movie("1008", "John Wick 4", "ACCION", 169, "+18");
     }
 
-    private void movie(Long id, String title, String genre, int duration, String rating) {
+    private void movie(String id, String title, String genre, int duration, String rating) {
         if (movieRepository.existsById(id)) {
             return;
         }
@@ -299,14 +283,14 @@ public class CatalogDataInitializer implements CommandLineRunner {
     }
 
     private void seedRooms() {
-        room(2001L, 1L, "Sala 1 - Estándar", "ESTANDAR_2D", 10, 12, 8.50);
-        room(2002L, 1L, "Sala 2 - 3D", "DIGITAL_3D", 8, 10, 10.50);
-        room(2003L, 1L, "Sala 3 - VIP", "VIP", 6, 8, 14.00);
-        room(2004L, 2L, "Sala 1 - Estándar", "ESTANDAR_2D", 10, 12, 8.50);
-        room(2005L, 2L, "Sala 2 - 3D", "DIGITAL_3D", 8, 10, 10.50);
+        room("2001", "1", "Sala 1 - Estándar", "ESTANDAR_2D", 10, 12, 8.50);
+        room("2002", "1", "Sala 2 - 3D", "DIGITAL_3D", 8, 10, 10.50);
+        room("2003", "1", "Sala 3 - VIP", "VIP", 6, 8, 14.00);
+        room("2004", "2", "Sala 1 - Estándar", "ESTANDAR_2D", 10, 12, 8.50);
+        room("2005", "2", "Sala 2 - 3D", "DIGITAL_3D", 8, 10, 10.50);
     }
 
-    private void room(Long id, Long cinemaId, String name, String type,
+    private void room(String id, String cinemaId, String name, String type,
                       int rows, int columns, double price) {
         if (roomRepository.existsById(id)) {
             return;
@@ -328,31 +312,31 @@ public class CatalogDataInitializer implements CommandLineRunner {
         LocalDate today = LocalDate.now();
 
         // Día 1
-        session(3001L, 1001L, 2001L, today.plusDays(1).atTime(16, 0), 8.50);
-        session(3002L, 1008L, 2001L, today.plusDays(1).atTime(19, 30), 8.50);
-        session(3003L, 1004L, 2002L, today.plusDays(1).atTime(17, 0), 10.50);
-        session(3004L, 1006L, 2002L, today.plusDays(1).atTime(20, 0), 10.50);
-        session(3005L, 1003L, 2003L, today.plusDays(1).atTime(17, 30), 14.00);
-        session(3006L, 1002L, 2003L, today.plusDays(1).atTime(20, 0), 14.00);
+        session("3001", "1001", "2001", today.plusDays(1).atTime(16, 0), 8.50);
+        session("3002", "1008", "2001", today.plusDays(1).atTime(19, 30), 8.50);
+        session("3003", "1004", "2002", today.plusDays(1).atTime(17, 0), 10.50);
+        session("3004", "1006", "2002", today.plusDays(1).atTime(20, 0), 10.50);
+        session("3005", "1003", "2003", today.plusDays(1).atTime(17, 30), 14.00);
+        session("3006", "1002", "2003", today.plusDays(1).atTime(20, 0), 14.00);
 
         // Día 2
-        session(3007L, 1005L, 2001L, today.plusDays(2).atTime(16, 0), 8.50);
-        session(3008L, 1007L, 2001L, today.plusDays(2).atTime(19, 45), 8.50);
-        session(3009L, 1008L, 2002L, today.plusDays(2).atTime(17, 0), 10.50);
-        session(3010L, 1001L, 2002L, today.plusDays(2).atTime(20, 30), 10.50);
-        session(3011L, 1002L, 2003L, today.plusDays(2).atTime(17, 30), 14.00);
-        session(3012L, 1003L, 2003L, today.plusDays(2).atTime(21, 0), 14.00);
+        session("3007", "1005", "2001", today.plusDays(2).atTime(16, 0), 8.50);
+        session("3008", "1007", "2001", today.plusDays(2).atTime(19, 45), 8.50);
+        session("3009", "1008", "2002", today.plusDays(2).atTime(17, 0), 10.50);
+        session("3010", "1001", "2002", today.plusDays(2).atTime(20, 30), 10.50);
+        session("3011", "1002", "2003", today.plusDays(2).atTime(17, 30), 14.00);
+        session("3012", "1003", "2003", today.plusDays(2).atTime(21, 0), 14.00);
 
         // Día 3
-        session(3013L, 1006L, 2001L, today.plusDays(3).atTime(16, 0), 8.50);
-        session(3014L, 1004L, 2001L, today.plusDays(3).atTime(19, 30), 8.50);
-        session(3015L, 1007L, 2002L, today.plusDays(3).atTime(17, 0), 10.50);
-        session(3016L, 1005L, 2002L, today.plusDays(3).atTime(19, 15), 10.50);
-        session(3017L, 1001L, 2003L, today.plusDays(3).atTime(17, 30), 14.00);
-        session(3018L, 1008L, 2003L, today.plusDays(3).atTime(21, 0), 14.00);
+        session("3013", "1006", "2001", today.plusDays(3).atTime(16, 0), 8.50);
+        session("3014", "1004", "2001", today.plusDays(3).atTime(19, 30), 8.50);
+        session("3015", "1007", "2002", today.plusDays(3).atTime(17, 0), 10.50);
+        session("3016", "1005", "2002", today.plusDays(3).atTime(19, 15), 10.50);
+        session("3017", "1001", "2003", today.plusDays(3).atTime(17, 30), 14.00);
+        session("3018", "1008", "2003", today.plusDays(3).atTime(21, 0), 14.00);
     }
 
-    private void session(Long id, Long movieId, Long roomId, LocalDateTime start, double price) {
+    private void session(String id, String movieId, String roomId, LocalDateTime start, double price) {
         if (sessionRepository.existsById(id)) {
             return;
         }
@@ -386,17 +370,16 @@ app:
 ## 7. Checklist de verificación
 
 - [ ] `docker compose up -d --build` arranca sin errores.
-- [ ] `GET /api/v1/cinemas` devuelve 2 cines con ids `1` y `2`.
+- [ ] `GET /api/v1/cinemas` devuelve 2 cines con ids `"1"` y `"2"`.
 - [ ] `GET /api/v1/cinemas/1/rooms` devuelve 3 salas; `/cinemas/2/rooms`, 2.
-- [ ] `GET /api/v1/movies` devuelve 8 películas con ids `1001`–`1008`.
+- [ ] `GET /api/v1/movies` devuelve 8 películas con ids `"1001"`–`"1008"`.
 - [ ] `GET /api/v1/rooms` (con token) devuelve 5 salas con capacidades 120, 80, 48, 120 y 80.
 - [ ] `GET /api/v1/sessions` devuelve 18 sesiones.
 - [ ] `GET /api/v1/movies?inShowcase=true` devuelve las 8 (todas tienen sesión futura).
 - [ ] Todas las sesiones están en `A_LA_VENTA`.
 - [ ] Dos sesiones de la misma sala no se solapan.
-- [ ] `id_counters/_id="sessions"` vale `3000` tras el seed.
 - [ ] Reiniciar el servicio no duplica documentos (idempotencia).
-- [ ] `POST /v1/reservations` con `showId: 3001` funciona (el C2 acepta la sesión).
+- [ ] `POST /v1/reservations` con `showId: "3001"` funciona (el C2 acepta la sesión).
 - [ ] Tras pagar, el evento llega a RabbitMQ y el C4 devuelve ocupación > 0.
 
 ---
@@ -430,7 +413,4 @@ curl -X PATCH http://localhost:8081/api/v1/sessions/3001 \
 docker exec -it mongodb-cartelera mongosh cine_catalog_db --eval \
   'db.cinemas.countDocuments(); db.movies.countDocuments(); db.rooms.countDocuments(); db.sessions.countDocuments()'
 
-# Inicializar el contador de sesiones tras el seed
-docker exec -it mongodb-cartelera mongosh cine_catalog_db --eval \
-  'db.id_counters.updateOne({_id:"sessions"}, {$set:{value:3000}}, {upsert:true})'
 ```

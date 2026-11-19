@@ -11,7 +11,7 @@ import java.math.BigDecimal;
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record CatalogRoom(
-        Long id,
+        String id,
         String name,
         String roomType,
         Integer capacity,

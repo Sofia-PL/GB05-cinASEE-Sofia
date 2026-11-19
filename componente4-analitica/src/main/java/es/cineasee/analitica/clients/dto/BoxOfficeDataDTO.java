@@ -24,7 +24,7 @@ public record BoxOfficeDataDTO(
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record MovieBoxOfficeDTO(
-            Long movieId,
+            String movieId,
             long totalTicketsSold,
             long reservations,
             BigDecimal grossRevenue

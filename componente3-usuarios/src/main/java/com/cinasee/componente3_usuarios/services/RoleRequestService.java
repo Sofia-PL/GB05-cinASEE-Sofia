@@ -17,7 +17,7 @@ public interface RoleRequestService {
     List<com.cinasee.componente3_usuarios.dto.RoleRequest> listRoleRequests(
             Long reviewerId,
             String status,
-            Long cinemaId
+            String cinemaId
     );
 
     com.cinasee.componente3_usuarios.dto.RoleRequest reviewRoleRequest(

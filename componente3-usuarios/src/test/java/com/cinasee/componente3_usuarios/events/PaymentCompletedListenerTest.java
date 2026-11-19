@@ -27,7 +27,7 @@ class PaymentCompletedListenerTest {
                 "evt-8901",
                 8901L,
                 42L,
-                1024L,
+                "movie-1024",
                 new BigDecimal("18.50"),
                 "EUR",
                 OffsetDateTime.parse("2026-09-20T18:30:00Z"),

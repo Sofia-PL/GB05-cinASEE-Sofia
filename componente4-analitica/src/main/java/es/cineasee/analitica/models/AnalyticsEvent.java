@@ -30,13 +30,13 @@ public class AnalyticsEvent {
     private Long userId;
 
     @Column(nullable = false)
-    private Long cinemaId;
+    private String cinemaId;
 
-    private Long roomId;
+    private String roomId;
 
-    private Long sessionId;
+    private String sessionId;
 
-    private Long movieId;
+    private String movieId;
 
     private String movieTitle;
 

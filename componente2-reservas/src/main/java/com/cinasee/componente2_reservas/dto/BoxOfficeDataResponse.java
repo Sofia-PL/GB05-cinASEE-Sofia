@@ -17,6 +17,6 @@ public record BoxOfficeDataResponse(
         String currency,
         List<MovieBoxOffice> movies
 ) {
-    public record MovieBoxOffice(Long movieId, long totalTicketsSold, long reservations, BigDecimal grossRevenue) {
+    public record MovieBoxOffice(String movieId, long totalTicketsSold, long reservations, BigDecimal grossRevenue) {
     }
 }

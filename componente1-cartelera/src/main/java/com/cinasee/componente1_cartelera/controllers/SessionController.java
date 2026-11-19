@@ -25,7 +25,7 @@ public class SessionController {
     @GetMapping
     public ResponseEntity<List<Session>> getSessions(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
-            @RequestParam(required = false) Long movieId) {
+            @RequestParam(required = false) String movieId) {
         List<Session> sessions = sessionService.getAllSessions(date, movieId);
         return ResponseEntity.ok(sessions);
     }
@@ -37,7 +37,7 @@ public class SessionController {
     }
 
     @GetMapping("/{sessionId}")
-    public ResponseEntity<Session> getSessionById(@PathVariable Long sessionId) {
+    public ResponseEntity<Session> getSessionById(@PathVariable String sessionId) {
         return sessionService.getSessionById(sessionId)
                 .map(ResponseEntity::ok)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Sesión no encontrada con ID: " + sessionId));
@@ -45,7 +45,7 @@ public class SessionController {
 
     @PatchMapping("/{sessionId}")
     public ResponseEntity<Session> updateSessionStatus(
-            @PathVariable Long sessionId,
+            @PathVariable String sessionId,
             @RequestBody UpdateSessionRequest request) {
         Session updatedSession = sessionService.updateSessionStatus(sessionId, request);
         return ResponseEntity.ok(updatedSession);

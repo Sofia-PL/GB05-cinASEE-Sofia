@@ -7,7 +7,7 @@ import org.springframework.stereotype.Repository;
 import java.util.List;
 
 @Repository
-public interface RoomRepository extends MongoRepository<Room, Long> {
-    List<Room> findByCinemaId(Long cinemaId);
+public interface RoomRepository extends MongoRepository<Room, String> {
+    List<Room> findByCinemaId(String cinemaId);
 }
 

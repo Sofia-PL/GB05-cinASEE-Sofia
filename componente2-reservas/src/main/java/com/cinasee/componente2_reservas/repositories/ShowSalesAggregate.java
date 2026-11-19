@@ -11,9 +11,9 @@ import java.time.Instant;
  * @param reservations número de reservas confirmadas
  */
 public record ShowSalesAggregate(
-        Long showId,
-        Long movieId,
-        Long roomId,
+        String showId,
+        String movieId,
+        String roomId,
         Instant showStartTime,
         Long ticketsSold,
         BigDecimal revenue,

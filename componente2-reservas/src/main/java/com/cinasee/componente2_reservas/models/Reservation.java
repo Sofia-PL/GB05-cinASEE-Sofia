@@ -61,15 +61,15 @@ public class Reservation {
 
     /** Identificador de la sesión/pase (Componente 1). */
     @Column(name = "show_id", nullable = false)
-    private Long showId;
+    private String showId;
 
     /** Película proyectada en la sesión (snapshot del Componente 1). */
     @Column(name = "movie_id", nullable = false)
-    private Long movieId;
+    private String movieId;
 
     /** Sala de la sesión (snapshot del Componente 1). */
     @Column(name = "room_id", nullable = false)
-    private Long roomId;
+    private String roomId;
 
     /** Hora de inicio de la sesión (snapshot del Componente 1). */
     @Column(name = "show_start_time", nullable = false)

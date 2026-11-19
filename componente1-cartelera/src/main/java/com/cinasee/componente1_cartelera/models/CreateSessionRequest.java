@@ -16,10 +16,10 @@ import java.time.LocalDateTime;
 public class CreateSessionRequest {
 
     @NotNull(message = "El ID de la película es obligatorio")
-    private Long movieId;
+    private String movieId;
 
     @NotNull(message = "El ID de la sala es obligatorio")
-    private Long roomId;
+    private String roomId;
 
     @NotNull(message = "La fecha y hora de inicio es obligatoria")
     private LocalDateTime startTime;

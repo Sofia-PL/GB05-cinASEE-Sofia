@@ -47,14 +47,14 @@ class RemoteDataServiceTest {
 
     @Test
     void respuestaCorrecta_seDevuelveTalCual() {
-        when(carteleraClient.getSession(1L)).thenReturn(TestData.sessionOnSale());
-        assertThat(service.getSession(1L).status()).isEqualTo("A_LA_VENTA");
+        when(carteleraClient.getSession("session-1")).thenReturn(TestData.sessionOnSale());
+        assertThat(service.getSession("session-1").status()).isEqualTo("A_LA_VENTA");
     }
 
     @Test
     void http404_seTraduceA404() {
-        when(carteleraClient.getSession(1L)).thenThrow(httpError(404));
-        assertThatThrownBy(() -> service.getSession(1L)).isInstanceOf(ResourceNotFoundException.class);
+        when(carteleraClient.getSession("session-1")).thenThrow(httpError(404));
+        assertThatThrownBy(() -> service.getSession("session-1")).isInstanceOf(ResourceNotFoundException.class);
     }
 
     @Test
@@ -65,15 +65,15 @@ class RemoteDataServiceTest {
 
     @Test
     void http500_seTraduceA503() {
-        when(carteleraClient.getRoom(1L)).thenThrow(httpError(500));
-        assertThatThrownBy(() -> service.getRoom(1L)).isInstanceOf(ServiceUnavailableException.class);
+        when(carteleraClient.getRoom("room-1")).thenThrow(httpError(500));
+        assertThatThrownBy(() -> service.getRoom("room-1")).isInstanceOf(ServiceUnavailableException.class);
     }
 
     @Test
     void conexionRechazada_seTraduceA503() {
-        when(carteleraClient.getSession(1L)).thenThrow(new RetryableException(-1, "Connection refused",
+        when(carteleraClient.getSession("session-1")).thenThrow(new RetryableException(-1, "Connection refused",
                 Request.HttpMethod.GET, (Long) null, REQUEST));
-        assertThatThrownBy(() -> service.getSession(1L))
+        assertThatThrownBy(() -> service.getSession("session-1"))
                 .isInstanceOf(ServiceUnavailableException.class)
                 .hasMessageContaining("Cartelera");
     }

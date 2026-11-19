@@ -13,7 +13,7 @@ import java.time.LocalDate;
 @AllArgsConstructor
 public class BoxOfficeReportDTO {
     private Long distributorId;
-    private Long movieId;
+    private String movieId;
     private String movieTitle;
     private PeriodDTO period;
     private Long totalTicketsSold;

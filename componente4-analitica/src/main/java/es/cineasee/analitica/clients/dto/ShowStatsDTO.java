@@ -14,9 +14,9 @@ import java.time.Instant;
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record ShowStatsDTO(
-        Long showId,
-        Long movieId,
-        Long roomId,
+        String showId,
+        String movieId,
+        String roomId,
         Instant showStartTime,
         long ticketsSold,
         long reservations,

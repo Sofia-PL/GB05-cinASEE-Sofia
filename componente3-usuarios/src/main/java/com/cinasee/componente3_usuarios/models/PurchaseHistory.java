@@ -48,7 +48,7 @@ public class PurchaseHistory {
     private Long reservationId;
 
     @Column(name = "movie_id", nullable = false)
-    private Long movieId;
+    private String movieId;
 
     @Column(name = "purchase_date", nullable = false)
     private OffsetDateTime purchaseDate;

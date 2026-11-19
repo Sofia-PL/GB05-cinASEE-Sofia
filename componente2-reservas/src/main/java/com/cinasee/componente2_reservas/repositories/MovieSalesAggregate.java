@@ -6,7 +6,7 @@ import java.math.BigDecimal;
  * Proyección JPQL con las ventas agregadas de una película (informe Box Office).
  */
 public record MovieSalesAggregate(
-        Long movieId,
+        String movieId,
         Long ticketsSold,
         BigDecimal grossRevenue,
         Long reservations

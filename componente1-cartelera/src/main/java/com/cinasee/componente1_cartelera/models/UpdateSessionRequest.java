@@ -13,7 +13,7 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 public class UpdateSessionRequest {
 
-    private Long roomId;
+    private String roomId;
 
     private LocalDateTime startTime;
 

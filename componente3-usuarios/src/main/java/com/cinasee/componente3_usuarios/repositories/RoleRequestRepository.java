@@ -19,14 +19,14 @@ public interface RoleRequestRepository extends JpaRepository<RoleRequest, Long> 
 
     List<RoleRequest> findByStatusOrderByCreatedAtDesc(RoleRequestStatus status);
 
-    List<RoleRequest> findByCinemaIdOrderByCreatedAtDesc(Long cinemaId);
+    List<RoleRequest> findByCinemaIdOrderByCreatedAtDesc(String cinemaId);
 
-    List<RoleRequest> findByCinemaIdAndStatusOrderByCreatedAtDesc(Long cinemaId, RoleRequestStatus status);
+    List<RoleRequest> findByCinemaIdAndStatusOrderByCreatedAtDesc(String cinemaId, RoleRequestStatus status);
 
-    List<RoleRequest> findByCinemaIdAndRequestedRoleOrderByCreatedAtDesc(Long cinemaId, Role requestedRole);
+    List<RoleRequest> findByCinemaIdAndRequestedRoleOrderByCreatedAtDesc(String cinemaId, Role requestedRole);
 
     List<RoleRequest> findByCinemaIdAndRequestedRoleAndStatusOrderByCreatedAtDesc(
-            Long cinemaId,
+            String cinemaId,
             Role requestedRole,
             RoleRequestStatus status
     );

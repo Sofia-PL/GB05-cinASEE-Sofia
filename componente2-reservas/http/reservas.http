@@ -25,14 +25,14 @@ POST {{base}}/reservations
 Authorization: Bearer {{clientToken}}
 Content-Type: application/json
 
-{ "showId": 1024, "seats": [ { "row": 8, "column": 12 }, { "row": 8, "column": 13 } ] }
+{ "showId": "1024", "seats": [ { "row": 8, "column": 12 }, { "row": 8, "column": 13 } ] }
 
 ### 3. Otra persona intenta la MISMA butaca → 409 SEATS_UNAVAILABLE
 POST {{base}}/reservations
 Authorization: Bearer {{guestToken}}
 Content-Type: application/json
 
-{ "showId": 1024, "guestEmail": "invitado@email.com", "seats": [ { "row": 8, "column": 12 } ] }
+{ "showId": "1024", "guestEmail": "invitado@email.com", "seats": [ { "row": 8, "column": 12 } ] }
 
 ### 4. Consultar la reserva (estado y expiresAt) → 200
 GET {{base}}/reservations/{{reserva.response.body.id}}
@@ -74,7 +74,7 @@ POST {{base}}/reservations
 Authorization: Bearer {{guestToken}}
 Content-Type: application/json
 
-{ "showId": 1025, "guestEmail": "invitado@email.com", "seats": [ { "row": 1, "column": 1 } ] }
+{ "showId": "1025", "guestEmail": "invitado@email.com", "seats": [ { "row": 1, "column": 1 } ] }
 
 ### 11. El invitado cancela antes de pagar → 200 CANCELLED (butaca liberada)
 DELETE {{base}}/reservations/{{reservaInvitado.response.body.id}}
@@ -92,35 +92,35 @@ POST {{base}}/reservations
 Authorization: Bearer {{clientToken}}
 Content-Type: application/json
 
-{ "showId": 1024, "seats": [ { "row": 11, "column": 1 } ] }
+{ "showId": "1024", "seats": [ { "row": 11, "column": 1 } ] }
 
 ### 14. Sesión no a la venta (PROGRAMADA) → 409 SHOW_NOT_ON_SALE
 POST {{base}}/reservations
 Authorization: Bearer {{clientToken}}
 Content-Type: application/json
 
-{ "showId": 2048, "seats": [ { "row": 1, "column": 1 } ] }
+{ "showId": "2048", "seats": [ { "row": 1, "column": 1 } ] }
 
 ### 15. Sesión inexistente → 404
 POST {{base}}/reservations
 Authorization: Bearer {{clientToken}}
 Content-Type: application/json
 
-{ "showId": 9999, "seats": [ { "row": 1, "column": 1 } ] }
+{ "showId": "9999", "seats": [ { "row": 1, "column": 1 } ] }
 
 ### 16. Cartelera responde 500 → Reservas responde 503
 POST {{base}}/reservations
 Authorization: Bearer {{clientToken}}
 Content-Type: application/json
 
-{ "showId": 5030, "seats": [ { "row": 1, "column": 1 } ] }
+{ "showId": "5030", "seats": [ { "row": 1, "column": 1 } ] }
 
 ### 17. Cliente reservando a nombre de otro usuario → 403
 POST {{base}}/reservations
 Authorization: Bearer {{clientToken}}
 Content-Type: application/json
 
-{ "showId": 1024, "userId": 42, "seats": [ { "row": 2, "column": 2 } ] }
+{ "showId": "1024", "userId": 42, "seats": [ { "row": 2, "column": 2 } ] }
 
 ### 18. Estadísticas para Analítica (staff) → 200; con token de cliente → 403
 GET {{base}}/reservations/stats
@@ -144,7 +144,7 @@ POST {{base}}/reservations
 Authorization: Bearer {{clientToken}}
 Content-Type: application/json
 
-{ "showId": 1024, "seats": [ { "row": 2, "column": 7 } ] }
+{ "showId": "1024", "seats": [ { "row": 2, "column": 7 } ] }
 
 ### 22. Iniciar el pago → 200 con { url, fields, order, paymentDeadline }
 ### Para ir a la web de Redsys usa: .\scripts\pagar-redsys.ps1 -ReservationId <id> -Token <token>

@@ -75,7 +75,7 @@ class ReservationControllerTest {
     private JwtDecoder jwtDecoder;
 
     private static final String VALID_BODY = """
-            {"showId": 1024, "userId": 5590, "seats": [{"row": 8, "column": 12}, {"row": 8, "column": 13}]}
+            {"showId": "01ARZ3NDEKTSV4RRFFQ69G5FAV", "userId": 5590, "seats": [{"row": 8, "column": 12}, {"row": 8, "column": 13}]}
             """;
 
     /** Simula un JWT del Componente 3 con el sub y el rol indicados. */
@@ -85,7 +85,7 @@ class ReservationControllerTest {
     }
 
     private static ReservationResponse sampleReservation() {
-        return new ReservationResponse(8901L, 1024L, 101L, 1L, Instant.parse("2026-10-16T18:30:00Z"), 5590L, null,
+        return new ReservationResponse(8901L, "01ARZ3NDEKTSV4RRFFQ69G5FAV", "movie-101", "room-1", Instant.parse("2026-10-16T18:30:00Z"), 5590L, null,
                 new BigDecimal("9.25"), new BigDecimal("18.50"), "EUR", DiscountType.NONE,
                 ReservationStatus.PENDING_PAYMENT, Instant.parse("2026-10-08T11:54:36Z"),
                 Instant.parse("2026-10-08T12:04:36Z"), null, 2, List.of());
@@ -101,10 +101,10 @@ class ReservationControllerTest {
 
     @Test
     void mapaDeButacas_esPublico() throws Exception {
-        when(reservationService.getSeatMap(1024L)).thenReturn(new SeatMapResponse(1024L,
+        when(reservationService.getSeatMap("01ARZ3NDEKTSV4RRFFQ69G5FAV")).thenReturn(new SeatMapResponse("01ARZ3NDEKTSV4RRFFQ69G5FAV",
                 List.of(new SeatMapResponse.OccupiedSeat(8, 12, SeatStatus.SOLD))));
 
-        mockMvc.perform(get("/reservations/shows/1024/seats"))
+        mockMvc.perform(get("/reservations/shows/01ARZ3NDEKTSV4RRFFQ69G5FAV/seats"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.occupiedSeats[0].row").value(8))
                 .andExpect(jsonPath("$.occupiedSeats[0].status").value("SOLD"));
@@ -120,7 +120,7 @@ class ReservationControllerTest {
     void boxOffice_permitidoParaAdmin() throws Exception {
         when(reportService.getBoxOfficeData(LocalDate.parse("2026-10-01"), LocalDate.parse("2026-10-07"), null))
                 .thenReturn(new BoxOfficeDataResponse(LocalDate.parse("2026-10-01"), LocalDate.parse("2026-10-07"), "EUR",
-                        List.of(new BoxOfficeDataResponse.MovieBoxOffice(101L, 1250, 600, new BigDecimal("11250.50")))));
+                        List.of(new BoxOfficeDataResponse.MovieBoxOffice("movie-101", 1250, 600, new BigDecimal("11250.50")))));
 
         mockMvc.perform(get("/reservations/box-office-data")
                         .param("startDate", "2026-10-01").param("endDate", "2026-10-07")
@@ -174,7 +174,7 @@ class ReservationControllerTest {
         }
         mockMvc.perform(post("/reservations").with(token("5590", "CLIENTE_REGISTRADO"))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"showId\":1024,\"seats\":[" + seats + "]}"))
+                        .content("{\"showId\":\"01ARZ3NDEKTSV4RRFFQ69G5FAV\",\"seats\":[" + seats + "]}"))
                 .andExpect(status().isBadRequest());
     }
 

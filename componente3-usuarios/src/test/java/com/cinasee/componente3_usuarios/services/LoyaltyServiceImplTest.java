@@ -62,7 +62,7 @@ class LoyaltyServiceImplTest {
         PurchaseHistory saved = captor.getValue();
         assertEquals(42L, saved.getUserId());
         assertEquals(8901L, saved.getReservationId());
-        assertEquals(1024L, saved.getMovieId());
+        assertEquals("movie-1024", saved.getMovieId());
         assertEquals(new BigDecimal("18.50"), saved.getAmount());
         assertEquals(PURCHASE_DATE, saved.getPurchaseDate());
     }
@@ -136,7 +136,7 @@ class LoyaltyServiceImplTest {
     @Test
     void eventWithoutReservationIdIsRejected() {
         PaymentCompletedEvent invalid = new PaymentCompletedEvent(
-                "evt-1", null, 42L, 1024L, new BigDecimal("18.50"),
+                "evt-1", null, 42L, "movie-1024", new BigDecimal("18.50"),
                 "EUR", PURCHASE_DATE, PURCHASE_DATE
         );
 
@@ -151,7 +151,7 @@ class LoyaltyServiceImplTest {
     @Test
     void eventWithoutPurchaseDateIsRejected() {
         PaymentCompletedEvent invalid = new PaymentCompletedEvent(
-                "evt-1", 8901L, 42L, 1024L, new BigDecimal("18.50"),
+                "evt-1", 8901L, 42L, "movie-1024", new BigDecimal("18.50"),
                 "EUR", null, PURCHASE_DATE
         );
 
@@ -168,7 +168,7 @@ class LoyaltyServiceImplTest {
                 "evt-8901",
                 8901L,
                 userId,
-                1024L,
+                "movie-1024",
                 new BigDecimal(amount),
                 "EUR",
                 PURCHASE_DATE,

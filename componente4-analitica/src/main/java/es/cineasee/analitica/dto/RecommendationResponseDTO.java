@@ -20,7 +20,7 @@ public class RecommendationResponseDTO {
     @NoArgsConstructor
     @AllArgsConstructor
     public static class RecommendationItemDTO {
-        private Long movieId;
+        private String movieId;
         private String title;
         private Double matchScore;
         private String reason;

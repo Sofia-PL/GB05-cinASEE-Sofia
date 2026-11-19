@@ -34,20 +34,20 @@ public class MovieController {
     }
 
     @GetMapping("/{movieId}")
-    public ResponseEntity<Movie> getMovieById(@PathVariable Long movieId) {
+    public ResponseEntity<Movie> getMovieById(@PathVariable String movieId) {
         return movieService.getMovieById(movieId)
                 .map(ResponseEntity::ok)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Película no encontrada con ID: " + movieId));
     }
 
     @PutMapping("/{movieId}")
-    public ResponseEntity<Movie> updateMovie(@PathVariable Long movieId, @RequestBody @Valid CreateMovieRequest request) {
+    public ResponseEntity<Movie> updateMovie(@PathVariable String movieId, @RequestBody @Valid CreateMovieRequest request) {
         Movie updatedMovie = movieService.updateMovie(movieId, request);
         return ResponseEntity.ok(updatedMovie);
     }
 
     @DeleteMapping("/{movieId}")
-    public ResponseEntity<Void> deleteMovie(@PathVariable Long movieId) {
+    public ResponseEntity<Void> deleteMovie(@PathVariable String movieId) {
         movieService.deleteMovie(movieId);
         return ResponseEntity.noContent().build();
     }
