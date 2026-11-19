@@ -3201,3 +3201,15 @@ p {
   cursor: pointer;
   font-size: inherit;
 }
+
+/* --- Mensajes mientras se leen datos del backend --- */
+.estado-carga {
+  margin: 12px 0;
+  color: var(--text-muted);
+  font-size: 0.95rem;
+}
+
+.compra-entrada-codigo img {
+  background: #fff;
+  border-radius: 4px;
+}

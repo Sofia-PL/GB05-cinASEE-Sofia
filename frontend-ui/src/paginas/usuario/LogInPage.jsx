@@ -78,21 +78,6 @@ export default function LoginPage() {
     }
   }
 
-  async function loginDemo(email, pass) {
-    limpiarErrores();
-    setCargando(true);
-    try {
-      const result = await login(email, pass);
-      if (result.ok) {
-        redirigirSegunRol(result.user?.rol);
-      } else {
-        setErrorGlobal(result.error);
-      }
-    } finally {
-      setCargando(false);
-    }
-  }
-
   async function handleRegister(e) {
     e.preventDefault();
     limpiarErrores();
@@ -135,7 +120,7 @@ export default function LoginPage() {
 
     setCargando(true);
     try {
-      const result = await register(nameTrim, emailTrim, pass, 'USER');
+      const result = await register(nameTrim, emailTrim, pass);
       if (result.ok) {
         redirigirSegunRol('USER');
       } else {
@@ -152,53 +137,6 @@ export default function LoginPage() {
     <div className="login-page">
       <div className="login-card">
         <h1 className="login-title">CinASEE</h1>
-
-        {/* Acceso rápido para probar perfiles sin teclear */}
-        <div className="login-quick-access">
-          <p className="login-quick-title">Acceso rápido por perfil (modo de prueba):</p>
-          <p style={{ margin: '0 0 10px', fontSize: '0.82rem', color: 'var(--text-muted)' }}>
-            Pulsa en cualquiera de los tres perfiles para probar directamente sus pestañas y vistas correspondientes:
-          </p>
-          <div className="login-roles-grid">
-            <button
-              type="button"
-              className="login-role-btn login-role-btn--admin"
-              disabled={cargando}
-              onClick={() => loginDemo('admin@cinasee.es', 'admin123')}
-            >
-              <div>
-                <strong>Administrador (Prueba)</strong>
-                <small>Acceso a Películas, Salas, Sesiones y Métricas</small>
-              </div>
-            </button>
-            <button
-              type="button"
-              className="login-role-btn login-role-btn--staff"
-              disabled={cargando}
-              onClick={() => loginDemo('staff@cinasee.es', 'staff123')}
-            >
-              <div>
-                <strong>Personal / Staff (Prueba)</strong>
-                <small>Acceso a Validación QR y Terminal de Taquilla</small>
-              </div>
-            </button>
-            <button
-              type="button"
-              className="login-role-btn login-role-btn--user"
-              disabled={cargando}
-              onClick={() => loginDemo('usuario@cinasee.es', 'user123')}
-            >
-              <div>
-                <strong>Cliente / Usuario (Prueba)</strong>
-                <small>Acceso a Cartelera, Compra y Perfil</small>
-              </div>
-            </button>
-          </div>
-        </div>
-
-        <div className="login-divider">
-          <span>O introduce tus credenciales manualmente</span>
-        </div>
 
         {/* Pestañas Iniciar sesión / Registro */}
         <div className="login-tabs" role="tablist">
@@ -219,28 +157,6 @@ export default function LoginPage() {
             Registrarse
           </button>
         </div>
-
-        {/* Caja de información con los usuarios guardados para probar */}
-        {tab === 'login' && (
-          <div style={{
-            background: 'rgba(217, 164, 65, 0.12)',
-            border: '1px solid rgba(217, 164, 65, 0.35)',
-            borderRadius: '10px',
-            padding: '12px 16px',
-            marginBottom: '18px',
-            fontSize: '0.85rem',
-            color: 'var(--dark-burgundy)'
-          }}>
-            <strong style={{ display: 'block', marginBottom: '6px', color: 'var(--granate)' }}>
-              Usuarios guardados en el sistema para iniciar sesión:
-            </strong>
-            <ul style={{ margin: 0, paddingLeft: '18px', lineHeight: 1.5 }}>
-              <li><strong>Admin:</strong> admin@cinasee.es (contraseña: admin123)</li>
-              <li><strong>Personal:</strong> staff@cinasee.es (contraseña: staff123)</li>
-              <li><strong>Usuario:</strong> usuario@cinasee.es (contraseña: user123)</li>
-            </ul>
-          </div>
-        )}
 
         {errorGlobal && (
           <div

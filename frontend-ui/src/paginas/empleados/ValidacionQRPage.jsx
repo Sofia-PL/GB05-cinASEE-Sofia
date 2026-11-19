@@ -1,114 +1,134 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../../context/useAuth';
+import { useCine } from '../../context/useCine';
 import { validarEntrada, nombreButaca } from '../../api/reservas';
+import { obtenerSala, obtenerSesion, obtenerPelicula } from '../../api/cartelera';
+
+/** El navegador puede leer QR con la cámara (API BarcodeDetector) */
+const LECTOR_DISPONIBLE = typeof window !== 'undefined' && 'BarcodeDetector' in window;
+
+/** Título de la película y nombre de la sala de la entrada validada (si Cartelera responde) */
+async function detallesEntrada(c, token) {
+  const [sala, pelicula] = await Promise.all([
+    obtenerSala(c.roomId, token).catch(() => null),
+    obtenerSesion(c.showId, token)
+      .then((s) => obtenerPelicula(s.movieId))
+      .catch(() => null),
+  ]);
+  return { sala, pelicula };
+}
+
+/** Lector de QR con la cámara: llama a onCodigo con el texto leído */
+function LectorCamara({ onCodigo, onCerrar }) {
+  const video = useRef(null);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    let stream = null;
+    let timer = null;
+    let activo = true;
+    const detector = new window.BarcodeDetector({ formats: ['qr_code'] });
+
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+      .then((s) => {
+        if (!activo) { s.getTracks().forEach((t) => t.stop()); return; }
+        stream = s;
+        video.current.srcObject = s;
+        video.current.play();
+        timer = window.setInterval(async () => {
+          try {
+            const codigos = await detector.detect(video.current);
+            if (codigos.length > 0 && activo) {
+              activo = false;
+              onCodigo(codigos[0].rawValue);
+            }
+          } catch {
+            // fotograma no listo: se vuelve a intentar
+          }
+        }, 300);
+      })
+      .catch(() => setError('No se pudo acceder a la cámara. Revisa los permisos del navegador.'));
+
+    return () => {
+      activo = false;
+      window.clearInterval(timer);
+      stream?.getTracks().forEach((t) => t.stop());
+    };
+  }, [onCodigo]);
+
+  return (
+    <div style={{ marginBottom: '24px', textAlign: 'center' }}>
+      {error ? (
+        <div className="cinasee-error" role="alert">{error}</div>
+      ) : (
+        <video ref={video} muted playsInline style={{ width: '100%', maxHeight: '320px', borderRadius: 'var(--radius-sm)', background: '#180507' }} />
+      )}
+      <button type="button" className="home-button home-button-dark" onClick={onCerrar} style={{ marginTop: '10px' }}>
+        Cerrar cámara
+      </button>
+    </div>
+  );
+}
 
 export default function ValidacionQRPage() {
   const { tokenUsuario } = useAuth();
+  const { cines } = useCine();
+  const token = tokenUsuario();
   const [codigo, setCodigo] = useState('');
   const [resultado, setResultado] = useState(null);
   const [validando, setValidando] = useState(false);
+  const [camara, setCamara] = useState(false);
 
-  /** Staff con cuenta real: la entrada se valida en Reservas (Comp. 2), que la marca como usada */
-  async function validarEnServidor(cleanCode, token) {
+  /** La entrada se valida en Reservas (Comp. 2), que la marca como usada */
+  async function validar(codigoLeido) {
+    const cleanCode = (codigoLeido || '').trim();
+    if (!cleanCode) {
+      setResultado({ valido: false, mensaje: 'Introduce o escanea un código de entrada antes de validar.' });
+      return;
+    }
     setValidando(true);
+    setResultado(null);
     try {
       const c = await validarEntrada(cleanCode, token);
+      const { sala, pelicula } = await detallesEntrada(c, token);
       const inicio = new Date(c.showStartTime);
       setResultado({
         valido: true,
+        mensaje: 'Entrada verificada y marcada como utilizada. Acceso permitido a la sala.',
         ticket: {
-          id: c.ticketCode,
-          pelicula: `Reserva nº ${c.reservationId} · Sesión ${c.showId}`,
-          cine: 'CinASEE',
-          sala: `Sala ${c.roomId}`,
+          codigo: c.ticketCode,
+          reserva: c.reservationId,
+          pelicula: pelicula?.title || 'Película',
+          cine: cines.find((x) => x.id === sala?.cinemaId)?.name || '',
+          sala: sala?.name || 'Sala',
           hora: `${inicio.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}, ${inicio.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}`,
-          butacas: [nombreButaca(c.row, c.column)],
+          butaca: nombreButaca(c.row, c.column),
         },
-        mensaje: 'Entrada verificada con éxito y marcada como utilizada. Acceso permitido a la sala.',
       });
+      setCodigo('');
     } catch (err) {
-      setResultado({
-        valido: false,
-        mensaje: err.status === 404 ? 'Código no registrado en el sistema.' : err.message,
-      });
+      const mensajes = {
+        404: 'Código no registrado en el sistema.',
+      };
+      const porCodigo = {
+        TICKET_ALREADY_USED: 'Esta entrada ya se utilizó.',
+        TICKET_NOT_VALID: 'La entrada no es válida (reserva no pagada, cancelada o devuelta).',
+      };
+      setResultado({ valido: false, mensaje: porCodigo[err.code] || mensajes[err.status] || err.message });
     } finally {
       setValidando(false);
     }
   }
 
-  function handleValidar(e) {
-    e?.preventDefault();
-    const cleanCode = (codigo || '').trim();
-    if (!cleanCode) {
-      setResultado({
-        valido: false,
-        mensaje: 'Por favor, introduce o escanea un código de ticket antes de validar.',
-      });
-      return;
-    }
-
-    const token = tokenUsuario();
-    if (token) {
-      validarEnServidor(cleanCode, token);
-      return;
-    }
-
-    let ticketEncontrado = null;
-    try {
-      const raw = localStorage.getItem('cinasee_entradas');
-      if (raw) {
-        const lista = JSON.parse(raw);
-        ticketEncontrado = lista.find((t) => t.id.toLowerCase() === cleanCode.toLowerCase());
-      }
-    } catch {
-      // Ignorar
-    }
-
-    if (ticketEncontrado) {
-      setResultado({
-        valido: true,
-        ticket: ticketEncontrado,
-        mensaje: 'Entrada verificada con éxito. Acceso permitido a la sala.',
-      });
-    } else if (cleanCode.toUpperCase().startsWith('CN-') || cleanCode.toUpperCase().startsWith('QR-')) {
-      setResultado({
-        valido: true,
-        ticket: {
-          id: cleanCode.toUpperCase(),
-          pelicula: 'Godzilla Minus Zero',
-          cine: 'CinASEE Gran Vía',
-          sala: 'Sala 1 (IMAX)',
-          hora: '19:00',
-          butacas: ['F5', 'F6'],
-          total: '23.00',
-        },
-        mensaje: 'Ticket válido registrado en el sistema central.',
-      });
-    } else {
-      setResultado({
-        valido: false,
-        mensaje: 'Código no reconocido, no registrado o entrada ya utilizada.',
-      });
-    }
+  function handleSubmit(e) {
+    e.preventDefault();
+    validar(codigo);
   }
 
-  function validarDemo() {
-    setCodigo('CN-849201');
-    setTimeout(() => {
-      setResultado({
-        valido: true,
-        ticket: {
-          id: 'CN-849201',
-          pelicula: 'Los Juegos del Hambre: Amanecer en la cosecha',
-          cine: 'CinASEE Gran Via',
-          sala: 'Sala 3 (3D RealD)',
-          hora: '18:15',
-          butacas: ['D7', 'D8'],
-          total: '23.00',
-        },
-        mensaje: 'Entrada verificada con éxito. Acceso permitido a la sala.',
-      });
-    }, 200);
+  function handleCodigoCamara(texto) {
+    setCamara(false);
+    setCodigo(texto);
+    validar(texto);
   }
 
   return (
@@ -119,7 +139,7 @@ export default function ValidacionQRPage() {
           Validación de Entradas QR
         </h1>
         <p style={{ color: 'var(--text-muted)' }}>
-          Escanea el código de barras o introduce el localizador del cliente para dar acceso a sala.
+          Escanea el código QR de la entrada o introduce su código para dar acceso a sala.
         </p>
       </header>
 
@@ -129,37 +149,21 @@ export default function ValidacionQRPage() {
         padding: '32px',
         border: '1px solid rgba(217, 164, 65, 0.3)',
         boxShadow: 'var(--shadow-md)',
-        marginBottom: '24px'
+        marginBottom: '24px',
       }}>
-        <div style={{
-          width: '100%',
-          height: '180px',
-          borderRadius: 'var(--radius-sm)',
-          background: 'linear-gradient(135deg, #180507, #2c080c)',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          color: 'var(--cream)',
-          position: 'relative',
-          overflow: 'hidden',
-          marginBottom: '24px',
-          border: '2px dashed rgba(217, 164, 65, 0.5)'
-        }}>
-          <p style={{ fontSize: '1rem', color: 'rgba(247,235,221,0.85)', margin: 0, fontWeight: 600 }}>
-            Lector de código óptico preparado
-          </p>
-          <span style={{ fontSize: '0.8rem', color: 'rgba(247,235,221,0.6)', marginTop: '4px' }}>
-            Apunta la cámara hacia el ticket digital o impreso
-          </span>
-        </div>
+        {!token && (
+          <div className="cinasee-error" role="alert">Tu sesión ha caducado. Vuelve a iniciar sesión para validar entradas.</div>
+        )}
 
-        <form onSubmit={handleValidar} style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+        {camara && <LectorCamara onCodigo={handleCodigoCamara} onCerrar={() => setCamara(false)} />}
+
+        <form onSubmit={handleSubmit} style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
           <input
             type="text"
-            placeholder="Introduce código (ej: QR-1-8-12-A1B2C3D4)"
+            placeholder="Código de la entrada (QR-…)"
             value={codigo}
             onChange={(e) => setCodigo(e.target.value)}
+            aria-label="Código de la entrada"
             style={{
               flex: 1,
               minWidth: '220px',
@@ -168,20 +172,23 @@ export default function ValidacionQRPage() {
               border: '1px solid rgba(43, 18, 21, 0.25)',
               fontSize: '1rem',
               fontFamily: 'monospace',
-              letterSpacing: '0.05em'
+              letterSpacing: '0.05em',
             }}
           />
-          <button className="home-button" type="submit" disabled={validando} style={{ padding: '0.8em 1.6em' }}>
+          <button className="home-button" type="submit" disabled={validando || !token} style={{ padding: '0.8em 1.6em' }}>
             {validando ? 'Validando…' : 'Validar código'}
           </button>
-          <button
-            type="button"
-            className="home-button home-button-dark"
-            onClick={validarDemo}
-            style={{ padding: '0.8em 1.2em' }}
-          >
-            Probar demo
-          </button>
+          {LECTOR_DISPONIBLE && !camara && (
+            <button
+              type="button"
+              className="home-button home-button-dark"
+              onClick={() => { setResultado(null); setCamara(true); }}
+              disabled={!token}
+              style={{ padding: '0.8em 1.2em' }}
+            >
+              Escanear con la cámara
+            </button>
+          )}
         </form>
 
         {resultado && (
@@ -190,27 +197,24 @@ export default function ValidacionQRPage() {
             padding: '20px',
             borderRadius: 'var(--radius-sm)',
             background: resultado.valido ? 'rgba(40, 167, 69, 0.1)' : 'rgba(220, 53, 69, 0.1)',
-            border: `1px solid ${resultado.valido ? 'rgba(40, 167, 69, 0.4)' : 'rgba(220, 53, 69, 0.4)'}`
+            border: `1px solid ${resultado.valido ? 'rgba(40, 167, 69, 0.4)' : 'rgba(220, 53, 69, 0.4)'}`,
           }}>
-            <h3 style={{
-              margin: '0 0 8px',
-              color: resultado.valido ? '#155724' : '#721c24'
-            }}>
+            <h3 style={{ margin: '0 0 8px', color: resultado.valido ? '#155724' : '#721c24' }}>
               {resultado.valido ? 'Acceso autorizado' : 'Acceso denegado'}
             </h3>
             <p style={{ margin: '0 0 12px', color: 'var(--dark-burgundy)' }}>{resultado.mensaje}</p>
 
             {resultado.valido && resultado.ticket && (
-              <div style={{
-                background: 'white',
-                padding: '16px',
-                borderRadius: '6px',
-                border: '1px solid rgba(0,0,0,0.08)'
-              }}>
+              <div style={{ background: 'white', padding: '16px', borderRadius: '6px', border: '1px solid rgba(0,0,0,0.08)' }}>
                 <p style={{ margin: '0 0 4px' }}><strong>Película:</strong> {resultado.ticket.pelicula}</p>
-                <p style={{ margin: '0 0 4px' }}><strong>Cine y Sala:</strong> {resultado.ticket.cine} — {resultado.ticket.sala}</p>
-                <p style={{ margin: '0 0 4px' }}><strong>Hora:</strong> {resultado.ticket.hora}</p>
-                <p style={{ margin: 0 }}><strong>Butacas reservadas:</strong> {Array.isArray(resultado.ticket.butacas) ? resultado.ticket.butacas.join(', ') : resultado.ticket.butacas}</p>
+                <p style={{ margin: '0 0 4px' }}>
+                  <strong>Sala:</strong> {[resultado.ticket.cine, resultado.ticket.sala].filter(Boolean).join(' — ')}
+                </p>
+                <p style={{ margin: '0 0 4px' }}><strong>Sesión:</strong> {resultado.ticket.hora}</p>
+                <p style={{ margin: '0 0 4px' }}><strong>Butaca:</strong> {resultado.ticket.butaca}</p>
+                <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                  Reserva nº {resultado.ticket.reserva} · <code>{resultado.ticket.codigo}</code>
+                </p>
               </div>
             )}
           </div>

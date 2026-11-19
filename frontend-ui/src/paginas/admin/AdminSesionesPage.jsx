@@ -1,163 +1,191 @@
 import { useState, useEffect } from 'react';
-import initialPeliculas from '../../assets/peliculas.json';
-import initialCines from '../../assets/cines.json';
+import { useAuth } from '../../context/useAuth';
+import {
+  obtenerPeliculas,
+  obtenerCines,
+  obtenerSalasCine,
+  obtenerTodasSesiones,
+  crearSesion,
+  actualizarSesion,
+  fechaIso,
+  ESTADOS_SESION,
+  TIPOS_SALA,
+} from '../../api/cartelera';
+import { AvisoAdmin, AvisoSinToken } from './AdminAvisos';
 
-const LS_PELIS_KEY = 'cinasee_admin_peliculas';
-const LS_SESIONES_KEY_PREFIX = 'cinasee_admin_sesiones_';
-const LS_ACTIVE_CINE = 'cinasee_admin_active_cine_id';
-
-function getPeliculas() {
-  try {
-    const raw = localStorage.getItem(LS_PELIS_KEY);
-    if (raw) return JSON.parse(raw);
-  } catch {
-    // fallback
-  }
-  return initialPeliculas;
+/** "2026-11-10T19:00:00" -> { fecha: "2026-11-10", hora: "19:00" } */
+function partirFechaHora(startTime) {
+  const s = String(startTime || '');
+  return { fecha: s.slice(0, 10), hora: s.slice(11, 16) };
 }
 
-function getInitialSesiones(cineId, pelis) {
-  const peli1 = pelis[0]?.title || 'Los Juegos del Hambre';
-  const peli2 = pelis[1]?.title || 'Godzilla Minus Zero';
-  const peli3 = pelis[2]?.title || 'La bola negra';
-
-  return [
-    { id: 101, cineId, peli: peli1, sala: 1, hora: '16:30', fecha: '2026-11-10', formato: '2D', precio: 9.50 },
-    { id: 102, cineId, peli: peli1, sala: 5, hora: '19:15', fecha: '2026-11-10', formato: 'IMAX', precio: 14.00 },
-    { id: 103, cineId, peli: peli1, sala: 5, hora: '22:00', fecha: '2026-11-10', formato: 'IMAX', precio: 14.00 },
-    { id: 104, cineId, peli: peli2, sala: 3, hora: '18:00', fecha: '2026-11-10', formato: '3D', precio: 11.50 },
-    { id: 105, cineId, peli: peli2, sala: 3, hora: '21:00', fecha: '2026-11-10', formato: '3D', precio: 11.50 },
-    { id: 106, cineId, peli: peli3, sala: 2, hora: '17:30', fecha: '2026-11-10', formato: '2D', precio: 9.50 },
-    { id: 107, cineId, peli: peli3, sala: 4, hora: '20:15', fecha: '2026-11-10', formato: 'VIP', precio: 15.00 },
-  ];
+/** Fecha y hora locales del formulario -> LocalDateTime que espera Cartelera */
+function unirFechaHora(fecha, hora) {
+  return `${fecha}T${hora}:00`;
 }
 
-function loadSesionesForCine(cineId, pelis) {
-  const key = `${LS_SESIONES_KEY_PREFIX}${cineId}`;
-  try {
-    const raw = localStorage.getItem(key);
-    if (raw) return JSON.parse(raw);
-  } catch {
-    // fallback
-  }
-  return getInitialSesiones(cineId, pelis);
-}
+const COLOR_ESTADO = {
+  PROGRAMADA: 'admin-badge-warning',
+  A_LA_VENTA: 'admin-badge-success',
+  EN_CURSO: 'admin-badge-dark',
+  FINALIZADA: '',
+  CANCELADA: 'admin-badge-dark',
+};
 
 export default function AdminSesionesPage() {
-  const peliculas = getPeliculas();
-  const cines = initialCines;
+  const { user } = useAuth();
+  const token = user?.token;
 
-  const [selectedCineId, setSelectedCineId] = useState(() => {
-    const saved = localStorage.getItem(LS_ACTIVE_CINE);
-    return saved ? Number(saved) : cines[0].id;
-  });
+  const [peliculas, setPeliculas] = useState([]);
+  const [cines, setCines] = useState([]);
+  const [sesiones, setSesiones] = useState([]);
+  const [cargando, setCargando] = useState(true);
+  const [recarga, setRecarga] = useState(0);
 
-  const cineActivo = cines.find((c) => c.id === selectedCineId) || cines[0];
-  const [sesiones, setSesiones] = useState(() => loadSesionesForCine(cineActivo.id, peliculas));
+  const [selectedCineId, setSelectedCineId] = useState(null);
+  const [salas, setSalas] = useState([]);
 
-  // Película seleccionada para filtrar en el maestro-detalle
-  const [selectedPeliId, setSelectedPeliId] = useState(() => peliculas[0]?.id || 1);
-  const selectedPeli = peliculas.find((p) => p.id === selectedPeliId) || peliculas[0];
-
+  const [selectedPeliId, setSelectedPeliId] = useState(null);
   const [busquedaPeli, setBusquedaPeli] = useState('');
 
-  // Modal para crear / editar sesión
-  const [modalMode, setModalMode] = useState(null); // null, 'create', 'edit'
-  const [formData, setFormData] = useState({
-    id: null,
-    peli: selectedPeli?.title || '',
-    sala: 1,
-    hora: '18:00',
-    fecha: new Date().toISOString().split('T')[0],
-    formato: '2D',
-    precio: 9.50,
-  });
+  const [aviso, setAviso] = useState(null);
+  const [guardando, setGuardando] = useState(false);
 
-  // Persistir cine activo
+  // Modal: null, 'create' o 'edit'
+  const [modalMode, setModalMode] = useState(null);
+  const [formData, setFormData] = useState(null);
+
+  /* Películas, cines y sesiones (todo público en Cartelera) */
   useEffect(() => {
-    localStorage.setItem(LS_ACTIVE_CINE, String(selectedCineId));
-  }, [selectedCineId]);
+    let cancelado = false;
+    Promise.all([obtenerPeliculas(), obtenerCines(), obtenerTodasSesiones()])
+      .then(([pelis, listaCines, listaSesiones]) => {
+        if (cancelado) return;
+        const p = Array.isArray(pelis) ? pelis : [];
+        const c = Array.isArray(listaCines) ? listaCines : [];
+        setPeliculas(p);
+        setCines(c);
+        setSesiones(Array.isArray(listaSesiones) ? listaSesiones : []);
+        setSelectedPeliId((actual) => (p.some((x) => x.id === actual) ? actual : p[0]?.id ?? null));
+        setSelectedCineId((actual) => (c.some((x) => x.id === actual) ? actual : c[0]?.id ?? null));
+      })
+      .catch((err) => {
+        if (!cancelado) setAviso({ tipo: 'error', texto: `No se pudo cargar la programación: ${err.message}` });
+      })
+      .finally(() => {
+        if (!cancelado) setCargando(false);
+      });
+    return () => { cancelado = true; };
+  }, [recarga]);
 
-  /** Al elegir otro cine se cargan sus sesiones */
-  function cambiarCine(id) {
-    setSelectedCineId(id);
-    setSesiones(loadSesionesForCine(id, peliculas));
-  }
-
-  // Persistir sesiones del cine actual
+  /* Salas del cine elegido (requiere token) */
   useEffect(() => {
-    const key = `${LS_SESIONES_KEY_PREFIX}${cineActivo.id}`;
-    try {
-      localStorage.setItem(key, JSON.stringify(sesiones));
-    } catch {
-      // ignore
-    }
-  }, [sesiones, cineActivo.id]);
+    if (!selectedCineId || !token) return undefined;
+    let cancelado = false;
+    obtenerSalasCine(selectedCineId, token)
+      .then((lista) => {
+        if (!cancelado) setSalas(Array.isArray(lista) ? lista : []);
+      })
+      .catch((err) => {
+        if (!cancelado) setAviso({ tipo: 'error', texto: `No se pudieron cargar las salas: ${err.message}` });
+      });
+    return () => { cancelado = true; };
+  }, [selectedCineId, token]);
 
-  // Filtrar sesiones por la película seleccionada a la derecha
-  const sesionesPelicula = sesiones.filter(
-    (s) => s.peli.trim().toLowerCase() === selectedPeli?.title.trim().toLowerCase()
-  );
+  const cineActivo = cines.find((c) => c.id === selectedCineId) || null;
+  const selectedPeli = peliculas.find((p) => p.id === selectedPeliId) || null;
+  const salaPorId = Object.fromEntries(salas.map((s) => [s.id, s]));
+
+  // Sesiones del cine elegido (sus salas). Sin token no se conocen las salas: se muestran todas.
+  const sesionesCine = token ? sesiones.filter((s) => salaPorId[s.roomId]) : sesiones;
+  const sesionesPelicula = sesionesCine
+    .filter((s) => s.movieId === selectedPeliId)
+    .sort((a, b) => String(a.startTime).localeCompare(String(b.startTime)));
 
   const peliculasFiltradas = peliculas.filter((p) =>
-    p.title.toLowerCase().includes(busquedaPeli.toLowerCase())
+    (p.title || '').toLowerCase().includes(busquedaPeli.toLowerCase())
   );
 
+  function cambiarCine(id) {
+    setSelectedCineId(id);
+    setSalas([]);
+  }
+
   function abrirCrearSesion() {
+    const primera = salas[0];
     setFormData({
       id: null,
-      peli: selectedPeli.title,
-      sala: 1,
+      movieId: selectedPeliId,
+      roomId: primera?.id || '',
+      fecha: fechaIso(new Date()),
       hora: '19:00',
-      fecha: new Date().toISOString().split('T')[0],
-      formato: '2D',
-      precio: 9.50,
+      ticketPrice: primera?.basePrice ?? 9.5,
     });
     setModalMode('create');
   }
 
   function abrirEditarSesion(sesion) {
+    const { fecha, hora } = partirFechaHora(sesion.startTime);
     setFormData({
       id: sesion.id,
-      peli: sesion.peli,
-      sala: sesion.sala,
-      hora: sesion.hora,
-      fecha: sesion.fecha || new Date().toISOString().split('T')[0],
-      formato: sesion.formato,
-      precio: sesion.precio,
+      movieId: sesion.movieId,
+      roomId: sesion.roomId,
+      fecha,
+      hora,
+      ticketPrice: sesion.ticketPrice,
+      original: sesion,
     });
     setModalMode('edit');
   }
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
-    const precioNum = parseFloat(formData.precio) || 9.50;
-    const salaNum = parseInt(formData.sala, 10) || 1;
-
-    if (modalMode === 'create') {
-      const nueva = {
-        ...formData,
-        id: Date.now(),
-        cineId: cineActivo.id,
-        precio: precioNum,
-        sala: salaNum,
-      };
-      setSesiones([...sesiones, nueva]);
-    } else if (modalMode === 'edit') {
-      setSesiones(
-        sesiones.map((s) =>
-          s.id === formData.id
-            ? { ...s, ...formData, precio: precioNum, sala: salaNum }
-            : s
-        )
-      );
+    setGuardando(true);
+    try {
+      const startTime = unirFechaHora(formData.fecha, formData.hora);
+      if (modalMode === 'create') {
+        await crearSesion({
+          movieId: formData.movieId,
+          roomId: formData.roomId,
+          startTime,
+          ticketPrice: Number(formData.ticketPrice),
+        }, token);
+        setAviso({
+          tipo: 'ok',
+          texto: 'Sesión creada como PROGRAMADA. Ponla "A la venta" para que se puedan comprar entradas.',
+        });
+      } else {
+        // PATCH solo admite sala y hora (y estado): se envía únicamente lo que ha cambiado
+        const cambios = {};
+        if (formData.roomId !== formData.original.roomId) cambios.roomId = formData.roomId;
+        const original = partirFechaHora(formData.original.startTime);
+        if (startTime !== unirFechaHora(original.fecha, original.hora)) cambios.startTime = startTime;
+        if (Object.keys(cambios).length > 0) {
+          await actualizarSesion(formData.id, cambios, token);
+          setAviso({ tipo: 'ok', texto: 'Sesión modificada.' });
+        }
+      }
+      setModalMode(null);
+      setRecarga((n) => n + 1);
+    } catch (err) {
+      const texto = err.status === 409
+        ? 'La sala ya tiene otra sesión que se solapa con ese horario.'
+        : err.message;
+      setAviso({ tipo: 'error', texto: `No se pudo guardar la sesión: ${texto}` });
+    } finally {
+      setGuardando(false);
     }
-    setModalMode(null);
   }
 
-  function handleDelete(id) {
-    if (window.confirm('¿Confirmas la cancelación y eliminación de este pase?')) {
-      setSesiones(sesiones.filter((s) => s.id !== id));
+  async function cambiarEstado(sesion, status) {
+    if (status === sesion.status) return;
+    if (status === 'CANCELADA' && !window.confirm('¿Confirmas la cancelación de este pase?')) return;
+    try {
+      await actualizarSesion(sesion.id, { status }, token);
+      setAviso({ tipo: 'ok', texto: `Sesión marcada como "${ESTADOS_SESION[status] || status}".` });
+      setRecarga((n) => n + 1);
+    } catch (err) {
+      setAviso({ tipo: 'error', texto: `No se pudo cambiar el estado: ${err.message}` });
     }
   }
 
@@ -167,7 +195,7 @@ export default function AdminSesionesPage() {
         <div>
           <h1 className="admin-header-title">Programación de Sesiones por Película</h1>
           <p className="admin-header-desc">
-            Organización de horarios, salas asignadas y precios de venta para cada título en este cine.
+            Horarios, salas, precio y estado de venta de cada pase. Solo se venden las sesiones «A la venta».
           </p>
         </div>
 
@@ -178,10 +206,12 @@ export default function AdminSesionesPage() {
           </label>
           <select
             className="admin-select"
-            value={selectedCineId}
-            onChange={(e) => cambiarCine(Number(e.target.value))}
+            value={selectedCineId ?? ''}
+            onChange={(e) => cambiarCine(e.target.value)}
+            disabled={cines.length === 0}
             style={{ fontWeight: 700, minWidth: '240px' }}
           >
+            {cines.length === 0 && <option value="">{cargando ? 'Cargando…' : 'No hay cines'}</option>}
             {cines.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.name} ({c.city})
@@ -191,12 +221,14 @@ export default function AdminSesionesPage() {
         </div>
       </header>
 
+      {!token && <AvisoSinToken />}
+      <AvisoAdmin aviso={aviso} onCerrar={() => setAviso(null)} />
+
       {/* Maestro-Detalle: Películas a la izquierda / Sesiones de esa película a la derecha */}
       <div className="admin-master-detail">
-        {/* Columna Izquierda: Filtro y Catálogo de Películas */}
         <aside className="admin-list-sidebar">
           <div className="admin-list-sidebar-header">
-            Catálogo en Cartelera ({peliculas.length})
+            Catálogo ({peliculas.length})
           </div>
 
           <div style={{ padding: '10px 14px', borderBottom: '1px solid rgba(43,18,21,0.08)' }}>
@@ -212,10 +244,8 @@ export default function AdminSesionesPage() {
 
           <div style={{ maxHeight: '600px', overflowY: 'auto' }}>
             {peliculasFiltradas.map((peli) => {
-              const isSelected = peli.id === selectedPeli?.id;
-              const cantSesiones = sesiones.filter(
-                (s) => s.peli.trim().toLowerCase() === peli.title.trim().toLowerCase()
-              ).length;
+              const isSelected = peli.id === selectedPeliId;
+              const cantSesiones = sesionesCine.filter((s) => s.movieId === peli.id).length;
 
               return (
                 <button
@@ -246,9 +276,10 @@ export default function AdminSesionesPage() {
           </div>
         </aside>
 
-        {/* Columna Derecha: Todas las sesiones de la película seleccionada */}
         <section className="admin-panel" style={{ margin: 0 }}>
-          {selectedPeli ? (
+          {cargando ? (
+            <p style={{ color: 'var(--text-muted)' }}>Cargando programación…</p>
+          ) : selectedPeli ? (
             <>
               <div style={{
                 display: 'flex',
@@ -258,7 +289,7 @@ export default function AdminSesionesPage() {
                 marginBottom: '16px',
                 borderBottom: '1px solid rgba(43,18,21,0.12)',
                 flexWrap: 'wrap',
-                gap: '12px'
+                gap: '12px',
               }}>
                 <div>
                   <span className="admin-badge admin-badge-warning" style={{ marginBottom: '4px' }}>
@@ -267,40 +298,36 @@ export default function AdminSesionesPage() {
                   <h2 style={{ color: 'var(--burgundy)', margin: '2px 0 0', fontSize: '1.4rem' }}>
                     Sesiones de: {selectedPeli.title}
                   </h2>
-                  <p style={{ margin: '4px 0 0', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                    Programación en {cineActivo.name} ({cineActivo.city})
-                  </p>
+                  {cineActivo && (
+                    <p style={{ margin: '4px 0 0', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                      Programación en {cineActivo.name} ({cineActivo.city})
+                    </p>
+                  )}
                 </div>
 
                 <button
                   type="button"
                   className="admin-btn admin-btn-primary"
                   onClick={abrirCrearSesion}
+                  disabled={!token || salas.length === 0}
+                  title={token && salas.length === 0 ? 'Este cine no tiene salas' : undefined}
                 >
                   + Añadir Sesión a esta Película
                 </button>
               </div>
 
-              {/* Listado / Tabla de Sesiones de esta Película */}
               {sesionesPelicula.length === 0 ? (
                 <div style={{
                   padding: '48px 20px',
                   textAlign: 'center',
                   background: 'rgba(43,18,21,0.02)',
                   borderRadius: '4px',
-                  border: '1px dashed rgba(43,18,21,0.2)'
+                  border: '1px dashed rgba(43,18,21,0.2)',
                 }}>
                   <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.95rem' }}>
-                    No hay ningún horario programado para <strong>{selectedPeli.title}</strong> en {cineActivo.name}.
+                    No hay ningún horario programado para <strong>{selectedPeli.title}</strong>
+                    {cineActivo ? ` en ${cineActivo.name}` : ''}.
                   </p>
-                  <button
-                    type="button"
-                    className="admin-btn admin-btn-secondary"
-                    onClick={abrirCrearSesion}
-                    style={{ marginTop: '12px' }}
-                  >
-                    Programar primer pase
-                  </button>
                 </div>
               ) : (
                 <div className="admin-table-wrap">
@@ -310,91 +337,121 @@ export default function AdminSesionesPage() {
                         <th>Fecha</th>
                         <th>Horario</th>
                         <th>Sala</th>
-                        <th>Formato</th>
                         <th>Tarifa</th>
+                        <th>Estado</th>
                         <th style={{ textAlign: 'right' }}>Acciones</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {sesionesPelicula.map((sesion) => (
-                        <tr key={sesion.id}>
-                          <td style={{ fontWeight: 600 }}>{sesion.fecha || '2026-11-10'}</td>
-                          <td>
-                            <strong style={{ fontSize: '1.1rem', color: 'var(--burgundy)' }}>
-                              {sesion.hora}
-                            </strong>
-                          </td>
-                          <td>Sala {sesion.sala}</td>
-                          <td>
-                            <span className="admin-badge admin-badge-dark">{sesion.formato}</span>
-                          </td>
-                          <td>
-                            <strong>{sesion.precio.toFixed(2)} €</strong>
-                          </td>
-                          <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
-                            <button
-                              type="button"
-                              className="admin-btn admin-btn-secondary admin-btn-sm"
-                              onClick={() => abrirEditarSesion(sesion)}
-                              style={{ marginRight: '6px' }}
-                            >
-                              Editar
-                            </button>
-                            <button
-                              type="button"
-                              className="admin-btn admin-btn-danger admin-btn-sm"
-                              onClick={() => handleDelete(sesion.id)}
-                            >
-                              Eliminar
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
+                      {sesionesPelicula.map((sesion) => {
+                        const inicio = partirFechaHora(sesion.startTime);
+                        const fin = partirFechaHora(sesion.endTime);
+                        const sala = salaPorId[sesion.roomId];
+                        return (
+                          <tr key={sesion.id}>
+                            <td style={{ fontWeight: 600 }}>{inicio.fecha}</td>
+                            <td>
+                              <strong style={{ fontSize: '1.1rem', color: 'var(--burgundy)' }}>{inicio.hora}</strong>
+                              {fin.hora && (
+                                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}> – {fin.hora}</span>
+                              )}
+                            </td>
+                            <td>
+                              {sala ? (
+                                <>
+                                  {sala.name}{' '}
+                                  <span className="admin-badge admin-badge-dark">{TIPOS_SALA[sala.roomType] || sala.roomType}</span>
+                                </>
+                              ) : (
+                                <span style={{ color: 'var(--text-muted)' }}>{sesion.roomId}</span>
+                              )}
+                            </td>
+                            <td>
+                              <strong>{Number(sesion.ticketPrice || 0).toFixed(2)} €</strong>
+                            </td>
+                            <td>
+                              {token ? (
+                                <select
+                                  className="admin-select"
+                                  value={sesion.status || 'PROGRAMADA'}
+                                  onChange={(e) => cambiarEstado(sesion, e.target.value)}
+                                  style={{ fontSize: '0.82rem', padding: '4px 8px' }}
+                                >
+                                  {Object.entries(ESTADOS_SESION).map(([valor, etiqueta]) => (
+                                    <option key={valor} value={valor}>{etiqueta}</option>
+                                  ))}
+                                </select>
+                              ) : (
+                                <span className={`admin-badge ${COLOR_ESTADO[sesion.status] || ''}`}>
+                                  {ESTADOS_SESION[sesion.status] || sesion.status}
+                                </span>
+                              )}
+                            </td>
+                            <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                              <button
+                                type="button"
+                                className="admin-btn admin-btn-secondary admin-btn-sm"
+                                onClick={() => abrirEditarSesion(sesion)}
+                                disabled={!token || sesion.status === 'CANCELADA'}
+                                style={{ marginRight: '6px' }}
+                              >
+                                Editar
+                              </button>
+                              <button
+                                type="button"
+                                className="admin-btn admin-btn-danger admin-btn-sm"
+                                onClick={() => cambiarEstado(sesion, 'CANCELADA')}
+                                disabled={!token || sesion.status === 'CANCELADA'}
+                              >
+                                Cancelar
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
               )}
             </>
           ) : (
-            <p style={{ color: 'var(--text-muted)' }}>Selecciona una película a la izquierda para ver y gestionar sus sesiones.</p>
+            <p style={{ color: 'var(--text-muted)' }}>No hay películas en el catálogo.</p>
           )}
         </section>
       </div>
 
-      {/* Modal CRUD: Añadir / Editar Sesión */}
-      {modalMode && (
+      {/* Modal: crear / editar sesión */}
+      {modalMode && formData && (
         <div className="admin-modal-backdrop" onClick={() => setModalMode(null)}>
           <div className="admin-modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="admin-modal-header">
               <h2 className="admin-modal-title">
                 {modalMode === 'create' ? 'Programar Nueva Sesión' : 'Modificar Horario de Sesión'}
               </h2>
-              <button
-                type="button"
-                className="admin-btn admin-btn-secondary admin-btn-sm"
-                onClick={() => setModalMode(null)}
-              >
+              <button type="button" className="admin-btn admin-btn-secondary admin-btn-sm" onClick={() => setModalMode(null)}>
                 ✕
               </button>
             </div>
 
             <form onSubmit={handleSubmit}>
               <div className="admin-form-group">
-                <label className="admin-label">Película a Proyectar</label>
+                <label className="admin-label">Película a Proyectar *</label>
                 <select
                   className="admin-select"
-                  value={formData.peli}
-                  onChange={(e) => setFormData({ ...formData, peli: e.target.value })}
+                  required
+                  value={formData.movieId || ''}
+                  disabled={modalMode === 'edit'}
+                  onChange={(e) => setFormData({ ...formData, movieId: e.target.value })}
                 >
                   {peliculas.map((p) => (
-                    <option key={p.id} value={p.title}>{p.title}</option>
+                    <option key={p.id} value={p.id}>{p.title}</option>
                   ))}
                 </select>
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
                 <div className="admin-form-group">
-                  <label className="admin-label">Fecha de Proyección</label>
+                  <label className="admin-label">Fecha de Proyección *</label>
                   <input
                     type="date"
                     className="admin-input"
@@ -405,7 +462,7 @@ export default function AdminSesionesPage() {
                 </div>
 
                 <div className="admin-form-group">
-                  <label className="admin-label">Hora del Pase (hh:mm)</label>
+                  <label className="admin-label">Hora del Pase *</label>
                   <input
                     type="time"
                     className="admin-input"
@@ -418,60 +475,56 @@ export default function AdminSesionesPage() {
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
                 <div className="admin-form-group">
-                  <label className="admin-label">Sala Asignada en {cineActivo.name}</label>
+                  <label className="admin-label">Sala en {cineActivo?.name} *</label>
                   <select
                     className="admin-select"
-                    value={formData.sala}
-                    onChange={(e) => setFormData({ ...formData, sala: e.target.value })}
+                    required
+                    value={formData.roomId}
+                    onChange={(e) => {
+                      const sala = salaPorId[e.target.value];
+                      setFormData({
+                        ...formData,
+                        roomId: e.target.value,
+                        // Al crear, el precio propuesto es el precio base de la sala
+                        ticketPrice: modalMode === 'create' && sala?.basePrice != null ? sala.basePrice : formData.ticketPrice,
+                      });
+                    }}
                   >
-                    {[1, 2, 3, 4, 5, 6, 7, 8].map((s) => (
-                      <option key={s} value={s}>Sala {s}</option>
+                    {salas.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name} ({TIPOS_SALA[s.roomType] || s.roomType})
+                      </option>
                     ))}
                   </select>
                 </div>
 
                 <div className="admin-form-group">
-                  <label className="admin-label">Formato de la Sesión</label>
-                  <select
-                    className="admin-select"
-                    value={formData.formato}
-                    onChange={(e) => setFormData({ ...formData, formato: e.target.value })}
-                  >
-                    <option value="2D">2D Estándar</option>
-                    <option value="3D">3D RealD</option>
-                    <option value="IMAX">IMAX Láser</option>
-                    <option value="VIP">VIP Luxury</option>
-                  </select>
+                  <label className="admin-label">Precio por Entrada (€) *</label>
+                  <input
+                    type="number"
+                    step="0.05"
+                    min="0"
+                    className="admin-input"
+                    required
+                    disabled={modalMode === 'edit'}
+                    value={formData.ticketPrice}
+                    onChange={(e) => setFormData({ ...formData, ticketPrice: e.target.value })}
+                  />
                 </div>
               </div>
 
-              <div className="admin-form-group">
-                <label className="admin-label">Precio por Entrada (€) *</label>
-                <input
-                  type="number"
-                  step="0.50"
-                  min="4"
-                  max="30"
-                  className="admin-input"
-                  required
-                  value={formData.precio}
-                  onChange={(e) => setFormData({ ...formData, precio: e.target.value })}
-                />
-              </div>
+              <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: '4px 0 0' }}>
+                {modalMode === 'create'
+                  ? 'La hora de fin la calcula Cartelera (duración de la película + 20 min de limpieza). La sesión se crea como «Programada».'
+                  : 'Cartelera solo permite cambiar la sala y el horario de una sesión ya creada; la película y el precio no se pueden modificar.'}
+              </p>
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '22px', paddingTop: '16px', borderTop: '1px solid rgba(43,18,21,0.1)' }}>
-                <button
-                  type="button"
-                  className="admin-btn admin-btn-secondary"
-                  onClick={() => setModalMode(null)}
-                >
+                <button type="button" className="admin-btn admin-btn-secondary" onClick={() => setModalMode(null)}>
                   Cancelar
                 </button>
-                <button
-                  type="submit"
-                  className="admin-btn admin-btn-primary"
-                >
-                  {modalMode === 'create' ? 'Confirmar y Publicar Pase' : 'Guardar Modificación'}
+                <button type="submit" className="admin-btn admin-btn-primary" disabled={guardando}>
+                  {guardando ? 'Guardando…' : modalMode === 'create' ? 'Programar Sesión' : 'Guardar Modificación'}
                 </button>
               </div>
             </form>

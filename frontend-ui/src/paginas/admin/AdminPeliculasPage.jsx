@@ -1,8 +1,15 @@
 import { useState, useEffect } from 'react';
-import initialPeliculas from '../../assets/peliculas.json';
+import { useAuth } from '../../context/useAuth';
+import {
+  obtenerPeliculas,
+  obtenerPeliculasEnCartelera,
+  crearPelicula,
+  actualizarPelicula,
+  eliminarPelicula,
+} from '../../api/cartelera';
+import { AvisoAdmin, AvisoSinToken } from './AdminAvisos';
 
-const LS_PELIS_KEY = 'cinasee_admin_peliculas';
-
+/* Géneros en mayúsculas y sin tildes, como los guarda Cartelera (Comp. 1) */
 const GENRES = [
   { value: 'ACCION', label: 'Acción' },
   { value: 'CIENCIA_FICCION', label: 'Ciencia Ficción' },
@@ -16,121 +23,136 @@ const GENRES = [
 
 const AGE_RATINGS = ['TP', '+7', '+12', '+16', '+18'];
 
-function loadPeliculas() {
-  try {
-    const raw = localStorage.getItem(LS_PELIS_KEY);
-    if (raw) return JSON.parse(raw);
-  } catch {
-    // fallback
-  }
-  return initialPeliculas.map((p) => ({
-    ...p,
-    trailerUrl: p.trailerUrl,
-  }));
+const FORM_VACIO = {
+  id: null,
+  title: '',
+  genre: 'ACCION',
+  durationMinutes: 120,
+  ageRating: '+12',
+  synopsis: '',
+  posterUrl: '',
+  trailerUrl: '',
+};
+
+/** Opciones de un select añadiendo el valor actual si no está en la lista (datos ya guardados) */
+function conValorActual(opciones, valor) {
+  return valor && !opciones.includes(valor) ? [...opciones, valor] : opciones;
+}
+
+/** Cuerpo que espera POST/PUT /movies (CreateMovieRequest) */
+function cuerpoPelicula(form) {
+  return {
+    title: form.title.trim(),
+    synopsis: form.synopsis.trim() || null,
+    durationMinutes: Number(form.durationMinutes),
+    genre: form.genre,
+    ageRating: form.ageRating,
+    posterUrl: form.posterUrl.trim() || null,
+    trailerUrl: form.trailerUrl.trim() || null,
+  };
 }
 
 export default function AdminPeliculasPage() {
-  const [peliculas, setPeliculas] = useState(loadPeliculas);
+  const { user } = useAuth();
+  const token = user?.token;
+
+  const [peliculas, setPeliculas] = useState([]);
+  /** Ids de las películas con sesiones futuras no canceladas (lo calcula Cartelera) */
+  const [enCartelera, setEnCartelera] = useState(new Set());
+  const [cargando, setCargando] = useState(true);
+  const [recarga, setRecarga] = useState(0);
+  const [aviso, setAviso] = useState(null);
+  const [guardando, setGuardando] = useState(false);
+
   const [busqueda, setBusqueda] = useState('');
   const [filtroGenero, setFiltroGenero] = useState('TODOS');
 
-  // Estado del modal (null = cerrado, 'create' = nuevo, objeto peli = editar)
+  // null = cerrado, 'create' = nueva, 'edit' = modificar
   const [modalMode, setModalMode] = useState(null);
+  const [formData, setFormData] = useState(FORM_VACIO);
 
-  // Formulario reactivo
-  const [formData, setFormData] = useState({
-    id: null,
-    title: '',
-    genre: 'ACCION',
-    durationMinutes: 120,
-    trailerUrl: '',
-    posterUrl: '',
-    synopsis: '',
-    ageRating: '+12',
-    inShowcase: false,
-  });
-
-  // Persistir en localStorage [Esto ns ]
   useEffect(() => {
-    try {
-      localStorage.setItem(LS_PELIS_KEY, JSON.stringify(peliculas));
-    } catch {
-      // ignore
-    }
-  }, [peliculas]);
+    let cancelado = false;
+    Promise.all([
+      obtenerPeliculas(),
+      obtenerPeliculasEnCartelera(),
+    ])
+      .then(([todas, activas]) => {
+        if (cancelado) return;
+        setPeliculas(Array.isArray(todas) ? todas : []);
+        setEnCartelera(new Set((Array.isArray(activas) ? activas : []).map((m) => m.id)));
+      })
+      .catch((err) => {
+        if (!cancelado) setAviso({ tipo: 'error', texto: `No se pudo cargar el catálogo: ${err.message}` });
+      })
+      .finally(() => {
+        if (!cancelado) setCargando(false);
+      });
+    return () => { cancelado = true; };
+  }, [recarga]);
 
   function abrirCrear() {
-    setFormData({
-      id: null,
-      title: '',
-      genre: 'ACCION',
-      durationMinutes: 120,
-      trailerUrl: '',
-      posterUrl: '/ljdh.jpe',
-      synopsis: '',
-      ageRating: '+12',
-      inShowcase: false,
-    });
+    setFormData(FORM_VACIO);
     setModalMode('create');
   }
 
   function abrirEditar(peli) {
     setFormData({
       id: peli.id,
-      title: peli.title,
-      genre: peli.genre,
+      title: peli.title || '',
+      genre: peli.genre || 'ACCION',
       durationMinutes: peli.durationMinutes || 120,
-      trailerUrl: peli.trailerUrl || '',
-      posterUrl: peli.posterUrl || '',
-      synopsis: peli.synopsis || '',
       ageRating: peli.ageRating || '+12',
-      inShowcase: !!peli.inShowcase,
+      synopsis: peli.synopsis || '',
+      posterUrl: peli.posterUrl || '',
+      trailerUrl: peli.trailerUrl || '',
     });
     setModalMode('edit');
   }
 
-  function cerrarModal() {
-    setModalMode(null);
-  }
-
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
     if (!formData.title.trim()) return;
-
-    if (modalMode === 'create') {
-      const nueva = {
-        ...formData,
-        id: Date.now(),
-        durationMinutes: Number(formData.durationMinutes) || 90,
-      };
-      setPeliculas([nueva, ...peliculas]);
-    } else if (modalMode === 'edit') {
-      setPeliculas(
-        peliculas.map((p) =>
-          p.id === formData.id
-            ? {
-              ...p,
-              ...formData,
-              durationMinutes: Number(formData.durationMinutes) || 90,
-            }
-            : p
-        )
-      );
+    setGuardando(true);
+    try {
+      const cuerpo = cuerpoPelicula(formData);
+      if (modalMode === 'create') {
+        await crearPelicula(cuerpo, token);
+        setAviso({ tipo: 'ok', texto: `Película "${cuerpo.title}" creada en el catálogo.` });
+      } else {
+        await actualizarPelicula(formData.id, cuerpo, token);
+        setAviso({ tipo: 'ok', texto: `Película "${cuerpo.title}" actualizada.` });
+      }
+      setModalMode(null);
+      setRecarga((n) => n + 1);
+    } catch (err) {
+      setAviso({ tipo: 'error', texto: `No se pudo guardar la película: ${err.message}` });
+    } finally {
+      setGuardando(false);
     }
-    cerrarModal();
   }
 
-  function handleDelete(id, titulo) {
-    if (window.confirm(`¿Confirmas la eliminación definitiva de "${titulo}" del catálogo central?`)) {
-      setPeliculas(peliculas.filter((p) => p.id !== id));
+  async function handleDelete(peli) {
+    if (!window.confirm(`¿Confirmas la eliminación definitiva de "${peli.title}" del catálogo central?`)) return;
+    try {
+      await eliminarPelicula(peli.id, token);
+      setAviso({ tipo: 'ok', texto: `Película "${peli.title}" eliminada.` });
+      setRecarga((n) => n + 1);
+    } catch (err) {
+      setAviso({ tipo: 'error', texto: `No se pudo eliminar la película: ${err.message}` });
     }
   }
 
   const peliculasFiltradas = peliculas.filter((p) => {
-    const coincideTitulo = p.title.toLowerCase().includes(busqueda.toLowerCase());
+    const coincideTitulo = (p.title || '').toLowerCase().includes(busqueda.toLowerCase());
     const coincideGenero = filtroGenero === 'TODOS' || p.genre === filtroGenero;
     return coincideTitulo && coincideGenero;
   });
+
+  // Géneros conocidos + los que ya existan en la BD con otro valor
+  const generosFiltro = [...new Set([...GENRES.map((g) => g.value), ...peliculas.map((p) => p.genre).filter(Boolean)])];
+
+  const etiquetaGenero = (g) => GENRES.find((x) => x.value === g)?.label || g;
 
   return (
     <div className="admin-page-container">
@@ -142,10 +164,13 @@ export default function AdminPeliculasPage() {
           </p>
         </div>
 
-        <button className="admin-btn admin-btn-primary" type="button" onClick={abrirCrear}>
+        <button className="admin-btn admin-btn-primary" type="button" onClick={abrirCrear} disabled={!token}>
           + Añadir Película
         </button>
       </header>
+
+      {!token && <AvisoSinToken />}
+      <AvisoAdmin aviso={aviso} onCerrar={() => setAviso(null)} />
 
       {/* Barra de filtros y búsqueda */}
       <div className="admin-panel" style={{ padding: '14px 18px', marginBottom: '20px' }}>
@@ -167,8 +192,8 @@ export default function AdminPeliculasPage() {
               onChange={(e) => setFiltroGenero(e.target.value)}
             >
               <option value="TODOS">Todos los géneros</option>
-              {GENRES.map((g) => (
-                <option key={g.value} value={g.value}>{g.label}</option>
+              {generosFiltro.map((g) => (
+                <option key={g} value={g}>{etiquetaGenero(g)}</option>
               ))}
             </select>
           </div>
@@ -190,12 +215,18 @@ export default function AdminPeliculasPage() {
               <th>Duración</th>
               <th>Edad</th>
               <th>Tráiler</th>
-              <th>Carrusel</th>
+              <th title="Calculado por Cartelera: tiene sesiones futuras no canceladas">En cartelera</th>
               <th style={{ textAlign: 'right' }}>Acciones</th>
             </tr>
           </thead>
           <tbody>
-            {peliculasFiltradas.length === 0 ? (
+            {cargando ? (
+              <tr>
+                <td colSpan="8" style={{ textAlign: 'center', padding: '36px', color: 'var(--text-muted)' }}>
+                  Cargando catálogo…
+                </td>
+              </tr>
+            ) : peliculasFiltradas.length === 0 ? (
               <tr>
                 <td colSpan="8" style={{ textAlign: 'center', padding: '36px', color: 'var(--text-muted)' }}>
                   No se han encontrado películas con el criterio de búsqueda especificado.
@@ -234,7 +265,7 @@ export default function AdminPeliculasPage() {
                           fontSize: '1.2rem',
                           borderRadius: '3px',
                         }}>
-                          {peli.title.charAt(0)}
+                          {(peli.title || '?').charAt(0)}
                         </div>
                       )}
                     </td>
@@ -259,9 +290,7 @@ export default function AdminPeliculasPage() {
                     </td>
 
                     <td>
-                      <span className="admin-badge admin-badge-dark">
-                        {GENRES.find((g) => g.value === peli.genre)?.label || peli.genre}
-                      </span>
+                      <span className="admin-badge admin-badge-dark">{etiquetaGenero(peli.genre)}</span>
                     </td>
 
                     <td style={{ whiteSpace: 'nowrap' }}>
@@ -288,10 +317,10 @@ export default function AdminPeliculasPage() {
                     </td>
 
                     <td>
-                      {peli.inShowcase ? (
-                        <span className="admin-badge admin-badge-success">Destacada</span>
+                      {enCartelera.has(peli.id) ? (
+                        <span className="admin-badge admin-badge-success">Con sesiones</span>
                       ) : (
-                        <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Estándar</span>
+                        <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Sin sesiones</span>
                       )}
                     </td>
 
@@ -300,6 +329,7 @@ export default function AdminPeliculasPage() {
                         className="admin-btn admin-btn-secondary admin-btn-sm"
                         type="button"
                         onClick={() => abrirEditar(peli)}
+                        disabled={!token}
                         style={{ marginRight: '6px' }}
                       >
                         Editar
@@ -307,7 +337,8 @@ export default function AdminPeliculasPage() {
                       <button
                         className="admin-btn admin-btn-danger admin-btn-sm"
                         type="button"
-                        onClick={() => handleDelete(peli.id, peli.title)}
+                        onClick={() => handleDelete(peli)}
+                        disabled={!token}
                       >
                         Eliminar
                       </button>
@@ -322,7 +353,7 @@ export default function AdminPeliculasPage() {
 
       {/* Modal CRUD: Añadir / Modificar Película */}
       {modalMode && (
-        <div className="admin-modal-backdrop" onClick={cerrarModal}>
+        <div className="admin-modal-backdrop" onClick={() => setModalMode(null)}>
           <div className="admin-modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="admin-modal-header">
               <h2 className="admin-modal-title">
@@ -331,7 +362,7 @@ export default function AdminPeliculasPage() {
               <button
                 type="button"
                 className="admin-btn admin-btn-secondary admin-btn-sm"
-                onClick={cerrarModal}
+                onClick={() => setModalMode(null)}
               >
                 ✕
               </button>
@@ -352,14 +383,15 @@ export default function AdminPeliculasPage() {
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
                 <div className="admin-form-group">
-                  <label className="admin-label">Género Cinematográfico</label>
+                  <label className="admin-label">Género Cinematográfico *</label>
                   <select
                     className="admin-select"
+                    required
                     value={formData.genre}
                     onChange={(e) => setFormData({ ...formData, genre: e.target.value })}
                   >
-                    {GENRES.map((g) => (
-                      <option key={g.value} value={g.value}>{g.label}</option>
+                    {conValorActual(GENRES.map((g) => g.value), formData.genre).map((g) => (
+                      <option key={g} value={g}>{etiquetaGenero(g)}</option>
                     ))}
                   </select>
                 </div>
@@ -370,8 +402,8 @@ export default function AdminPeliculasPage() {
                     type="number"
                     className="admin-input"
                     required
-                    min={30}
-                    max={400}
+                    min={1}
+                    max={600}
                     value={formData.durationMinutes}
                     onChange={(e) => setFormData({ ...formData, durationMinutes: e.target.value })}
                   />
@@ -384,20 +416,21 @@ export default function AdminPeliculasPage() {
                   <input
                     type="text"
                     className="admin-input"
-                    placeholder="/ljdh.jpe o https://..."
+                    placeholder="https://..."
                     value={formData.posterUrl}
                     onChange={(e) => setFormData({ ...formData, posterUrl: e.target.value })}
                   />
                 </div>
 
                 <div className="admin-form-group">
-                  <label className="admin-label">Clasificación por Edad</label>
+                  <label className="admin-label">Clasificación por Edad *</label>
                   <select
                     className="admin-select"
+                    required
                     value={formData.ageRating}
                     onChange={(e) => setFormData({ ...formData, ageRating: e.target.value })}
                   >
-                    {AGE_RATINGS.map((r) => (
+                    {conValorActual(AGE_RATINGS, formData.ageRating).map((r) => (
                       <option key={r} value={r}>{r}</option>
                     ))}
                   </select>
@@ -416,10 +449,9 @@ export default function AdminPeliculasPage() {
               </div>
 
               <div className="admin-form-group">
-                <label className="admin-label">Sinopsis Argumental *</label>
+                <label className="admin-label">Sinopsis Argumental</label>
                 <textarea
                   className="admin-textarea"
-                  required
                   rows={4}
                   placeholder="Escribe la descripción argumental y sinopsis de la obra..."
                   value={formData.synopsis}
@@ -427,32 +459,20 @@ export default function AdminPeliculasPage() {
                 />
               </div>
 
-              <div className="admin-form-group" style={{ flexDirection: 'row', alignItems: 'center', gap: '10px', marginTop: '6px' }}>
-                <input
-                  type="checkbox"
-                  id="inShowcase"
-                  checked={formData.inShowcase}
-                  onChange={(e) => setFormData({ ...formData, inShowcase: e.target.checked })}
-                  style={{ width: '18px', height: '18px', cursor: 'pointer' }}
-                />
-                <label htmlFor="inShowcase" style={{ cursor: 'pointer', fontSize: '0.88rem', fontWeight: 600 }}>
-                  Destacar en el carrusel principal de la web
-                </label>
-              </div>
+              <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: '4px 0 0' }}>
+                Una película aparece en cartelera automáticamente cuando tiene sesiones programadas.
+              </p>
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '24px', paddingTop: '16px', borderTop: '1px solid rgba(43,18,21,0.1)' }}>
                 <button
                   type="button"
                   className="admin-btn admin-btn-secondary"
-                  onClick={cerrarModal}
+                  onClick={() => setModalMode(null)}
                 >
                   Cancelar
                 </button>
-                <button
-                  type="submit"
-                  className="admin-btn admin-btn-primary"
-                >
-                  {modalMode === 'create' ? 'Guardar Película' : 'Actualizar Cambios'}
+                <button type="submit" className="admin-btn admin-btn-primary" disabled={guardando}>
+                  {guardando ? 'Guardando…' : modalMode === 'create' ? 'Guardar Película' : 'Actualizar Cambios'}
                 </button>
               </div>
             </form>

@@ -32,6 +32,85 @@ export function obtenerSala(roomId, token) {
   return apiFetch(`/api/v1/rooms/${roomId}`, { token });
 }
 
+/* ---------------------------------------------------------
+   Gestión (administración). Lectura de películas, sesiones y
+   cines es pública; el resto exige token.
+   --------------------------------------------------------- */
+
+/** GET /api/v1/cinemas (público) */
+export function obtenerCines() {
+  return apiFetch('/api/v1/cinemas');
+}
+
+/** PUT /api/v1/cinemas/{id} · body { name, address, city, phone } */
+export function actualizarCine(cinemaId, datos, token) {
+  return apiFetch(`/api/v1/cinemas/${cinemaId}`, { method: 'PUT', body: datos, token });
+}
+
+/** POST /api/v1/cinemas · body { name, address, city, phone } */
+export function crearCine(datos, token) {
+  return apiFetch('/api/v1/cinemas', { method: 'POST', body: datos, token });
+}
+
+/** DELETE /api/v1/cinemas/{id} */
+export function eliminarCine(cinemaId, token) {
+  return apiFetch(`/api/v1/cinemas/${cinemaId}`, { method: 'DELETE', token });
+}
+
+/** GET /api/v1/movies?inShowcase=true (público) -> películas con sesiones futuras no canceladas */
+export function obtenerPeliculasEnCartelera() {
+  return apiFetch('/api/v1/movies', { query: { inShowcase: true } });
+}
+
+/** POST /api/v1/movies · body { title, synopsis, durationMinutes, genre, ageRating, posterUrl, trailerUrl } */
+export function crearPelicula(datos, token) {
+  return apiFetch('/api/v1/movies', { method: 'POST', body: datos, token });
+}
+
+/** PUT /api/v1/movies/{id} (mismos campos que al crear) */
+export function actualizarPelicula(movieId, datos, token) {
+  return apiFetch(`/api/v1/movies/${movieId}`, { method: 'PUT', body: datos, token });
+}
+
+/** DELETE /api/v1/movies/{id} */
+export function eliminarPelicula(movieId, token) {
+  return apiFetch(`/api/v1/movies/${movieId}`, { method: 'DELETE', token });
+}
+
+/** GET /api/v1/rooms?cinemaId= (requiere token) -> salas de un cine */
+export function obtenerSalasCine(cinemaId, token) {
+  return apiFetch('/api/v1/rooms', { token, query: { cinemaId } });
+}
+
+/** POST /api/v1/rooms · body { cinemaId, name, roomType, rowsCount, columnsCount, wheelchairAccessible, basePrice } */
+export function crearSala(datos, token) {
+  return apiFetch('/api/v1/rooms', { method: 'POST', body: datos, token });
+}
+
+/** GET /api/v1/sessions (público, sin filtros) -> todas las sesiones */
+export function obtenerTodasSesiones() {
+  return apiFetch('/api/v1/sessions');
+}
+
+/** POST /api/v1/sessions · body { movieId, roomId, startTime, ticketPrice } (se crea PROGRAMADA) */
+export function crearSesion(datos, token) {
+  return apiFetch('/api/v1/sessions', { method: 'POST', body: datos, token });
+}
+
+/** PATCH /api/v1/sessions/{id} · body { roomId?, startTime?, status? } */
+export function actualizarSesion(sessionId, cambios, token) {
+  return apiFetch(`/api/v1/sessions/${sessionId}`, { method: 'PATCH', body: cambios, token });
+}
+
+/** Estados de una sesión en Cartelera. Reservas solo vende las que están A_LA_VENTA. */
+export const ESTADOS_SESION = {
+  PROGRAMADA: 'Programada',
+  A_LA_VENTA: 'A la venta',
+  EN_CURSO: 'En curso',
+  FINALIZADA: 'Finalizada',
+  CANCELADA: 'Cancelada',
+};
+
 /** Fecha local en formato AAAA-MM-DD (sin pasar a UTC, que cambiaría el día) */
 export function fechaIso(fecha) {
   const d = new Date(fecha);
@@ -40,13 +119,64 @@ export function fechaIso(fecha) {
   return `${d.getFullYear()}-${mm}-${dd}`;
 }
 
+/** GET /api/v1/sessions/{id} (requiere token) */
+export function obtenerSesion(sessionId, token) {
+  return apiFetch(`/api/v1/sessions/${sessionId}`, { token });
+}
+
+/** GET /api/v1/cinemas/{id} (público) */
+export function obtenerCine(cinemaId) {
+  return apiFetch(`/api/v1/cinemas/${cinemaId}`);
+}
+
+/** "2026-11-10T19:00:00" (LocalDateTime de Cartelera, hora local del cine) -> Date */
+export function fechaSesion(startTime) {
+  return new Date(String(startTime || ''));
+}
+
+/** "2026-11-10T19:00:00" -> "19:00" */
+export function horaSesion(startTime) {
+  return String(startTime || '').slice(11, 16);
+}
+
 /**
- * Cine del frontend en el que se venden las sesiones reales.
- * El Comp. 1 no tiene el concepto de "cine" (solo salas y sesiones), así que su
- * cartelera se asigna a un único cine; los demás muestran sesiones de demostración.
- * Se cambia con VITE_CINE_CARTELERA (id de src/assets/cines.json).
+ * Cartelera de un cine para un día: sesiones A_LA_VENTA que aún no han empezado,
+ * en las salas de ese cine, agrupadas por película.
+ * Leer las salas exige token (el del usuario o uno de invitado).
+ * @returns {{ peliculas: object[], sesionesPorPelicula: Record<string, object[]> }}
  */
-export const CINE_CARTELERA = Number(import.meta.env.VITE_CINE_CARTELERA || 1);
+export async function cargarCarteleraCine(cinemaId, fecha, token) {
+  const [salas, sesiones, pelis] = await Promise.all([
+    obtenerSalasCine(cinemaId, token),
+    obtenerSesiones(fecha),
+    obtenerPeliculas(),
+  ]);
+  const salaPorId = new Map((salas || []).map((s) => [s.id, s]));
+  const ahora = Date.now();
+
+  const porPelicula = {};
+  (sesiones || [])
+    .filter((s) => s.status === 'A_LA_VENTA' && salaPorId.has(s.roomId) && fechaSesion(s.startTime).getTime() > ahora)
+    .sort((a, b) => String(a.startTime).localeCompare(String(b.startTime)))
+    .forEach((s) => {
+      const sala = salaPorId.get(s.roomId);
+      (porPelicula[s.movieId] ||= []).push({
+        showId: s.id,                // id de la sesión en Cartelera = showId en Reservas
+        roomId: s.roomId,
+        startTime: s.startTime,
+        hora: horaSesion(s.startTime),
+        salaNombre: sala.name || '',
+        formato: TIPOS_SALA[sala.roomType] || sala.roomType || '',
+        precio: Number(s.ticketPrice) || 0,
+      });
+    });
+
+  const catalogo = new Map((pelis || []).map((m) => [m.id, m]));
+  const peliculas = Object.keys(porPelicula)
+    .filter((movieId) => catalogo.has(movieId))
+    .map((movieId) => adaptarPelicula(catalogo.get(movieId)));
+  return { peliculas, sesionesPorPelicula: porPelicula };
+}
 
 /** Película de Cartelera con valores por defecto para los campos opcionales */
 export function adaptarPelicula(m) {
@@ -58,7 +188,24 @@ export function adaptarPelicula(m) {
     genre: m.genre || '',
     ageRating: m.ageRating || '',
     posterUrl: m.posterUrl || '',
+    trailerUrl: m.trailerUrl || '',
   };
+}
+
+/** Nombre legible de los géneros (Cartelera los guarda en mayúsculas y sin tildes) */
+export const GENEROS = {
+  ACCION: 'Acción',
+  CIENCIA_FICCION: 'Ciencia Ficción',
+  DRAMA: 'Drama',
+  COMEDIA: 'Comedia',
+  TERROR: 'Terror',
+  ANIMACION: 'Animación',
+  THRILLER: 'Thriller',
+  ROMANCE: 'Romance',
+};
+
+export function nombreGenero(genero) {
+  return GENEROS[genero] || String(genero || '').replace(/_/g, ' ');
 }
 
 /** Nombre legible del tipo de sala de Cartelera */

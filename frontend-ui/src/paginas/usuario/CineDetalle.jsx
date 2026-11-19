@@ -1,84 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import cines from '../../assets/cines.json';
-import peliculas from '../../assets/peliculas.json';
 import { useCine } from '../../context/useCine';
 import { useAuth } from '../../context/useAuth';
-import { obtenerTokenInvitado } from '../../api/usuarios';
-import {
-  obtenerPeliculas,
-  obtenerSesiones,
-  obtenerSalas,
-  adaptarPelicula,
-  CINE_CARTELERA,
-  TIPOS_SALA,
-} from '../../api/cartelera';
-
-/* ---------------------------------------------------------
-   Sesiones reales del Componente 1 (Cartelera)
-   Solo se pueden comprar las que están A_LA_VENTA.
-   --------------------------------------------------------- */
-function adaptarSesion(s, salas) {
-  const sala = salas.get(s.roomId);
-  return {
-    showId: s.id,              // id de la sesión en Cartelera = showId en Reservas
-    roomId: s.roomId,
-    startTime: s.startTime,
-    hora: (s.startTime || '').slice(11, 16),
-    sala: s.roomId,
-    salaNombre: sala?.name || '',
-    formato: sala ? TIPOS_SALA[sala.roomType] || sala.roomType || '' : '',
-    precio: Number(s.ticketPrice) || 0,
-  };
-}
-
-/**
- * Salas de Cartelera (nombre y formato). Leerlas exige token: se usa el del usuario
- * o uno de invitado, que el Comp. 3 solo firma (no guarda nada). Si falla, sin nombres.
- */
-async function cargarSalas(obtenerToken) {
-  try {
-    const salas = await obtenerSalas(await obtenerToken());
-    return new Map((salas || []).map((r) => [r.id, r]));
-  } catch {
-    return new Map();
-  }
-}
-
-async function cargarCarteleraReal(fecha, obtenerToken) {
-  const [sesiones, pelis] = await Promise.all([obtenerSesiones(fecha), obtenerPeliculas()]);
-  const aLaVenta = (sesiones || [])
-    .filter((s) => s.status === 'A_LA_VENTA')
-    .sort((a, b) => String(a.startTime).localeCompare(String(b.startTime)));
-
-  const salas = aLaVenta.length > 0 ? await cargarSalas(obtenerToken) : new Map();
-  const porPelicula = {};
-  aLaVenta.forEach((s) => {
-    (porPelicula[s.movieId] ||= []).push(adaptarSesion(s, salas));
-  });
-
-  const catalogo = new Map((pelis || []).map((m) => [m.id, m]));
-  const peliculasConSesion = Object.keys(porPelicula).map((movieId) =>
-    adaptarPelicula(catalogo.get(Number(movieId)) || { id: Number(movieId) })
-  );
-  return { peliculas: peliculasConSesion, sesionesPorPelicula: porPelicula };
-}
-
-function generarSesiones(peliculaId, cineId, fecha) {
-  const seed = (Number(peliculaId) * 11 + Number(cineId) * 7 + fecha.getDate() + fecha.getMonth() * 31) % 100;
-  const catalogoHorarios = [
-    { hora: '12:30', sala: 1, formato: '2D',   precio: 8.50 },
-    { hora: '16:00', sala: 2, formato: '2D',   precio: 9.50 },
-    { hora: '18:15', sala: 3, formato: '3D',   precio: 11.50 },
-    { hora: '20:30', sala: 4, formato: 'VIP',  precio: 15.00 },
-    { hora: '22:15', sala: 5, formato: 'IMAX', precio: 14.00 },
-  ];
-
-  return catalogoHorarios.filter((_, i) => (seed + i) % 4 !== 0 || i < 3).map((s) => ({
-    ...s,
-    asientosLibres: ((seed * (s.sala + 2)) % 45) + 12,
-  }));
-}
+import { tokenParaLeer } from '../../api/usuarios';
+import { obtenerCine, cargarCarteleraCine, nombreGenero } from '../../api/cartelera';
+import { Cargando, ErrorCarga, SinDatos } from '../../components/EstadoCarga';
 
 function generarDias() {
   const dias = [];
@@ -105,51 +31,50 @@ export default function CineDetalle() {
   const { cineId } = useParams();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { setCineSeleccionado } = useCine();
+  const { cines, cargandoCines, setCineSeleccionado } = useCine();
+  const { tokenUsuario } = useAuth();
+  const tokenCliente = tokenUsuario();
 
-  const cine = cines.find((item) => String(item.id) === cineId);
+  // Cine: de la lista global o, si aún no está, directamente de Cartelera
+  const cineLista = cines.find((c) => c.id === cineId) || null;
+  const [cineDirecto, setCineDirecto] = useState({ id: null, cine: null, error: '' });
+  const cine = cineLista || (cineDirecto.id === cineId ? cineDirecto.cine : null);
+
+  useEffect(() => {
+    if (cineLista || cargandoCines) return undefined;
+    let cancelado = false;
+    obtenerCine(cineId)
+      .then((c) => { if (!cancelado) setCineDirecto({ id: cineId, cine: c, error: '' }); })
+      .catch((err) => { if (!cancelado) setCineDirecto({ id: cineId, cine: null, error: err.status === 404 ? 'no-existe' : err.message }); });
+    return () => { cancelado = true; };
+  }, [cineId, cineLista, cargandoCines]);
+
   const dias = generarDias();
   const [diaIdx, setDiaIdx] = useState(0);
   const [sesionSeleccionada, setSesionSeleccionada] = useState(null);
-
-  // Cartelera real: 'cargando' | 'real' (hay sesiones a la venta) | 'vacio' | 'demo' (sin conexión)
-  //                 | 'otro-cine' (las sesiones reales están en el cine CINE_CARTELERA)
-  const { tokenUsuario } = useAuth();
-  const tokenCliente = tokenUsuario();
-  const esCineCartelera = cine?.id === CINE_CARTELERA;
-  const [carteleraCargada, setCarteleraCargada] = useState({ dia: null, modo: 'cargando', peliculas: [], sesionesPorPelicula: {} });
+  const [recarga, setRecarga] = useState(0);
   const diaClave = dias[diaIdx].toDateString();
+  const claveCartelera = `${cineId}|${diaClave}|${recarga}`;
+
+  // Cartelera del día: sesiones a la venta en las salas de este cine
+  const [cartelera, setCartelera] = useState({ clave: null, peliculas: [], sesionesPorPelicula: {}, error: '' });
 
   useEffect(() => {
-    if (!esCineCartelera) return undefined;
     let cancelado = false;
-    const obtenerToken = () => (tokenCliente ? Promise.resolve(tokenCliente) : obtenerTokenInvitado());
-    cargarCarteleraReal(new Date(diaClave), obtenerToken)
-      .then((res) => {
-        if (!cancelado) setCarteleraCargada({ ...res, dia: diaClave, modo: res.peliculas.length > 0 ? 'real' : 'vacio' });
-      })
-      .catch(() => {
-        if (!cancelado) setCarteleraCargada({ dia: diaClave, modo: 'demo', peliculas: [], sesionesPorPelicula: {} });
-      });
+    const clave = `${cineId}|${diaClave}|${recarga}`;
+    tokenParaLeer(tokenCliente)
+      .then((token) => cargarCarteleraCine(cineId, new Date(diaClave), token))
+      .then((res) => { if (!cancelado) setCartelera({ clave, ...res, error: '' }); })
+      .catch((err) => { if (!cancelado) setCartelera({ clave, peliculas: [], sesionesPorPelicula: {}, error: err.message }); });
     return () => { cancelado = true; };
-  }, [diaClave, esCineCartelera, tokenCliente]);
+  }, [cineId, diaClave, tokenCliente, recarga]);
 
-  // Mientras llega la respuesta del día elegido se muestra "cargando"
-  const vacia = { peliculas: [], sesionesPorPelicula: {} };
-  const cartelera = !esCineCartelera
-    ? { ...vacia, modo: 'otro-cine' }
-    : carteleraCargada.dia === diaClave
-      ? carteleraCargada
-      : { ...vacia, modo: 'cargando' };
-  const cineCartelera = cines.find((c) => c.id === CINE_CARTELERA);
-  const esReal = cartelera.modo === 'real';
-  const listaPeliculas = esReal ? cartelera.peliculas : peliculas;
-  const sesionesDe = (peli) =>
-    esReal ? cartelera.sesionesPorPelicula[peli.id] || [] : generarSesiones(peli.id, cine.id, fechaSeleccionada);
+  const cargandoCartelera = cartelera.clave !== claveCartelera;
 
-  // Carrusel de películas en la cabecera del cine
-  const carruselPeliculas = peliculas.filter((p) => p.inShowcase);
+  // Carrusel con las películas del día
+  const carruselPeliculas = cargandoCartelera ? [] : cartelera.peliculas.filter((p) => p.posterUrl);
   const [activeCarousel, setActiveCarousel] = useState(0);
+  const peliCarousel = carruselPeliculas[activeCarousel % Math.max(1, carruselPeliculas.length)];
 
   useEffect(() => {
     if (carruselPeliculas.length < 2) return undefined;
@@ -159,27 +84,27 @@ export default function CineDetalle() {
     return () => window.clearInterval(timer);
   }, [carruselPeliculas.length]);
 
-  function prevCarousel() {
-    setActiveCarousel((idx) => (idx - 1 + carruselPeliculas.length) % carruselPeliculas.length);
-  }
-
-  function nextCarousel() {
-    setActiveCarousel((idx) => (idx + 1) % carruselPeliculas.length);
-  }
-
-  const peliCarousel = carruselPeliculas[activeCarousel];
-
+  // Visitar un cine lo deja elegido para la cartelera y la compra
   useEffect(() => {
-    if (cine) {
-      setCineSeleccionado(cine);
-    }
+    if (cine) setCineSeleccionado(cine);
   }, [cine, setCineSeleccionado]);
 
   if (!cine) {
+    if (cineDirecto.id === cineId && cineDirecto.error) {
+      return (
+        <section className="placeholder-page">
+          <h1>Cine no disponible</h1>
+          <p>
+            {cineDirecto.error === 'no-existe'
+              ? 'No se ha encontrado el cine solicitado.'
+              : `No se pudo cargar el cine: ${cineDirecto.error}`}
+          </p>
+        </section>
+      );
+    }
     return (
       <section className="placeholder-page">
-        <h1>Cine no disponible</h1>
-        <p>No se ha encontrado la información correspondiente al cine solicitado.</p>
+        <Cargando texto="Cargando cine…" />
       </section>
     );
   }
@@ -192,7 +117,7 @@ export default function CineDetalle() {
         cineName: cine.name,
         peliculaId: pelicula.id,
         peliculaTitle: pelicula.title,
-        fecha: dias[diaIdx].toISOString(),
+        fecha: sesion.startTime,
         sesion,
       },
     });
@@ -200,30 +125,20 @@ export default function CineDetalle() {
 
   const fechaSeleccionada = dias[diaIdx];
   const peliculaPreselId = searchParams.get('pelicula');
+  const infoDia = formatDia(fechaSeleccionada, diaIdx);
 
   return (
     <div className="detalle-cine-page">
-      {/* 1. Cabecera con datos del cine y foto integrada (sin botón volver) */}
+      {/* 1. Cabecera con datos del cine */}
       <header className="detalle-cine-header-panel">
         <div className="detalle-cine-hero-grid">
           <div className="detalle-cine-datos">
-            <span className="home-eyebrow">{cine.city}, {cine.province}</span>
+            <span className="home-eyebrow">{cine.city}</span>
             <h1 className="detalle-cine-title">{cine.name}</h1>
-            <p className="detalle-cine-location">
-              {cine.address}, {cine.postalCode}
-            </p>
-            <p className="detalle-cine-desc">
-              Espacio audiovisual dotado de {cine.rooms} salas de proyección digital, climatización acústica y accesibilidad total.
-            </p>
-            <div className="detalle-cine-format-list">
-              <span className="cine-format-pill">{cine.rooms} salas</span>
-              {cine.formats.map((f) => (
-                <span key={f} className="cine-format-pill">{f}</span>
-              ))}
-            </div>
+            <p className="detalle-cine-location">{cine.address}</p>
+            {cine.phone && <p className="detalle-cine-desc">Teléfono: {cine.phone}</p>}
           </div>
 
-          {/* Carrusel de películas en la cabecera: ocupa la mitad de pantalla con título abajo a la derecha saliendo por debajo */}
           <div className="detalle-cine-carousel-wrap">
             <div className="detalle-carousel-inner">
               {peliCarousel?.posterUrl ? (
@@ -239,18 +154,18 @@ export default function CineDetalle() {
               <div className="detalle-carousel-overlay-shadow" />
             </div>
 
-            {/* Título abajo a la derecha: solo las letras, sin recuadro ni badge */}
-            <div className="detalle-carousel-title-wrap">
-              <h3 className="detalle-carousel-title-text">{peliCarousel?.title}</h3>
-            </div>
+            {peliCarousel && (
+              <div className="detalle-carousel-title-wrap">
+                <h3 className="detalle-carousel-title-text">{peliCarousel.title}</h3>
+              </div>
+            )}
 
-            {/* Controles del carrusel */}
             {carruselPeliculas.length > 1 && (
               <>
                 <button
                   className="detalle-carousel-control detalle-carousel-prev"
                   type="button"
-                  onClick={prevCarousel}
+                  onClick={() => setActiveCarousel((idx) => (idx - 1 + carruselPeliculas.length) % carruselPeliculas.length)}
                   aria-label="Película anterior"
                 >
                   ‹
@@ -258,7 +173,7 @@ export default function CineDetalle() {
                 <button
                   className="detalle-carousel-control detalle-carousel-next"
                   type="button"
-                  onClick={nextCarousel}
+                  onClick={() => setActiveCarousel((idx) => (idx + 1) % carruselPeliculas.length)}
                   aria-label="Película siguiente"
                 >
                   ›
@@ -268,7 +183,7 @@ export default function CineDetalle() {
                     <button
                       key={item.id}
                       type="button"
-                      className={index === activeCarousel ? 'active' : ''}
+                      className={index === activeCarousel % carruselPeliculas.length ? 'active' : ''}
                       onClick={() => setActiveCarousel(index)}
                       aria-label={`Mostrar ${item.title}`}
                     />
@@ -283,19 +198,16 @@ export default function CineDetalle() {
       {/* 2. Selector de fechas */}
       <section className="detalle-cine-fechas-panel">
         <div className="detalle-cine-container">
-          <h2 className="detalle-fechas-subtitulo">
-            Selecciona fecha de proyección
-          </h2>
+          <h2 className="detalle-fechas-subtitulo">Selecciona fecha de proyección</h2>
           <div className="detalle-dias-scroll">
             {dias.map((d, i) => {
               const info = formatDia(d, i);
-              const activo = diaIdx === i;
               return (
                 <button
                   key={d.toISOString()}
                   type="button"
-                  className={`detalle-dia-pill${activo ? ' active' : ''}`}
-                  onClick={() => { setDiaIdx(i); setSesionSeleccionada(null); }}
+                  className={`detalle-dia-pill${diaIdx === i ? ' active' : ''}`}
+                  onClick={() => { setDiaIdx(i); setSesionSeleccionada(null); setActiveCarousel(0); }}
                 >
                   <span className="detalle-dia-principal">{info.label}</span>
                   <span className="detalle-dia-secundario">{info.sub}</span>
@@ -306,62 +218,38 @@ export default function CineDetalle() {
         </div>
       </section>
 
-      {/* 3. Películas: Info a la izquierda, póster a la derecha y sesiones debajo */}
+      {/* 3. Películas con sus sesiones */}
       <section className="detalle-cine-cartelera-panel">
         <div className="detalle-cine-container">
           <p className="detalle-cartelera-intro">
-            Sesiones para <strong>{formatDia(fechaSeleccionada, diaIdx).label} ({formatDia(fechaSeleccionada, diaIdx).sub})</strong> en <strong>{cine.name}</strong>
+            Sesiones para <strong>{infoDia.label} ({infoDia.sub})</strong> en <strong>{cine.name}</strong>
           </p>
 
-          {cartelera.modo === 'cargando' && (
-            <p className="detalle-cartelera-intro">Consultando las sesiones a la venta…</p>
+          {cargandoCartelera && <Cargando texto="Consultando las sesiones a la venta…" />}
+          {!cargandoCartelera && cartelera.error && (
+            <ErrorCarga mensaje={`No se pudo cargar la cartelera: ${cartelera.error}`} onReintentar={() => setRecarga((n) => n + 1)} />
           )}
-          {(cartelera.modo === 'demo' || cartelera.modo === 'vacio') && (
-            <div className="cinasee-aviso">
-              {cartelera.modo === 'demo'
-                ? 'No hay conexión con la Cartelera: se muestran sesiones de demostración y el pago será simulado.'
-                : 'No hay sesiones a la venta en la Cartelera para este día: se muestran sesiones de demostración y el pago será simulado.'}
-            </div>
-          )}
-          {cartelera.modo === 'otro-cine' && cineCartelera && (
-            <div className="cinasee-aviso">
-              Las sesiones a la venta de la Cartelera están en <strong>{cineCartelera.name}</strong>.
-              En este cine se muestran sesiones de demostración y el pago será simulado.{' '}
-              <button
-                type="button"
-                className="cinasee-aviso-link"
-                onClick={() => navigate(`/cines/${cineCartelera.id}${peliculaPreselId ? `?pelicula=${peliculaPreselId}` : ''}`)}
-              >
-                Ir a {cineCartelera.name} →
-              </button>
-            </div>
+          {!cargandoCartelera && !cartelera.error && cartelera.peliculas.length === 0 && (
+            <SinDatos>No hay sesiones a la venta en este cine para este día.</SinDatos>
           )}
 
           <div className="detalle-peliculas-list">
-            {listaPeliculas.map((peli) => {
-              const sesiones = sesionesDe(peli);
+            {!cargandoCartelera && cartelera.peliculas.map((peli) => {
+              const sesiones = cartelera.sesionesPorPelicula[peli.id] || [];
               const isPreselected = String(peli.id) === String(peliculaPreselId);
               const sesActual = sesionSeleccionada?.peliculaId === peli.id ? sesionSeleccionada.sesion : null;
               const durHoras = Math.floor(peli.durationMinutes / 60);
               const durMin = peli.durationMinutes % 60;
 
               return (
-                <article
-                  key={peli.id}
-                  className={`detalle-peli-card${isPreselected ? ' preselected' : ''}`}
-                >
-                  {/* Fila superior: Izquierda texto / Derecha imagen fija */}
+                <article key={peli.id} className={`detalle-peli-card${isPreselected ? ' preselected' : ''}`}>
                   <div className="detalle-peli-row">
                     <div className="detalle-peli-col-info">
                       <div className="detalle-peli-badges">
-                        {peli.genre && (
-                          <span className="cartelera-badge-tag">{peli.genre.replace('_', ' ')}</span>
-                        )}
+                        {peli.genre && <span className="cartelera-badge-tag">{nombreGenero(peli.genre)}</span>}
                         {peli.ageRating && <span className="cartelera-badge-tag">{peli.ageRating}</span>}
                         {peli.durationMinutes > 0 && (
-                          <span className="cartelera-badge-tag cartelera-badge-tag--dark">
-                            {durHoras}h {durMin}m
-                          </span>
+                          <span className="cartelera-badge-tag cartelera-badge-tag--dark">{durHoras}h {durMin}m</span>
                         )}
                       </div>
                       <h2 className="detalle-peli-heading">{peli.title}</h2>
@@ -370,45 +258,29 @@ export default function CineDetalle() {
 
                     <div className="detalle-peli-col-poster">
                       {peli.posterUrl ? (
-                        <img
-                          className="detalle-peli-fixed-poster"
-                          src={peli.posterUrl}
-                          alt={`Póster de ${peli.title}`}
-                          loading="lazy"
-                        />
+                        <img className="detalle-peli-fixed-poster" src={peli.posterUrl} alt={`Póster de ${peli.title}`} loading="lazy" />
                       ) : (
-                        <div className="detalle-peli-fixed-poster placeholder">
-                          {peli.title.charAt(0)}
-                        </div>
+                        <div className="detalle-peli-fixed-poster placeholder">{peli.title.charAt(0)}</div>
                       )}
                     </div>
                   </div>
 
-                  {/* Fila inferior: Horarios y sesiones */}
                   <div className="detalle-sesiones-bloque">
                     <h3 className="detalle-sesiones-titulo">Horarios disponibles:</h3>
                     <div className="detalle-sesiones-fila-accion">
                       <div className="detalle-sesiones-grid">
                         {sesiones.map((ses) => {
-                          const clave = ses.showId ?? `${ses.hora}-${ses.sala}`;
-                          const claveActual = sesActual ? (sesActual.showId ?? `${sesActual.hora}-${sesActual.sala}`) : null;
-                          const isSelected = claveActual === clave;
+                          const isSelected = sesActual?.showId === ses.showId;
                           return (
                             <button
-                              key={clave}
+                              key={ses.showId}
                               type="button"
                               className={`detalle-hora-card${isSelected ? ' selected' : ''}`}
-                              onClick={() =>
-                                setSesionSeleccionada(
-                                  isSelected ? null : { peliculaId: peli.id, sesion: ses }
-                                )
-                              }
+                              onClick={() => setSesionSeleccionada(isSelected ? null : { peliculaId: peli.id, sesion: ses })}
                             >
                               <span className="detalle-hora-time">{ses.hora}</span>
                               <span className="detalle-hora-meta">
-                                {ses.showId
-                                  ? [ses.formato, ses.salaNombre].filter(Boolean).join(' · ') || 'Sala de proyección'
-                                  : `${ses.formato} · Sala ${ses.sala}`}
+                                {[ses.formato, ses.salaNombre].filter(Boolean).join(' · ') || 'Sala de proyección'}
                               </span>
                               <span className="detalle-hora-price">{ses.precio.toFixed(2)} €</span>
                             </button>

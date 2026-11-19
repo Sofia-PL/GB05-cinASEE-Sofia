@@ -1,23 +1,30 @@
+import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import cines from '../../assets/cines.json';
-import peliculas from '../../assets/peliculas.json';
 import { useCine } from '../../context/useCine';
+import { obtenerPelicula } from '../../api/cartelera';
+import { Cargando, ErrorCarga, SinDatos } from '../../components/EstadoCarga';
 
 export default function Cines() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { setCineSeleccionado } = useCine();
+  const { cines, cargandoCines, errorCines, recargarCines, setCineSeleccionado } = useCine();
 
+  // Si se llega desde la cartelera con una película elegida, se muestra su título
   const peliculaId = location.state?.peliculaId;
-  const peliSeleccionada = peliculaId ? peliculas.find((p) => p.id === Number(peliculaId)) : null;
+  const [peliSeleccionada, setPeliSeleccionada] = useState(null);
+
+  useEffect(() => {
+    if (!peliculaId) return undefined;
+    let cancelado = false;
+    obtenerPelicula(peliculaId)
+      .then((p) => { if (!cancelado) setPeliSeleccionada(p); })
+      .catch(() => { /* sin título: se puede elegir cine igualmente */ });
+    return () => { cancelado = true; };
+  }, [peliculaId]);
 
   function handleElegirCine(cine) {
     setCineSeleccionado(cine);
-    if (peliculaId) {
-      navigate(`/cines/${cine.id}?pelicula=${peliculaId}`);
-    } else {
-      navigate(`/cines/${cine.id}`);
-    }
+    navigate(peliculaId ? `/cines/${cine.id}?pelicula=${peliculaId}` : `/cines/${cine.id}`);
   }
 
   return (
@@ -25,37 +32,39 @@ export default function Cines() {
       <header className="cines-header">
         <p className="home-eyebrow">CinASEE en España</p>
         <h1>Nuestros cines</h1>
-        {peliSeleccionada ? (
+        {peliculaId ? (
           <div className="cines-aviso-pelicula">
-            Película seleccionada: <strong>{peliSeleccionada.title}</strong>. Elige a continuación el cine donde deseas verla:
+            {peliSeleccionada
+              ? <>Película seleccionada: <strong>{peliSeleccionada.title}</strong>. </>
+              : null}
+            Elige a continuación el cine donde deseas verla:
           </div>
         ) : (
           <p className="cines-header-desc">
-            Encuentra tu cine más cercano y consulta la cartelera actualizada con sesiones y formatos disponibles.
+            Encuentra tu cine más cercano y consulta las sesiones a la venta.
           </p>
         )}
       </header>
+
+      {cargandoCines && <Cargando texto="Cargando cines…" />}
+      {errorCines && <ErrorCarga mensaje={`No se pudieron cargar los cines: ${errorCines}`} onReintentar={recargarCines} />}
+      {!cargandoCines && !errorCines && cines.length === 0 && <SinDatos>Todavía no hay cines dados de alta.</SinDatos>}
 
       <div className="cines-grid">
         {cines.map((cine) => (
           <article className="cine-card" key={cine.id}>
             <div className="cine-card-header">
               <span className="cine-card-city">{cine.city}</span>
-              <span className="cine-card-rooms">{cine.rooms} salas</span>
             </div>
             <h2 className="cine-card-title">{cine.name}</h2>
-            <p className="cine-card-address">{cine.address}, {cine.postalCode}</p>
-            <div className="cine-card-formats">
-              {cine.formats.map((f) => (
-                <span key={f} className="cine-format-pill">{f}</span>
-              ))}
-            </div>
+            <p className="cine-card-address">{cine.address}</p>
+            {cine.phone && <p className="cine-card-address">Tel. {cine.phone}</p>}
             <button
               className="home-button home-button-dark cine-card-btn"
               type="button"
               onClick={() => handleElegirCine(cine)}
             >
-              {peliSeleccionada ? 'Elegir este cine' : 'Ver sesiones'}
+              {peliculaId ? 'Elegir este cine' : 'Ver sesiones'}
             </button>
           </article>
         ))}

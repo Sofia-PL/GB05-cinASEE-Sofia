@@ -53,6 +53,14 @@ export async function obtenerTokenInvitado() {
   return res.accessToken;
 }
 
+/**
+ * Token para leer datos que exigen autenticación (p. ej. las salas de Cartelera):
+ * el del usuario si lo hay o, si no, uno de invitado.
+ */
+export function tokenParaLeer(tokenUsuario) {
+  return tokenUsuario ? Promise.resolve(tokenUsuario) : obtenerTokenInvitado();
+}
+
 export function borrarTokenInvitado() {
   try {
     sessionStorage.removeItem(SS_GUEST_KEY);
@@ -76,7 +84,20 @@ export function tokenInvitado(deviceId) {
   return apiFetch('/v1/iam/auth/guest', { method: 'POST', body: { deviceId } });
 }
 
-/** GET /v1/iam/users/{id} -> perfil (nombre, puntos de fidelización...) */
+/**
+ * GET /v1/iam/users/{id} -> { id, email, fullName, role, loyaltyPoints,
+ *   preferredGenres, phone, homeCinema, cinemaId, canReviewRoleRequests }
+ */
 export function obtenerPerfil(userId, token) {
   return apiFetch(`/v1/iam/users/${userId}`, { token });
+}
+
+/** PUT /v1/iam/users/{id} · body { fullName?, preferredGenres?, phone?, homeCinema? } */
+export function actualizarPerfil(userId, datos, token) {
+  return apiFetch(`/v1/iam/users/${userId}`, { method: 'PUT', body: datos, token });
+}
+
+/** GET /v1/iam/users/{id}/history -> [{ reservationId, movieId, purchaseDate, amount }] */
+export function obtenerHistorial(userId, token) {
+  return apiFetch(`/v1/iam/users/${userId}/history`, { token });
 }

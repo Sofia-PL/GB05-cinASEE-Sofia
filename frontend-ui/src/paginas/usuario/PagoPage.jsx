@@ -10,6 +10,7 @@ import {
   guardarPagoEnCurso,
   borrarPagoEnCurso,
 } from '../../api/reservas';
+import CodigoQR from '../../components/CodigoQR';
 
 /* =========================================================
    Página de vuelta de Redsys  (/pago/redsys/vuelta)
@@ -115,7 +116,7 @@ export default function PagoPage() {
       // si ya caducó, las butacas ya están libres
     }
     borrarPagoEnCurso();
-    navigate('/cines');
+    navigate(pago.taquilla ? '/empleados/taquilla' : '/cines');
   }
 
   if (estado === 'confirmando') {
@@ -152,25 +153,41 @@ export default function PagoPage() {
             </div>
 
             <div className="compra-entradas-qr">
-              <p className="compra-redsys-title">Tus entradas</p>
+              <p className="compra-redsys-title">{pago.taquilla ? 'Entradas emitidas' : 'Tus entradas'}</p>
               {(confirmacion.tickets || []).map((codigo, i) => (
                 <div key={codigo} className="compra-entrada-codigo">
                   <span>{pago.butacas?.[i] ? `Butaca ${pago.butacas[i]}` : `Entrada ${i + 1}`}</span>
+                  <CodigoQR texto={codigo} tamano={110} />
                   <code>{codigo}</code>
                 </div>
               ))}
             </div>
 
             <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>
-              Presenta estos códigos en el control de acceso de la sala.
+              Presenta estos códigos QR en el control de acceso de la sala.
             </p>
             <div className="compra-nav-btns" style={{ width: '100%', maxWidth: '520px' }}>
-              <Link className="home-button" to="/perfil" style={{ flex: 1, justifyContent: 'center' }}>
-                Ver mis entradas
-              </Link>
-              <Link className="home-button home-button-dark" to="/" style={{ flex: 1, justifyContent: 'center' }}>
-                Volver al inicio
-              </Link>
+              {pago.taquilla ? (
+                <>
+                  <button className="home-button home-button-dark" type="button" onClick={() => window.print()} style={{ flex: 1, justifyContent: 'center' }}>
+                    Imprimir entradas
+                  </button>
+                  <Link className="home-button" to="/empleados/taquilla" style={{ flex: 1, justifyContent: 'center' }}>
+                    Nueva venta
+                  </Link>
+                </>
+              ) : (
+                <>
+                  {!pago.invitado && (
+                    <Link className="home-button" to="/perfil" style={{ flex: 1, justifyContent: 'center' }}>
+                      Ver mis entradas
+                    </Link>
+                  )}
+                  <Link className="home-button home-button-dark" to="/" style={{ flex: 1, justifyContent: 'center' }}>
+                    Volver al inicio
+                  </Link>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -209,9 +226,13 @@ export default function PagoPage() {
               </>
             ) : (
               <>
-                <Link className="home-button home-button-dark" to="/perfil">Ver mis entradas</Link>
-                <Link className="home-button" to="/cines" style={{ flex: 1, justifyContent: 'center' }}>
-                  Volver a la cartelera
+                {!pago?.invitado && <Link className="home-button home-button-dark" to="/perfil">Ver mis entradas</Link>}
+                <Link
+                  className="home-button"
+                  to={pago?.taquilla ? '/empleados/taquilla' : '/cines'}
+                  style={{ flex: 1, justifyContent: 'center' }}
+                >
+                  {pago?.taquilla ? 'Volver a taquilla' : 'Volver a la cartelera'}
                 </Link>
               </>
             )}
