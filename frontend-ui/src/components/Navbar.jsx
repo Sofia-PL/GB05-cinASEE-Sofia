@@ -2,6 +2,12 @@ import { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/useAuth';
 
+const ETIQUETA_ROL = {
+  USER: 'Cliente',
+  STAFF: 'Taquilla',
+  ADMIN: 'Admin',
+};
+
 export default function Navbar() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
@@ -71,8 +77,9 @@ export default function Navbar() {
           </>
         ) : (
           <>
-            <Link to="/perfil" className="site-navbar-link">
-              {user.name}
+            <Link to="/perfil" className="site-navbar-link site-navbar-cuenta" title={user.email}>
+              Mi cuenta
+              <span className="site-navbar-rol">{ETIQUETA_ROL[user.rol] || 'Cliente'}</span>
             </Link>
             <button
               className="site-navbar-register site-navbar-logout"

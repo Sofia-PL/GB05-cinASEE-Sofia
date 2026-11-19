@@ -120,6 +120,10 @@ public class SessionService {
             session.setStatus(request.getStatus().toUpperCase());
         }
 
+        if (request.getTicketPrice() != null) {
+            session.setTicketPrice(request.getTicketPrice());
+        }
+
         return sessionRepository.save(session);
     }
 

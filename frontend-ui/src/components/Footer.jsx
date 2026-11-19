@@ -1,81 +1,59 @@
 import { Link } from 'react-router-dom';
+import { useCine } from '../context/useCine';
 
 export default function Footer() {
+  const { cines } = useCine();
+
   return (
     <footer className="site-footer">
       <div className="site-footer-container">
-        {/* Columna 1: Marca y descripción */}
+        {/* Columna 1: Marca */}
         <div className="site-footer-col">
           <Link to="/" className="site-footer-logo">CinASEE</Link>
           <p className="site-footer-desc">
-            Red de cines líder en España con la última tecnología en proyección láser digital, salas IMAX, 3D RealD y sonido envolvente Dolby Atmos.
+            Consulta la cartelera, elige tu butaca y compra tus entradas online en cualquiera de nuestros cines.
           </p>
-          <div className="site-footer-company-data">
-            <span>CinASEE Exhibición Cinematográfica S.L.</span>
-            <span>NIF: B-88492015</span>
-            <span>Sede Central: Gran Vía 42, 28013 Madrid</span>
-          </div>
         </div>
 
-        {/* Columna 2: Navegación rápida */}
+        {/* Columna 2: Navegación */}
         <div className="site-footer-col">
           <h4 className="site-footer-heading">Navegación</h4>
           <ul className="site-footer-links">
             <li><Link to="/cines">Nuestros cines</Link></li>
-            <li><Link to="/cartelera">Cartelera y horarios</Link></li>
-            <li><Link to="/cartelera">Próximos estrenos</Link></li>
-            <li><Link to="/cines">Salas IMAX y VIP</Link></li>
-            <li><Link to="/login">Acceso a mi cuenta</Link></li>
+            <li><Link to="/cartelera">Cartelera</Link></li>
+            <li><Link to="/perfil">Mi cuenta y entradas</Link></li>
           </ul>
         </div>
 
-        {/* Columna 3: Contacto y Atención al Cliente */}
-        <div className="site-footer-col">
-          <h4 className="site-footer-heading">Atención al cliente</h4>
-          <ul className="site-footer-contact">
-            <li>
-              <strong>Teléfono gratuito:</strong>
-              <a href="tel:900842901">900 842 901</a>
-            </li>
-            <li>
-              <strong>Correo electrónico:</strong>
-              <a href="mailto:contacto@cinasee.es">contacto@cinasee.es</a>
-            </li>
-            <li>
-              <strong>Horario de atención:</strong>
-              <span>Lunes a Domingo: 11:00 a 23:00 h</span>
-            </li>
-            <li>
-              <strong>Incidencias de taquilla:</strong>
-              <span>soporte@cinasee.es</span>
-            </li>
-          </ul>
-        </div>
-
-        {/* Columna 4: Legal y Políticas */}
-        <div className="site-footer-col">
-          <h4 className="site-footer-heading">Información legal</h4>
-          <ul className="site-footer-links">
-            <li><a href="#aviso-legal" onClick={(e) => e.preventDefault()}>Aviso legal</a></li>
-            <li><a href="#privacidad" onClick={(e) => e.preventDefault()}>Política de privacidad</a></li>
-            <li><a href="#cookies" onClick={(e) => e.preventDefault()}>Política de cookies</a></li>
-            <li><a href="#condiciones" onClick={(e) => e.preventDefault()}>Condiciones de compra de entradas</a></li>
-            <li><a href="#accesibilidad" onClick={(e) => e.preventDefault()}>Accesibilidad de salas</a></li>
-          </ul>
-        </div>
+        {/* Columna 3: Contacto de cada cine (datos de Cartelera) */}
+        {cines.length > 0 && (
+          <div className="site-footer-col">
+            <h4 className="site-footer-heading">Contacto</h4>
+            <ul className="site-footer-contact">
+              {cines.slice(0, 4).map((c) => (
+                <li key={c.id}>
+                  <strong>{c.name}</strong>
+                  {c.phone ? (
+                    <a href={`tel:${c.phone.replace(/\s+/g, '')}`}>{c.phone}</a>
+                  ) : (
+                    <span>{c.address}, {c.city}</span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </div>
 
-      {/* Franja inferior de copyright */}
+      {/* Franja inferior */}
       <div className="site-footer-bottom">
         <div className="site-footer-bottom-inner">
-          <p>© 2026 CinASEE España S.L. Todos los derechos reservados.</p>
+          <p>© {new Date().getFullYear()} CinASEE</p>
           <div className="site-footer-badges">
-            <span>Pago Seguro 256-bit SSL</span>
-            <span>Entradas Oficiales Garantizadas</span>
+            <span>Pago seguro con Redsys</span>
           </div>
         </div>
       </div>
     </footer>
   );
 }
-

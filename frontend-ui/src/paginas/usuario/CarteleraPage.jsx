@@ -1,12 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useCine } from '../../context/useCine';
 import { obtenerPeliculasEnCartelera, adaptarPelicula, nombreGenero } from '../../api/cartelera';
 import { Cargando, ErrorCarga, SinDatos } from '../../components/EstadoCarga';
 
 export default function CarteleraPage() {
   const navigate = useNavigate();
-  const { cineSeleccionado } = useCine();
   const [hoveredId, setHoveredId] = useState(null);
 
   // Películas con sesiones programadas en Cartelera (Comp. 1)
@@ -26,11 +24,7 @@ export default function CarteleraPage() {
   }, [recarga]);
 
   function handleComprar(peliculaId) {
-    if (cineSeleccionado) {
-      navigate(`/cines/${cineSeleccionado.id}?pelicula=${peliculaId}`);
-    } else {
-      navigate('/cines', { state: { peliculaId } });
-    }
+    navigate('/cines', { state: { peliculaId } });
   }
 
   return (
@@ -40,14 +34,6 @@ export default function CarteleraPage() {
         <p className="cartelera-subtitle">
           Pasa el ratón sobre cualquier película para consultar su sinopsis y comprar entradas
         </p>
-        {cineSeleccionado && (
-          <div className="cartelera-cine-badge">
-            <span>Cine seleccionado: <strong>{cineSeleccionado.name}</strong></span>
-            <button type="button" className="cartelera-cambiar-cine-btn" onClick={() => navigate('/cines')}>
-              Cambiar
-            </button>
-          </div>
-        )}
       </header>
 
       {catalogo.cargando && <Cargando texto="Cargando cartelera…" />}
@@ -99,7 +85,7 @@ export default function CarteleraPage() {
                 <div className={`cartelera-hover-panel${isHovered ? ' visible' : ''}`}>
                   <p className="cartelera-synopsis-text">{movie.synopsis}</p>
                   <button className="home-button cartelera-buy-btn" type="button" onClick={() => handleComprar(movie.id)}>
-                    {cineSeleccionado ? `Comprar en ${cineSeleccionado.name}` : 'Comprar entradas'}
+                    Comprar entradas
                   </button>
                 </div>
               </div>

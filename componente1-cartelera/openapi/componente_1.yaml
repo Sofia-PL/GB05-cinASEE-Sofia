@@ -548,7 +548,7 @@ paths:
       tags:
         - Sessions
       summary: Modificar o cancelar una sesión programada
-      description: Permite cambiar el horario, sala o estado (ej. CANCELADA) de una sesión. Dispara validaciones de solapamiento.
+      description: Permite cambiar el horario, sala, precio o estado (ej. CANCELADA) de una sesión. Dispara validaciones de solapamiento.
       operationId: updateSession
       parameters:
         - name: sessionId
@@ -571,6 +571,11 @@ paths:
                 status:
                   type: string
                   enum: [PROGRAMADA, A_LA_VENTA, EN_CURSO, FINALIZADA, CANCELADA]
+                ticketPrice:
+                  type: number
+                  format: double
+                  minimum: 0
+                  description: Nuevo precio de la entrada. Las reservas ya hechas conservan el precio con el que se crearon.
       responses:
         '200':
           description: Sesión actualizada.

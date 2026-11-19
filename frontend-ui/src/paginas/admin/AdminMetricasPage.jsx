@@ -4,6 +4,8 @@ import { useCine } from '../../context/useCine';
 import { obtenerPeliculas, obtenerSalasCine, fechaIso, TIPOS_SALA, nombreGenero } from '../../api/cartelera';
 import { obtenerTaquilla, obtenerOcupacion } from '../../api/analitica';
 import { AvisoAdmin, AvisoSinToken } from './AdminAvisos';
+import BarrasHorizontales from '../../components/graficas/BarrasHorizontales';
+import Columnas from '../../components/graficas/Columnas';
 
 /* =========================================================
    Métricas (Componente 4 · Analítica)
@@ -26,6 +28,31 @@ function rangoDe(periodo, desde, hasta) {
   }
   return { startDate: desde, endDate: hasta, texto: `Del ${desde} al ${hasta}` };
 }
+
+/** Máximo de días para pedir la evolución diaria (una consulta por día) */
+const MAX_DIAS = 62;
+
+/** Días (AAAA-MM-DD) entre dos fechas, ambas incluidas */
+function diasEntre(inicio, fin) {
+  if (!inicio || !fin || inicio > fin) return [];
+  const dias = [];
+  const d = new Date(`${inicio}T12:00:00`);
+  const ultimo = new Date(`${fin}T12:00:00`);
+  while (d <= ultimo && dias.length <= MAX_DIAS) {
+    dias.push(fechaIso(d));
+    d.setDate(d.getDate() + 1);
+  }
+  return dias;
+}
+
+const DIA_CORTO = (dia) => {
+  const d = new Date(`${dia}T12:00:00`);
+  return `${d.getDate()}/${d.getMonth() + 1}`;
+};
+
+const DIA_LARGO = (dia) => new Date(`${dia}T12:00:00`).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' });
+
+const eurosCortos = (v) => (v >= 1000 ? `${(v / 1000).toLocaleString('es-ES', { maximumFractionDigits: 1 })} k€` : `${Math.round(v)} €`);
 
 const euros = (v) => `${Number(v || 0).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`;
 
@@ -51,7 +78,7 @@ export default function AdminMetricasPage() {
   const rango = rangoDe(periodo, desde, hasta);
   const rangoValido = rango.startDate && rango.endDate && rango.startDate <= rango.endDate;
 
-  const [taquilla, setTaquilla] = useState({ clave: null, total: null, porPelicula: [], error: '' });
+  const [taquilla, setTaquilla] = useState({ clave: null, total: null, porPelicula: [], porDia: null, error: '' });
   const claveTaquilla = `${rango.startDate}|${rango.endDate}`;
 
   const [cineElegido, setCineElegido] = useState(null);
@@ -68,25 +95,40 @@ export default function AdminMetricasPage() {
     let cancelado = false;
     const clave = `${rango.startDate}|${rango.endDate}`;
     const fechas = { startDate: rango.startDate, endDate: rango.endDate };
+    const dias = diasEntre(rango.startDate, rango.endDate);
     Promise.all([obtenerTaquilla(fechas, token), obtenerPeliculas()])
       .then(async ([total, pelis]) => {
-        const filas = await Promise.all((pelis || []).map(async (p) => {
-          try {
-            const r = await obtenerTaquilla({ ...fechas, movieId: p.id }, token);
-            return { pelicula: p, entradas: r.totalTicketsSold || 0, ingresos: r.grossRevenue || 0 };
-          } catch {
-            return { pelicula: p, entradas: 0, ingresos: 0 };
-          }
-        }));
+        const [filas, porDia] = await Promise.all([
+          Promise.all((pelis || []).map(async (p) => {
+            try {
+              const r = await obtenerTaquilla({ ...fechas, movieId: p.id }, token);
+              return { pelicula: p, entradas: r.totalTicketsSold || 0, ingresos: r.grossRevenue || 0 };
+            } catch {
+              return { pelicula: p, entradas: 0, ingresos: 0 };
+            }
+          })),
+          // Evolución diaria: una consulta por día (solo para periodos de varios días y hasta MAX_DIAS)
+          dias.length > 1 && dias.length <= MAX_DIAS
+            ? Promise.all(dias.map(async (dia) => {
+              try {
+                const r = await obtenerTaquilla({ startDate: dia, endDate: dia }, token);
+                return { dia, entradas: r.totalTicketsSold || 0, ingresos: r.grossRevenue || 0 };
+              } catch {
+                return { dia, entradas: 0, ingresos: 0 };
+              }
+            }))
+            : Promise.resolve(null),
+        ]);
         if (cancelado) return;
         setTaquilla({
           clave,
           total,
           porPelicula: filas.filter((f) => f.entradas > 0).sort((a, b) => b.ingresos - a.ingresos),
+          porDia,
           error: '',
         });
       })
-      .catch((err) => { if (!cancelado) setTaquilla({ clave, total: null, porPelicula: [], error: err.message }); });
+      .catch((err) => { if (!cancelado) setTaquilla({ clave, total: null, porPelicula: [], porDia: null, error: err.message }); });
     return () => { cancelado = true; };
   }, [token, rango.startDate, rango.endDate, rangoValido]);
 
@@ -119,6 +161,7 @@ export default function AdminMetricasPage() {
   const total = taquilla.clave === claveTaquilla ? taquilla.total : null;
   const entradasTotales = total?.totalTicketsSold || 0;
   const ingresosTotales = total?.grossRevenue || 0;
+  const porDia = taquilla.clave === claveTaquilla ? taquilla.porDia : null;
 
   return (
     <div className="admin-page-container">
@@ -172,11 +215,71 @@ export default function AdminMetricasPage() {
         <Kpi titulo="Precio medio por entrada" valor={total && entradasTotales > 0 ? euros(ingresosTotales / entradasTotales) : '—'} />
       </div>
 
+      {/* Evolución diaria de ingresos */}
+      {porDia && (
+        <div className="admin-panel" style={{ marginBottom: '28px' }}>
+          <h3 style={{ margin: '0 0 4px', color: 'var(--burgundy)', fontSize: '1.2rem', fontWeight: 700 }}>
+            Ingresos por día
+          </h3>
+          <p style={{ margin: '0 0 12px', fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+            Pasa el ratón por una columna para ver el detalle del día.
+          </p>
+          <Columnas
+            titulo="Ingresos de taquilla por día"
+            formato={eurosCortos}
+            datos={porDia.map((p) => ({
+              id: p.dia,
+              etiqueta: DIA_CORTO(p.dia),
+              etiquetaLarga: DIA_LARGO(p.dia),
+              valor: p.ingresos,
+              detalle: [`${p.entradas.toLocaleString('es-ES')} entradas`],
+            }))}
+          />
+          <details className="viz-tabla">
+            <summary>Ver tabla</summary>
+            <table className="admin-table">
+              <thead><tr><th>Día</th><th style={{ textAlign: 'right' }}>Entradas</th><th style={{ textAlign: 'right' }}>Ingresos</th></tr></thead>
+              <tbody>
+                {porDia.map((p) => (
+                  <tr key={p.dia}>
+                    <td>{DIA_LARGO(p.dia)}</td>
+                    <td style={{ textAlign: 'right' }}>{p.entradas.toLocaleString('es-ES')}</td>
+                    <td style={{ textAlign: 'right' }}>{euros(p.ingresos)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </details>
+        </div>
+      )}
+      {rangoValido && diasEntre(rango.startDate, rango.endDate).length > MAX_DIAS && (
+        <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+          Elige un rango de {MAX_DIAS} días o menos para ver la evolución diaria.
+        </p>
+      )}
+
       {/* Recaudación por película */}
       <div className="admin-panel" style={{ marginBottom: '28px' }}>
         <h3 style={{ margin: '0 0 16px', color: 'var(--burgundy)', fontSize: '1.2rem', fontWeight: 700 }}>
           Recaudación por película
         </h3>
+        {!cargandoTaquilla && (
+          <BarrasHorizontales
+            titulo="Ingresos de taquilla por película"
+            formato={eurosCortos}
+            datos={taquilla.porPelicula.map((f) => ({
+              id: f.pelicula.id,
+              etiqueta: f.pelicula.title,
+              valor: f.ingresos,
+              detalle: [
+                `${f.entradas.toLocaleString('es-ES')} entradas`,
+                ingresosTotales > 0 ? `${Math.round((f.ingresos / ingresosTotales) * 100)}% de la taquilla` : '',
+              ].filter(Boolean),
+            }))}
+          />
+        )}
+        <details className="viz-tabla">
+          <summary>Ver tabla</summary>
         <div className="admin-table-wrap">
           <table className="admin-table">
             <thead>
@@ -213,6 +316,7 @@ export default function AdminMetricasPage() {
             </tbody>
           </table>
         </div>
+        </details>
       </div>
 
       {/* Ocupación */}
@@ -243,6 +347,21 @@ export default function AdminMetricasPage() {
               Total del cine: <strong>{ocupacion.cine.totalTicketsSold}</strong> entradas vendidas sobre un aforo de{' '}
               <strong>{ocupacion.cine.totalCapacity}</strong> butacas ({ocupacion.cine.occupancyPercentage}%).
             </p>
+            <BarrasHorizontales
+              titulo="Ocupación por sala"
+              maximo={100}
+              formato={(v) => `${Math.round(v * 10) / 10}%`}
+              datos={ocupacion.salas.map(({ sala, metrica }) => ({
+                id: sala.id,
+                etiqueta: sala.name,
+                valor: metrica?.occupancyPercentage || 0,
+                detalle: metrica
+                  ? [`${metrica.totalTicketsSold} de ${metrica.totalCapacity} butacas`, TIPOS_SALA[sala.roomType] || sala.roomType]
+                  : ['Sin datos de Analítica'],
+              }))}
+            />
+            <details className="viz-tabla">
+              <summary>Ver tabla</summary>
             <div className="admin-table-wrap">
               <table className="admin-table">
                 <thead>
@@ -273,6 +392,7 @@ export default function AdminMetricasPage() {
                 </tbody>
               </table>
             </div>
+            </details>
           </>
         )}
       </div>

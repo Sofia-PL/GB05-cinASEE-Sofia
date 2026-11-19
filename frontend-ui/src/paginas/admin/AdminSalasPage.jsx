@@ -287,7 +287,7 @@ export default function AdminSalasPage() {
                       }}>
                         <div>Matriz: <strong>{sala.rowsCount} filas × {sala.columnsCount} columnas</strong></div>
                         <div>Aforo: <strong>{sala.capacity} butacas</strong></div>
-                        <div>Precio base: <strong>{Number(sala.basePrice || 0).toFixed(2)} €</strong></div>
+                        <div>Precio mínimo por entrada: <strong>{Number(sala.basePrice || 0).toFixed(2)} €</strong></div>
                       </div>
                     </article>
                   ))}
@@ -354,7 +354,7 @@ export default function AdminSalasPage() {
                 </div>
 
                 <div className="admin-form-group">
-                  <label className="admin-label">Precio Base (€)</label>
+                  <label className="admin-label">Precio Mínimo por Entrada (€)</label>
                   <input
                     type="number"
                     className="admin-input"

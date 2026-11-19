@@ -7,6 +7,7 @@ import com.cinasee.componente1_cartelera.models.CreateSessionRequest;
 import com.cinasee.componente1_cartelera.models.Movie;
 import com.cinasee.componente1_cartelera.models.Room;
 import com.cinasee.componente1_cartelera.models.Session;
+import com.cinasee.componente1_cartelera.models.UpdateSessionRequest;
 import com.cinasee.componente1_cartelera.repositories.CinemaRepository;
 import com.cinasee.componente1_cartelera.repositories.MovieRepository;
 import com.cinasee.componente1_cartelera.repositories.RoomRepository;
@@ -174,6 +175,37 @@ class CatalogServicesTest {
         assertEquals(HttpStatus.NOT_FOUND, error.getStatusCode());
         assertTrue(error.getReason().contains("Película no encontrada"));
         verify(roomRepository, never()).findById(anyString());
+    }
+
+    @Test
+    void updateSessionChangesTicketPriceWithoutTouchingSchedule() {
+        LocalDateTime start = LocalDateTime.of(2026, 11, 20, 20, 0);
+        Session existing = session("s1", "m1", "room-2", start, start.plusMinutes(147), "A_LA_VENTA");
+        existing.setTicketPrice(9.5);
+        when(sessionRepository.findById("s1")).thenReturn(Optional.of(existing));
+        when(sessionRepository.save(any(Session.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        Session updated = sessionService.updateSessionStatus("s1", UpdateSessionRequest.builder().ticketPrice(11.0).build());
+
+        assertEquals(11.0, updated.getTicketPrice());
+        assertEquals(start, updated.getStartTime());
+        assertEquals("room-2", updated.getRoomId());
+        assertEquals("A_LA_VENTA", updated.getStatus());
+        verify(movieRepository, never()).findById(anyString());
+    }
+
+    @Test
+    void updateSessionWithoutPriceKeepsCurrentPrice() {
+        LocalDateTime start = LocalDateTime.of(2026, 11, 20, 20, 0);
+        Session existing = session("s1", "m1", "room-2", start, start.plusMinutes(147), "PROGRAMADA");
+        existing.setTicketPrice(9.5);
+        when(sessionRepository.findById("s1")).thenReturn(Optional.of(existing));
+        when(sessionRepository.save(any(Session.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        Session updated = sessionService.updateSessionStatus("s1", UpdateSessionRequest.builder().status("a_la_venta").build());
+
+        assertEquals(9.5, updated.getTicketPrice());
+        assertEquals("A_LA_VENTA", updated.getStatus());
     }
 
     private static Movie movie(String id) {

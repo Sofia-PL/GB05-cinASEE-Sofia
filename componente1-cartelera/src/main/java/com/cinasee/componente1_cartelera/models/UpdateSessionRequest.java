@@ -1,5 +1,6 @@
 package com.cinasee.componente1_cartelera.models;
 
+import jakarta.validation.constraints.Min;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -18,5 +19,9 @@ public class UpdateSessionRequest {
     private LocalDateTime startTime;
 
     private String status; // PROGRAMADA, A_LA_VENTA, EN_CURSO, FINALIZADA, CANCELADA
+
+    /** Nuevo precio de la entrada (opcional). Las reservas ya hechas conservan su precio. */
+    @Min(value = 0, message = "El precio de la entrada no puede ser negativo")
+    private Double ticketPrice;
 }
 

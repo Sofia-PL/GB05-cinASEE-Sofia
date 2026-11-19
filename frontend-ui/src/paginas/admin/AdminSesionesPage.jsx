@@ -155,11 +155,14 @@ export default function AdminSesionesPage() {
           texto: 'Sesión creada como PROGRAMADA. Ponla "A la venta" para que se puedan comprar entradas.',
         });
       } else {
-        // PATCH solo admite sala y hora (y estado): se envía únicamente lo que ha cambiado
+        // PATCH admite sala, hora, precio y estado: se envía únicamente lo que ha cambiado
         const cambios = {};
         if (formData.roomId !== formData.original.roomId) cambios.roomId = formData.roomId;
         const original = partirFechaHora(formData.original.startTime);
         if (startTime !== unirFechaHora(original.fecha, original.hora)) cambios.startTime = startTime;
+        if (Number(formData.ticketPrice) !== Number(formData.original.ticketPrice)) {
+          cambios.ticketPrice = Number(formData.ticketPrice);
+        }
         if (Object.keys(cambios).length > 0) {
           await actualizarSesion(formData.id, cambios, token);
           setAviso({ tipo: 'ok', texto: 'Sesión modificada.' });
@@ -482,11 +485,12 @@ export default function AdminSesionesPage() {
                     value={formData.roomId}
                     onChange={(e) => {
                       const sala = salaPorId[e.target.value];
+                      const minimo = Number(sala?.basePrice || 0);
                       setFormData({
                         ...formData,
                         roomId: e.target.value,
-                        // Al crear, el precio propuesto es el precio base de la sala
-                        ticketPrice: modalMode === 'create' && sala?.basePrice != null ? sala.basePrice : formData.ticketPrice,
+                        // Al crear se propone el precio mínimo de la sala; al editar solo se sube si queda por debajo
+                        ticketPrice: modalMode === 'create' || Number(formData.ticketPrice) < minimo ? minimo : formData.ticketPrice,
                       });
                     }}
                   >
@@ -503,20 +507,35 @@ export default function AdminSesionesPage() {
                   <input
                     type="number"
                     step="0.05"
-                    min="0"
+                    min={Number(salaPorId[formData.roomId]?.basePrice || 0)}
                     className="admin-input"
                     required
-                    disabled={modalMode === 'edit'}
                     value={formData.ticketPrice}
                     onChange={(e) => setFormData({ ...formData, ticketPrice: e.target.value })}
                   />
+                  <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '3px' }}>
+                    Mínimo de la sala: {Number(salaPorId[formData.roomId]?.basePrice || 0).toFixed(2)} €
+                  </span>
                 </div>
+              </div>
+
+              <div className="admin-form-group">
+                <label className="admin-label">Formato de la Sesión</label>
+                <input
+                  type="text"
+                  className="admin-input"
+                  disabled
+                  value={TIPOS_SALA[salaPorId[formData.roomId]?.roomType] || salaPorId[formData.roomId]?.roomType || '—'}
+                />
+                <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '3px' }}>
+                  El formato lo da el tipo de la sala elegida.
+                </span>
               </div>
 
               <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: '4px 0 0' }}>
                 {modalMode === 'create'
                   ? 'La hora de fin la calcula Cartelera (duración de la película + 20 min de limpieza). La sesión se crea como «Programada».'
-                  : 'Cartelera solo permite cambiar la sala y el horario de una sesión ya creada; la película y el precio no se pueden modificar.'}
+                  : 'La película de una sesión ya creada no se puede cambiar. Un cambio de precio solo afecta a las reservas nuevas.'}
               </p>
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '22px', paddingTop: '16px', borderTop: '1px solid rgba(43,18,21,0.1)' }}>

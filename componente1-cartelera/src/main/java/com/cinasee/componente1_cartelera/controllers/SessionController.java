@@ -46,7 +46,7 @@ public class SessionController {
     @PatchMapping("/{sessionId}")
     public ResponseEntity<Session> updateSessionStatus(
             @PathVariable String sessionId,
-            @RequestBody UpdateSessionRequest request) {
+            @RequestBody @Valid UpdateSessionRequest request) {
         Session updatedSession = sessionService.updateSessionStatus(sessionId, request);
         return ResponseEntity.ok(updatedSession);
     }
