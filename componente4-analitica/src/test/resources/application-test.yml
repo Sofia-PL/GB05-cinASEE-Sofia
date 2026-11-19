@@ -1,0 +1,36 @@
+# Perfil de tests: base de datos H2 en memoria (modo PostgreSQL), sin conexión a
+# RabbitMQ al arrancar y con URLs ficticias (los clientes Feign se sustituyen por mocks).
+spring:
+  datasource:
+    url: jdbc:h2:mem:analitica_test;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.H2Dialect
+  rabbitmq:
+    listener:
+      simple:
+        auto-startup: false
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          jwk-set-uri: http://localhost:0/no-usado-en-tests/jwks.json
+          issuer-uri: http://localhost:8083/v1/iam
+
+app:
+  analytics:
+    time-zone: Europe/Madrid
+
+services:
+  cartelera:
+    url: http://localhost:0/cartelera
+  reservas:
+    url: http://localhost:0/reservas
+  usuarios:
+    url: http://localhost:0/usuarios
