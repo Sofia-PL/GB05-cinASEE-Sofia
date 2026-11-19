@@ -7,7 +7,10 @@ import org.springframework.data.mongodb.MongoDatabaseFactory;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-@SpringBootTest(properties = "SPRING_MONGODB_URI=mongodb://mongo-test:27018/component1_test")
+@SpringBootTest(properties = {
+    "SPRING_MONGODB_URI=mongodb://mongo-test:27018/component1_test",
+    "app.seed.enabled=false"
+})
 class Componente1CarteleraApplicationTests {
 
     @Autowired

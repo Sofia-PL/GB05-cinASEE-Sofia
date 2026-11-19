@@ -207,18 +207,20 @@ JWKS (`JWT_JWK_SET_URI`) y el emisor (`JWT_ISSUER`).
 - Los IDs nuevos de `Cinema`, `Movie` y `Room` se crean con
   `UUID.randomUUID().toString()`; las sesiones crean ULIDs monotónicos con
   `ulid-creator` al construir el documento.
-- C1 parte de una base MongoDB vacía y no incluye una migración para conservar
-  registros anteriores. Si hay datos creados con el esquema antiguo, elimina
-  las colecciones `cinemas`, `movies`, `rooms` y `sessions` antes de arrancar.
+- C1 no ejecuta seeds automáticamente al arrancar y no incluye una migración
+  para conservar registros anteriores. Para una base nueva o limpieza, puede
+  cargarse el catálogo reproducible con
+  [`scripts/seed-catalog.mongodb.js`](scripts/seed-catalog.mongodb.js).
+- El seed actual carga 7 cines, 8 películas, 12 salas y 48 sesiones en
+  `A_LA_VENTA`. Reparten 18 sesiones en Madrid, 8 en Barcelona, 6 en Cáceres,
+  3 en Navatrasierra, 3 en Madroñera, 7 en Málaga y 3 en Cuenca. Es idempotente
+  y no modifica documentos existentes. Los detalles están en
+  [`docs/seed-cartelera.md`](docs/seed-cartelera.md).
 - Para actualizar las bases relacionales de C2–C4, aplica sus scripts antes de
   arrancar las versiones nuevas:
   [C2 PostgreSQL](../componente2-reservas/docs/migrations/001-catalog-ids-to-varchar.sql),
   [C3 MySQL](../componente3-usuarios/docs/migrations/001-catalog-ids-to-varchar.sql)
   y [C4 PostgreSQL](../componente4-analitica/docs/migrations/001-catalog-ids-to-varchar.sql).
-- **Sin seed de cartelera:** la base arranca vacía y Mongo crea las colecciones
-  al primer `POST`. El sistema no se puede demostrar de punta a punta sin datos.
-  La lista concreta de cines, películas, salas y sesiones está en
-  [`docs/seed-cartelera.md`](docs/seed-cartelera.md).
 - **IDs externos:** los identificadores de cine, película, sala y sesión en
   C2–C4 también son texto; cada consumidor documenta su propia migración.
 - **Sin `distributorId`:** el merge eliminó `Movie.distributor`; C4 conserva el

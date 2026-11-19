@@ -15,6 +15,7 @@ cines y salas existan y evita solapamientos horarios en una misma sala.
 Documentos relacionados:
 
 - [ejecucion-y-pruebas.md](ejecucion-y-pruebas.md): arranque, comprobación de MongoDB y pruebas.
+- [seed-cartelera.md](seed-cartelera.md): carga manual y estado del catálogo de demostración.
 
 ## 1. Lugar en la arquitectura
 
@@ -166,9 +167,17 @@ documentos; por tanto, que no aparezcan colecciones en una instalación nueva no
 significa necesariamente que exista un error.
 
 Los IDs de cine, película y sala son UUID de texto; el ID de sesión es un ULID.
-C1 parte de una base vacía y no incluye una migración para conservar datos
-anteriores. Si hubiera registros del esquema antiguo, elimina las colecciones
-`cinemas`, `movies`, `rooms` y `sessions` antes de arrancar la nueva versión.
+C1 no ejecuta un seed automáticamente al arrancar y no incluye una migración
+para conservar datos anteriores. Si hubiera registros del esquema antiguo,
+puede eliminarse la base o las colecciones `cinemas`, `movies`, `rooms` y
+`sessions` antes de cargar el catálogo nuevo.
+
+El script [`scripts/seed-catalog.mongodb.js`](../scripts/seed-catalog.mongodb.js)
+permite cargar manualmente 7 cines, 8 películas, 12 salas y 48 sesiones de
+demostración. Las sesiones se reparten entre Madrid, Barcelona, Cáceres,
+Navatrasierra, Madroñera, Málaga y Cuenca. El script es idempotente y conserva
+los documentos existentes con el mismo ID. Consulta
+[seed-cartelera.md](seed-cartelera.md) para ejecutar y comprobar la carga.
 
 La URI predeterminada para ejecutar la aplicación fuera de Docker es
 `mongodb://localhost:27017/cine_catalog_db`. En Docker Compose se configura

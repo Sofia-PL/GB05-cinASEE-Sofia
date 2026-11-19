@@ -19,3 +19,9 @@ spring:
           jwk-set-uri: ${JWT_JWK_SET_URI:http://localhost:8083/v1/iam/.well-known/jwks.json}
           # Debe coincidir con el claim "iss" que firma el Componente 3
           issuer-uri: ${JWT_ISSUER:http://localhost:8083/v1/iam}
+
+app:
+  seed:
+    enabled: ${APP_SEED_ENABLED:true}
+  media:
+    base-url: ${APP_MEDIA_BASE_URL:http://localhost:8080/media/posters}

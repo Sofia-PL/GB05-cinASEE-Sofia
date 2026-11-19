@@ -9,6 +9,10 @@ spring:
       server:
         webmvc:
           routes:
+            - id: media-posters
+              uri: ${MEDIA_URI:http://media-server:80}
+              predicates:
+                - Path=/media/**
             - id: componente1-cartelera
               uri: ${COMPONENTE1_URI:http://localhost:8081}
               predicates:
