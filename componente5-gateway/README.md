@@ -37,6 +37,7 @@ validar el token y aplica sus propios roles. Es una capa adicional, no la única
 | `/api/metrics/**` | `http://componente4-analitica:8084` | C4 Ocupación |
 | `/api/reports/**` | `http://componente4-analitica:8084` | C4 Box Office |
 | `/api/recommendations/**` | `http://componente4-analitica:8084` | C4 Recomendaciones |
+| `/media/**` | `http://media-server:80` | Pósteres estáticos |
 
 El prefijo se reenvía **tal cual**: el Gateway no reescribe rutas. Por eso los
 `context-path` de cada servicio (`/api/v1`, `/v1`, `/v1/iam`, `/api`) ya están
@@ -102,6 +103,7 @@ Configurado en `CorsConfig`:
 | `GATEWAY_CORS_ALLOWED_ORIGIN` | `http://localhost:3000` | Origen del frontend |
 | `JWT_JWK_SET_URI` | C3 | Clave pública |
 | `JWT_ISSUER` | `http://localhost:8083/v1/iam` | Emisor esperado |
+| `MEDIA_URI` | `http://media-server:80` | Servidor de pósteres |
 
 En Docker las URLs apuntan a los nombres de servicio
 (`http://componente1-cartelera:8081`, etc.). En local, a `localhost`.

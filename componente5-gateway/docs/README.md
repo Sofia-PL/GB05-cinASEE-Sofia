@@ -22,6 +22,7 @@ conserva la ruta y el método HTTP al reenviar la solicitud:
 | `/v1/reservations/**` | Componente 2: reservas | `8082` |
 | `/v1/iam/**` | Componente 3: usuarios e identidad | `8083` |
 | `/api/metrics/**`, `/api/reports/**`, `/api/recommendations/**` | Componente 4: analítica | `8084` |
+| `/media/**` | Servicio `media-server` | `80` dentro de Docker |
 
 Las rutas que no coinciden con ninguna de estas configuraciones no se reenvían
 a los componentes; continúan por el manejo normal de Spring y, si no hay otro
@@ -78,6 +79,7 @@ Las variables de entorno permiten adaptar el componente a cada entorno:
 | `GATEWAY_CORS_ALLOWED_ORIGIN` | `http://localhost:3000` | Origen autorizado para CORS |
 | `JWT_JWK_SET_URI` | `http://localhost:8083/v1/iam/.well-known/jwks.json` | URL pública de claves para validar JWT |
 | `JWT_ISSUER` | `http://localhost:8083/v1/iam` | Emisor esperado en el JWT |
+| `MEDIA_URI` | `http://media-server:80` | URL interna del servidor de pósteres |
 
 ## Integración con Docker Compose
 

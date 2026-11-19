@@ -71,6 +71,7 @@ const API = import.meta.env.VITE_API_URL ?? "http://localhost:8080";
 | Mi perfil | `GET /v1/iam/users/{id}` |
 | Cartelera | `GET /api/v1/movies?inShowcase=true` |
 | Sesiones | `GET /api/v1/sessions?date=YYYY-MM-DD` |
+| Pósteres | `GET /media/posters/<archivo>.jpg` |
 | Butacas ocupadas | `GET /v1/reservations/shows/{showId}/seats` |
 | Reservar | `POST /v1/reservations` |
 | Pagar | `POST /v1/reservations/{id}/payment` |

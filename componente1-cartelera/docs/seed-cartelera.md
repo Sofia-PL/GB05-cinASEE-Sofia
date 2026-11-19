@@ -1,18 +1,18 @@
-# Estado de datos y carga manual — Componente 1
+# Estado de datos y carga del catálogo — Componente 1
 
 ## Estado actual
 
-C1 no tiene un seed automático ni un `CatalogDataInitializer`. Para cargar
-datos de demostración manualmente, usa
-[`scripts/seed-catalog.mongodb.js`](../scripts/seed-catalog.mongodb.js). El
-script agrega 7 cines, 8 películas, 12 salas y 48 sesiones próximas. Es
-idempotente: si vuelves a ejecutarlo, no duplica ni modifica los documentos
-existentes con esos IDs porque usa inserciones con `$setOnInsert`.
+C1 carga el catálogo automáticamente al arrancar mediante `CatalogSeeder`.
+La carga puede desactivarse con `APP_SEED_ENABLED=false`. También existe el
+script manual
+[`scripts/seed-catalog.mongodb.js`](../scripts/seed-catalog.mongodb.js).
+Ambos mecanismos producen 7 cines, 8 películas, 12 salas y 48 sesiones próximas.
+Son idempotentes: no duplican ni modifican documentos existentes con los mismos
+IDs.
 
-La base se vació el 19 de noviembre de 2026. Después se ejecutó el script y se
-comprobó que la API de C1 devuelve los catálogos y sesiones cargados; MongoDB
-está activo y saludable. Los demás servicios Docker también están activos, y
-el gateway responde `200` en `/api/v1/cinemas`.
+Los pósteres incluidos están empaquetados en `media/posters/` y se publican
+mediante `media-server` a través del Gateway en
+`http://localhost:8080/media/posters/<nombre>.jpg`.
 
 ## Persistencia y limpieza
 
@@ -79,8 +79,9 @@ docker exec mongodb-cartelera rm /tmp/seed-catalog.mongodb.js
 El script verifica que la base seleccionada se llame exactamente
 `cine_catalog_db`; si se ejecuta contra otra base, termina con error. Inserta
 los recursos en orden para mantener las referencias y conserva los documentos
-existentes. Las sesiones quedan en `A_LA_VENTA`, con horas UTC relativas al
-día de ejecución, y sus precios no son inferiores al precio base de sus salas.
+existentes. Las sesiones quedan en `A_LA_VENTA`, con horas locales de
+`Europe/Madrid` relativas al día de ejecución, y sus precios no son inferiores
+al precio base de sus salas.
 El calendario reparte las sesiones entre los siete cines: Madrid 18,
 Barcelona 8, Cáceres 6, Navatrasierra 3, Madroñera 3, Málaga 7 y Cuenca 3.
 

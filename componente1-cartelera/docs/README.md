@@ -15,7 +15,7 @@ cines y salas existan y evita solapamientos horarios en una misma sala.
 Documentos relacionados:
 
 - [ejecucion-y-pruebas.md](ejecucion-y-pruebas.md): arranque, comprobación de MongoDB y pruebas.
-- [seed-cartelera.md](seed-cartelera.md): carga manual y estado del catálogo de demostración.
+- [seed-cartelera.md](seed-cartelera.md): carga automática/manual y estado del catálogo de demostración.
 
 ## 1. Lugar en la arquitectura
 
@@ -167,13 +167,16 @@ documentos; por tanto, que no aparezcan colecciones en una instalación nueva no
 significa necesariamente que exista un error.
 
 Los IDs de cine, película y sala son UUID de texto; el ID de sesión es un ULID.
-C1 no ejecuta un seed automáticamente al arrancar y no incluye una migración
-para conservar datos anteriores. Si hubiera registros del esquema antiguo,
-puede eliminarse la base o las colecciones `cinemas`, `movies`, `rooms` y
-`sessions` antes de cargar el catálogo nuevo.
+C1 ejecuta `CatalogSeeder` automáticamente al arrancar, salvo que
+`APP_SEED_ENABLED=false`. La carga es idempotente y no modifica documentos
+existentes con el mismo ID. También puede cargarse manualmente el
+[`scripts/seed-catalog.mongodb.js`](../scripts/seed-catalog.mongodb.js).
 
-El script [`scripts/seed-catalog.mongodb.js`](../scripts/seed-catalog.mongodb.js)
-permite cargar manualmente 7 cines, 8 películas, 12 salas y 48 sesiones de
+Los pósteres se sirven por el servicio `media-server` a través del Gateway:
+`http://localhost:8080/media/posters/<nombre>.jpg`. El script manual y el
+seeder automático usan las mismas URL públicas.
+
+El catálogo reproducible contiene 7 cines, 8 películas, 12 salas y 48 sesiones de
 demostración. Las sesiones se reparten entre Madrid, Barcelona, Cáceres,
 Navatrasierra, Madroñera, Málaga y Cuenca. El script es idempotente y conserva
 los documentos existentes con el mismo ID. Consulta

@@ -78,6 +78,17 @@ contenedor aparece como iniciado, prueba el endpoint público:
 curl -i http://localhost:8081/api/v1/movies
 ```
 
+Al arrancar, `CatalogSeeder` carga automáticamente el catálogo de demostración
+si `APP_SEED_ENABLED=true`. Esta carga es idempotente. Puede desactivarse con:
+
+```bash
+APP_SEED_ENABLED=false docker compose up -d --build componente1-cartelera
+```
+
+Los pósteres se pueden consultar en
+`http://localhost:8080/media/posters/<archivo>.jpg` cuando está levantado el
+Gateway y `media-server`.
+
 ### Con Maven
 
 Arranca primero MongoDB según la sección anterior. Desde `componente1-cartelera`:

@@ -55,6 +55,12 @@ sesiones son ULID de 26 caracteres. Sus referencias (`cinemaId`, `movieId` y
 docker compose up -d --build
 ```
 
+El arranque del servicio ejecuta `CatalogSeeder` cuando
+`app.seed.enabled=true`. La carga es idempotente y crea únicamente los
+identificadores que aún no existen. Puede desactivarse con
+`APP_SEED_ENABLED=false`. Los pósteres se sirven desde
+`http://localhost:8080/media/posters/<archivo>.jpg`.
+
 ### En local
 
 ```bash
@@ -207,9 +213,10 @@ JWKS (`JWT_JWK_SET_URI`) y el emisor (`JWT_ISSUER`).
 - Los IDs nuevos de `Cinema`, `Movie` y `Room` se crean con
   `UUID.randomUUID().toString()`; las sesiones crean ULIDs monotónicos con
   `ulid-creator` al construir el documento.
-- C1 no ejecuta seeds automáticamente al arrancar y no incluye una migración
-  para conservar registros anteriores. Para una base nueva o limpieza, puede
-  cargarse el catálogo reproducible con
+- C1 ejecuta `CatalogSeeder` automáticamente al arrancar, salvo que
+  `APP_SEED_ENABLED=false`. La carga es idempotente: conserva registros
+  existentes y crea únicamente documentos con IDs que todavía no existen.
+  Puede cargarse también manualmente con
   [`scripts/seed-catalog.mongodb.js`](scripts/seed-catalog.mongodb.js).
 - El seed actual carga 7 cines, 8 películas, 12 salas y 48 sesiones en
   `A_LA_VENTA`. Reparten 18 sesiones en Madrid, 8 en Barcelona, 6 en Cáceres,
