@@ -241,10 +241,13 @@ JWKS (`JWT_JWK_SET_URI`) y el emisor (`JWT_ISSUER`).
   existentes y crea únicamente documentos con IDs que todavía no existen.
   Puede cargarse también manualmente con
   [`scripts/seed-catalog.mongodb.js`](scripts/seed-catalog.mongodb.js).
-- El seed actual carga 7 cines, 8 películas, 12 salas y 48 sesiones en
-  `A_LA_VENTA`. Reparten 18 sesiones en Madrid, 8 en Barcelona, 6 en Cáceres,
-  3 en Navatrasierra, 3 en Madroñera, 7 en Málaga y 3 en Cuenca. Es idempotente
-  y no modifica documentos existentes. Los detalles están en
+- El seed actual carga 7 cines, 8 películas, 12 salas y 278 sesiones en
+  `A_LA_VENTA` para los **14 días** siguientes al primer arranque, para que haya
+  cartelera aunque se pruebe días después. Los 3 primeros días tienen la
+  programación base (48 sesiones: 18 en Madrid, 8 en Barcelona, 6 en Cáceres,
+  3 en Navatrasierra, 3 en Madroñera, 7 en Málaga y 3 en Cuenca); del día 4 al 14
+  se repiten los horarios del día 1 y del día 2. Es idempotente, no modifica
+  documentos existentes y no crea una sesión que choque con otra de la misma sala. Los detalles están en
   [`docs/seed-cartelera.md`](docs/seed-cartelera.md).
 - Para actualizar las bases relacionales de C2–C4, aplica sus scripts antes de
   arrancar las versiones nuevas:

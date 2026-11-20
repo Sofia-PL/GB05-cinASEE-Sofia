@@ -467,6 +467,35 @@ const sessions = schedule.map(
   },
 );
 
+// Cartelera para dos semanas: del día 4 al 14 se repiten los horarios del día 1 y del
+// día 2 (alternos), igual que en CatalogSeeder. Cada copia tiene un id fijo (el original
+// con el número de día), así que volver a ejecutar el script no duplica nada.
+const DIAS_DE_CARTELERA = 14;
+
+function idDeCopia(idOriginal, dia) {
+  return `01M7SR8QHS${String(dia).padStart(2, "0")}${idOriginal.substring(12)}`;
+}
+
+for (let dia = 4; dia <= DIAS_DE_CARTELERA; dia++) {
+  const diaPlantilla = dia % 2 === 0 ? 2 : 1;
+  schedule.forEach(([day, hour, minute, movieId, roomId, ticketPrice], index) => {
+    if (day !== diaPlantilla) {
+      return;
+    }
+    const movie = movieById.get(movieId);
+    const startTime = utcStartTime(dia, hour, minute);
+    sessions.push({
+      _id: idDeCopia(sessionIds[index], dia),
+      movieId,
+      roomId,
+      startTime,
+      endTime: new Date(startTime.getTime() + (movie.durationMinutes + 20) * 60_000),
+      status: "A_LA_VENTA",
+      ticketPrice,
+    });
+  });
+}
+
 function insertIfMissing(collectionName, documents) {
   const collection = db.getCollection(collectionName);
   let inserted = 0;

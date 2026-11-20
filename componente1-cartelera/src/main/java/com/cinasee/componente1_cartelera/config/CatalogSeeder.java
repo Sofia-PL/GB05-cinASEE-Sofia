@@ -16,8 +16,10 @@ import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -37,6 +39,10 @@ public class CatalogSeeder implements CommandLineRunner {
 
     @Value("${app.media.base-url:http://localhost:8080/media/posters}")
     private String mediaBaseUrl;
+
+    /** Días de cartelera de ejemplo que se crean desde el primer arranque */
+    private static final int DIAS_DE_CARTELERA = 14;
+    private static final ZoneId MADRID = ZoneId.of("Europe/Madrid");
 
     @Override
     public void run(String... args) {
@@ -68,14 +74,26 @@ public class CatalogSeeder implements CommandLineRunner {
                 .collect(Collectors.toMap(Movie::getId, Function.identity()));
 
         List<Session> sessions = buildSessions(movieById);
-        sessions.forEach(s -> {
-            if (!sessionRepository.existsById(s.getId())) {
-                sessionRepository.save(s);
+        int insertadas = 0;
+        int saltadas = 0;
+        for (Session s : sessions) {
+            if (sessionRepository.existsById(s.getId())) {
+                continue;
             }
-        });
+            // No se inserta una sesión de ejemplo que choque con otra ya existente en la sala
+            if (seSolapa(s)) {
+                saltadas++;
+                continue;
+            }
+            sessionRepository.save(s);
+            insertadas++;
+        }
+        if (saltadas > 0) {
+            log.info("{} sesiones de ejemplo no se han creado porque chocaban con otras de la misma sala.", saltadas);
+        }
 
-        log.info("Seed de catálogo verificado ({} cines, {} películas, {} salas, {} sesiones).",
-                cinemas.size(), movies.size(), rooms.size(), sessions.size());
+        log.info("Seed de catálogo verificado ({} cines, {} películas, {} salas, {} sesiones de ejemplo; {} nuevas).",
+                cinemas.size(), movies.size(), rooms.size(), sessions.size(), insertadas);
     }
 
     /**
@@ -160,7 +178,53 @@ public class CatalogSeeder implements CommandLineRunner {
         );
     }
 
+    /** true si la sesión se cruza con otra no cancelada de la misma sala */
+    private boolean seSolapa(Session nueva) {
+        return sessionRepository.findByRoomIdAndStatusNot(nueva.getRoomId(), "CANCELADA").stream()
+                .anyMatch(s -> s.getStartTime() != null && s.getEndTime() != null
+                        && s.getStartTime().isBefore(nueva.getEndTime())
+                        && s.getEndTime().isAfter(nueva.getStartTime()));
+    }
+
+    /**
+     * Sesiones de ejemplo para {@value #DIAS_DE_CARTELERA} días desde el primer arranque, para
+     * que haya cartelera aunque se pruebe la aplicación días después de levantarla.
+     * Los días 1 a 3 son la programación base; del día 4 en adelante se repiten los horarios
+     * del día 1 y del día 2 (alternos), que cubren todos los cines. Cada copia tiene un id fijo
+     * (el de la sesión original con el número de día), así que el seed sigue siendo idempotente.
+     */
     private List<Session> buildSessions(Map<String, Movie> movieById) {
+        List<Session> base = buildSesionesBase(movieById);
+        List<Session> todas = new ArrayList<>(base);
+        LocalDate hoy = LocalDate.now(MADRID);
+        for (int dia = 4; dia <= DIAS_DE_CARTELERA; dia++) {
+            int diaPlantilla = dia % 2 == 0 ? 2 : 1;
+            LocalDate fechaPlantilla = hoy.plusDays(diaPlantilla);
+            for (Session original : base) {
+                if (!original.getStartTime().toLocalDate().equals(fechaPlantilla)) {
+                    continue;
+                }
+                Session copia = new Session();
+                copia.setId(idDeCopia(original.getId(), dia));
+                copia.setMovieId(original.getMovieId());
+                copia.setRoomId(original.getRoomId());
+                copia.setStartTime(original.getStartTime().plusDays(dia - diaPlantilla));
+                copia.setEndTime(original.getEndTime().plusDays(dia - diaPlantilla));
+                copia.setStatus(original.getStatus());
+                copia.setTicketPrice(original.getTicketPrice());
+                todas.add(copia);
+            }
+        }
+        return todas;
+    }
+
+    /** "01M7SR8QHR0000000000000001" del día 7 -> "01M7SR8QHS0700000000000001" (sigue siendo un ULID válido) */
+    static String idDeCopia(String idOriginal, int dia) {
+        return "01M7SR8QHS" + String.format("%02d", dia) + idOriginal.substring(12);
+    }
+
+    /** Programación base: 48 sesiones repartidas en los 3 primeros días */
+    private List<Session> buildSesionesBase(Map<String, Movie> movieById) {
         String mPonyo = "00000000-0000-4000-8000-000000000101";
         String mHowl = "00000000-0000-4000-8000-000000000102";
         String mEeaao = "00000000-0000-4000-8000-000000000103";
@@ -284,7 +348,7 @@ public class CatalogSeeder implements CommandLineRunner {
                             String movieId, String roomId, double ticketPrice,
                             Map<String, Movie> movieById) {
         Movie movie = movieById.get(movieId);
-        LocalDateTime startTime = LocalDateTime.now(ZoneId.of("Europe/Madrid"))
+        LocalDateTime startTime = LocalDateTime.now(MADRID)
                 .plusDays(daysFromToday)
                 .withHour(hour)
                 .withMinute(minute)

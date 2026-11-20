@@ -6,7 +6,12 @@ C1 carga el catálogo automáticamente al arrancar mediante `CatalogSeeder`.
 La carga puede desactivarse con `APP_SEED_ENABLED=false`. También existe el
 script manual
 [`scripts/seed-catalog.mongodb.js`](../scripts/seed-catalog.mongodb.js).
-Ambos mecanismos producen 7 cines, 8 películas, 12 salas y 48 sesiones próximas.
+Ambos mecanismos producen 7 cines, 8 películas, 12 salas y 278 sesiones para los
+14 días siguientes al primer arranque: 48 en los 3 primeros días (la programación
+base) y, del día 4 al 14, los horarios del día 1 y del día 2 alternos. Así hay
+cartelera aunque la aplicación se pruebe días después de levantarla. Las fechas se
+fijan en el primer arranque (o la primera ejecución del script) y no se mueven después.
+Una sesión de ejemplo que choque con otra ya existente en la misma sala no se crea.
 Son idempotentes: no duplican ni modifican documentos existentes con los mismos
 IDs.
 

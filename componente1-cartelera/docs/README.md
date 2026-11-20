@@ -176,8 +176,8 @@ Los pósteres se sirven por el servicio `media-server` a través del Gateway:
 `http://localhost:8080/media/posters/<nombre>.jpg`. El script manual y el
 seeder automático usan las mismas URL públicas.
 
-El catálogo reproducible contiene 7 cines, 8 películas, 12 salas y 48 sesiones de
-demostración. Las sesiones se reparten entre Madrid, Barcelona, Cáceres,
+El catálogo reproducible contiene 7 cines, 8 películas, 12 salas y 278 sesiones de
+demostración para los 14 días siguientes al primer arranque. Las sesiones se reparten entre Madrid, Barcelona, Cáceres,
 Navatrasierra, Madroñera, Málaga y Cuenca. El script es idempotente y conserva
 los documentos existentes con el mismo ID. Consulta
 [seed-cartelera.md](seed-cartelera.md) para ejecutar y comprobar la carga.
