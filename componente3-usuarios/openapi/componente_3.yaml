@@ -260,6 +260,41 @@ paths:
         '404':
           description: Usuario no encontrado.
 
+  /users/{userId}/role:
+    put:
+      tags:
+        - Users
+      summary: Asignar directamente un rol a un usuario
+      description: >
+        Solo para ADMIN. Cambia el rol de cualquier usuario indicando su número (id), sin
+        pasar por una solicitud de rol. Si el nuevo rol es STAFF_TAQUILLA se pueden indicar
+        también su cine (cinemaId) y si es responsable de ese cine (cinemaManager); con
+        cualquier otro rol, el cine asignado y el flag de responsable se borran.
+      operationId: assignUserRole
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          description: Número (id) del usuario al que se asigna el rol.
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssignRoleRequest'
+      responses:
+        '200':
+          description: Rol asignado correctamente.
+        '400':
+          description: Falta el rol o no es uno de los roles válidos.
+        '403':
+          description: Solo un ADMIN puede asignar roles.
+        '404':
+          description: Usuario no encontrado.
+
   # ==========================================================
   # PATH 3: HISTORIAL DE COMPRAS
   # ==========================================================
@@ -437,6 +472,66 @@ paths:
           description: La solicitud o el usuario solicitante no existen.
         '409':
           description: La solicitud ya no está pendiente.
+
+  # ==========================================================
+  # PATH 5: METADATOS PARA VALIDAR LOS TOKENS (públicos)
+  # ==========================================================
+  /.well-known/jwks.json:
+    get:
+      tags:
+        - Authentication
+      summary: Clave pública para validar los JWT (JWKS)
+      description: >
+        Publica la clave pública RSA con la que se verifican los tokens RS256 que emite
+        este componente. La descargan el Gateway y los Componentes 1, 2 y 4 para validar
+        los JWT en local. Solo contiene la parte pública de la clave. La clave se genera
+        al arrancar, así que cambia cada vez que se reinicia el servicio.
+      operationId: getJwks
+      security: []
+      responses:
+        '200':
+          description: Conjunto de claves públicas (JWK Set).
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+              example:
+                keys:
+                  - kty: RSA
+                    e: AQAB
+                    kid: 16c4ac4a-6e3d-40b7-8790-b53a5b19002b
+                    n: "0vx7agoebGcQSuuPiLJXZptN9nndrQmbXEps2aiAFbWhM78LhWx4..."
+
+  /.well-known/openid-configuration:
+    get:
+      tags:
+        - Authentication
+      summary: Metadatos OIDC del emisor de tokens
+      description: >
+        Documento de descubrimiento OpenID Connect: indica el emisor (iss) de los tokens,
+        dónde está el JWKS y el algoritmo de firma.
+      operationId: getOpenIdConfiguration
+      security: []
+      responses:
+        '200':
+          description: Metadatos del emisor.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  issuer:
+                    type: string
+                    example: http://localhost:8083/v1/iam
+                  jwks_uri:
+                    type: string
+                    example: http://localhost:8083/v1/iam/.well-known/jwks.json
+                  id_token_signing_alg_values_supported:
+                    type: array
+                    items:
+                      type: string
+                    example: [RS256]
 
 components:
   schemas:
@@ -652,6 +747,27 @@ components:
           maxLength: 500
           description: Comentario opcional del revisor.
           example: "Aprobado por el administrador"
+
+    # La clase Java de este esquema está escrita a mano (dto/AssignRoleRequest.java):
+    # el pom.xml indica al generador que la use en vez de crear otra (schemaMappings).
+    AssignRoleRequest:
+      type: object
+      required:
+        - role
+      properties:
+        role:
+          type: string
+          enum: [VISITANTE, CLIENTE_REGISTRADO, STAFF_TAQUILLA, ADMIN]
+          description: Nuevo rol del usuario.
+          example: "STAFF_TAQUILLA"
+        cinemaId:
+          type: string
+          description: Cine asignado. Solo se tiene en cuenta si el rol es STAFF_TAQUILLA.
+          example: "550e8400-e29b-41d4-a716-446655440001"
+        cinemaManager:
+          type: boolean
+          description: Si es el taquillero responsable de su cine. Solo se tiene en cuenta si el rol es STAFF_TAQUILLA.
+          example: false
 
     RoleRequest:
       type: object

@@ -38,6 +38,10 @@ tags:
     description: Gestión de perfiles de usuario y roles (RBAC)
   - name: Loyalty
     description: Historial de compras y monedero de puntos
+  - name: Role Requests
+    description: >
+      Solicitudes de cambio de rol (STAFF_TAQUILLA o ADMIN) y su revisión por
+      parte de un administrador global o del taquillero responsable de cada cine
 
 
 paths:
@@ -242,9 +246,52 @@ paths:
                   type: array
                   items:
                     type: string
+                phone:
+                  type: string
+                  maxLength: 30
+                  description: Nuevo teléfono de contacto del usuario.
+                homeCinema:
+                  type: string
+                  maxLength: 120
+                  description: Nuevo cine habitual del usuario.
       responses:
         '200':
           description: Perfil actualizado correctamente.
+        '404':
+          description: Usuario no encontrado.
+
+  /users/{userId}/role:
+    put:
+      tags:
+        - Users
+      summary: Asignar directamente un rol a un usuario
+      description: >
+        Solo para ADMIN. Cambia el rol de cualquier usuario indicando su número (id), sin
+        pasar por una solicitud de rol. Si el nuevo rol es STAFF_TAQUILLA se pueden indicar
+        también su cine (cinemaId) y si es responsable de ese cine (cinemaManager); con
+        cualquier otro rol, el cine asignado y el flag de responsable se borran.
+      operationId: assignUserRole
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          description: Número (id) del usuario al que se asigna el rol.
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssignRoleRequest'
+      responses:
+        '200':
+          description: Rol asignado correctamente.
+        '400':
+          description: Falta el rol o no es uno de los roles válidos.
+        '403':
+          description: Solo un ADMIN puede asignar roles.
         '404':
           description: Usuario no encontrado.
 
@@ -296,6 +343,195 @@ paths:
         '404':
           description: El usuario indicado no existe.
 
+  # ==========================================================
+  # PATH 4: SOLICITUDES DE CAMBIO DE ROL
+  # ==========================================================
+
+  /role-requests:
+    post:
+      tags:
+        - Role Requests
+      summary: Solicitar un cambio de rol
+      description: >
+        Un cliente registrado puede solicitar el rol STAFF_TAQUILLA o ADMIN.
+        Un STAFF_TAQUILLA puede solicitar el rol ADMIN. Un ADMIN no puede
+        solicitar otro rol. No se permite tener más de una solicitud PENDING.
+      operationId: createRoleRequest
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoleRequestCreateRequest'
+            example:
+              requestedRole: "STAFF_TAQUILLA"
+              cinemaId: "1"
+              motivation: "Trabajo en la taquilla del cine 1"
+      responses:
+        '201':
+          description: Solicitud creada correctamente en estado PENDING.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoleRequest'
+        '409':
+          description: >
+            Ya existe una solicitud PENDING para el usuario o el rol solicitado
+            no es compatible con su rol actual.
+    get:
+      tags:
+        - Role Requests
+      summary: Listar solicitudes de rol
+      description: >
+        Devuelve las solicitudes de rol visibles para el usuario autenticado.
+        Un ADMIN global ve todas; un taquillero con cinemaManager solo ve las
+        solicitudes STAFF_TAQUILLA de su propio cine.
+      operationId: listRoleRequests
+      parameters:
+        - name: status
+          in: query
+          required: false
+          description: Filtra por estado de la solicitud.
+          schema:
+            type: string
+            enum: [PENDING, APPROVED, REJECTED]
+        - name: cinemaId
+          in: query
+          required: false
+          description: Filtra por cine. Solo lo puede usar un ADMIN global.
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Listado de solicitudes visibles para el usuario.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RoleRequest'
+        '403':
+          description: El usuario no puede revisar solicitudes de rol.
+
+  /role-requests/me:
+    get:
+      tags:
+        - Role Requests
+      summary: Consultar mis solicitudes de rol
+      description: Devuelve las solicitudes de rol creadas por el usuario autenticado.
+      operationId: getMyRoleRequests
+      responses:
+        '200':
+          description: Solicitudes del usuario autenticado.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RoleRequest'
+
+  /role-requests/{requestId}:
+    patch:
+      tags:
+        - Role Requests
+      summary: Aprobar o rechazar una solicitud de rol
+      description: >
+        Un ADMIN global puede revisar cualquier solicitud. Un taquillero con
+        cinemaManager solo puede revisar solicitudes STAFF_TAQUILLA de su
+        propio cine. Nadie puede revisar su propia solicitud. Al aprobar, el
+        rol y el cine del solicitante se actualizan; el usuario debe volver a
+        iniciar sesión para obtener un JWT con el rol nuevo.
+      operationId: reviewRoleRequest
+      parameters:
+        - name: requestId
+          in: path
+          required: true
+          description: Identificador de la solicitud de rol.
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoleRequestReviewRequest'
+            example:
+              status: "APPROVED"
+              reviewComment: "Aprobado por el administrador"
+      responses:
+        '200':
+          description: Solicitud revisada correctamente.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoleRequest'
+        '403':
+          description: El usuario no puede revisar esta solicitud.
+        '404':
+          description: La solicitud o el usuario solicitante no existen.
+        '409':
+          description: La solicitud ya no está pendiente.
+
+  # ==========================================================
+  # PATH 5: METADATOS PARA VALIDAR LOS TOKENS (públicos)
+  # ==========================================================
+  /.well-known/jwks.json:
+    get:
+      tags:
+        - Authentication
+      summary: Clave pública para validar los JWT (JWKS)
+      description: >
+        Publica la clave pública RSA con la que se verifican los tokens RS256 que emite
+        este componente. La descargan el Gateway y los Componentes 1, 2 y 4 para validar
+        los JWT en local. Solo contiene la parte pública de la clave. La clave se genera
+        al arrancar, así que cambia cada vez que se reinicia el servicio.
+      operationId: getJwks
+      security: []
+      responses:
+        '200':
+          description: Conjunto de claves públicas (JWK Set).
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+              example:
+                keys:
+                  - kty: RSA
+                    e: AQAB
+                    kid: 16c4ac4a-6e3d-40b7-8790-b53a5b19002b
+                    n: "0vx7agoebGcQSuuPiLJXZptN9nndrQmbXEps2aiAFbWhM78LhWx4..."
+
+  /.well-known/openid-configuration:
+    get:
+      tags:
+        - Authentication
+      summary: Metadatos OIDC del emisor de tokens
+      description: >
+        Documento de descubrimiento OpenID Connect: indica el emisor (iss) de los tokens,
+        dónde está el JWKS y el algoritmo de firma.
+      operationId: getOpenIdConfiguration
+      security: []
+      responses:
+        '200':
+          description: Metadatos del emisor.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  issuer:
+                    type: string
+                    example: http://localhost:8083/v1/iam
+                  jwks_uri:
+                    type: string
+                    example: http://localhost:8083/v1/iam/.well-known/jwks.json
+                  id_token_signing_alg_values_supported:
+                    type: array
+                    items:
+                      type: string
+                    example: [RS256]
 
 components:
   schemas:
@@ -413,6 +649,29 @@ components:
           items:
             type: string
             example: "CIENCIA_FICCION"
+        phone:
+          type: string
+          maxLength: 30
+          description: Teléfono de contacto del usuario.
+          example: "+34 600 000 000"
+        homeCinema:
+          type: string
+          maxLength: 120
+          description: Cine habitual del usuario para consultar cartelera y recomendaciones.
+          example: "CineAsee Centro"
+        cinemaId:
+          type: string
+          description: >
+            Cine asignado al usuario cuando tiene rol STAFF_TAQUILLA o ADMIN.
+            Es nulo para los clientes registrados.
+          example: "1"
+        canReviewRoleRequests:
+          type: boolean
+          description: >
+            Indica si el usuario puede revisar solicitudes de rol. Es true para
+            los administradores globales y para los taquilleros responsables de
+            un cine (cinemaManager).
+          example: true
 
     PurchaseHistoryItem:
       type: object
@@ -444,6 +703,128 @@ components:
           minimum: 0 # Restricción para asegurar que el gasto reportado en el historial no sea negativo 
           description: Gasto total asociado a esa transacción.
           example: 18.50
+
+    # ========================================================
+    # SCHEMAS DE SOLICITUDES DE ROL
+    # ========================================================
+
+    RoleRequestCreateRequest:
+      type: object
+      required:
+        - requestedRole
+      properties:
+        requestedRole:
+          type: string
+          enum: [STAFF_TAQUILLA, ADMIN]
+          description: >
+            Rol al que se presenta el usuario. El cine es obligatorio cuando
+            se solicita STAFF_TAQUILLA.
+          example: "STAFF_TAQUILLA"
+        cinemaId:
+          type: string
+          description: >
+            Cine para el que se solicita el rol. Obligatorio para
+            STAFF_TAQUILLA; opcional para ADMIN (que es global).
+          example: "1"
+        motivation:
+          type: string
+          maxLength: 500
+          description: Motivo de la solicitud.
+          example: "Trabajo en la taquilla del cine 1"
+
+    RoleRequestReviewRequest:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          enum: [APPROVED, REJECTED]
+          description: Decisión tomada por el revisor.
+          example: "APPROVED"
+        reviewComment:
+          type: string
+          maxLength: 500
+          description: Comentario opcional del revisor.
+          example: "Aprobado por el administrador"
+
+    # La clase Java de este esquema está escrita a mano (dto/AssignRoleRequest.java):
+    # el pom.xml indica al generador que la use en vez de crear otra (schemaMappings).
+    AssignRoleRequest:
+      type: object
+      required:
+        - role
+      properties:
+        role:
+          type: string
+          enum: [VISITANTE, CLIENTE_REGISTRADO, STAFF_TAQUILLA, ADMIN]
+          description: Nuevo rol del usuario.
+          example: "STAFF_TAQUILLA"
+        cinemaId:
+          type: string
+          description: Cine asignado. Solo se tiene en cuenta si el rol es STAFF_TAQUILLA.
+          example: "550e8400-e29b-41d4-a716-446655440001"
+        cinemaManager:
+          type: boolean
+          description: Si es el taquillero responsable de su cine. Solo se tiene en cuenta si el rol es STAFF_TAQUILLA.
+          example: false
+
+    RoleRequest:
+      type: object
+      required:
+        - id
+        - userId
+        - requestedRole
+        - status
+        - createdAt
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: Identificador de la solicitud.
+          example: 1
+        userId:
+          type: integer
+          format: int64
+          description: Usuario que solicita el cambio de rol.
+          example: 3
+        requestedRole:
+          type: string
+          enum: [STAFF_TAQUILLA, ADMIN]
+          description: Rol solicitado.
+          example: "STAFF_TAQUILLA"
+        cinemaId:
+          type: string
+          description: Cine asociado a la solicitud.
+          example: "1"
+        motivation:
+          type: string
+          description: Motivo indicado por el solicitante.
+          example: "Trabajo en la taquilla del cine 1"
+        status:
+          type: string
+          enum: [PENDING, APPROVED, REJECTED]
+          description: Estado actual de la solicitud.
+          example: "PENDING"
+        createdAt:
+          type: string
+          format: date-time
+          description: Fecha y hora de creación.
+          example: "2026-11-09T10:00:00Z"
+        reviewedAt:
+          type: string
+          format: date-time
+          description: Fecha y hora de la revisión.
+          example: "2026-11-09T12:00:00Z"
+        reviewedBy:
+          type: integer
+          format: int64
+          description: Usuario que revisó la solicitud.
+          example: 1
+        reviewComment:
+          type: string
+          description: Comentario de la revisión.
+          example: "Aprobado por el administrador"
 
 # --- Configuración del esquema de seguridad JWT ---
   securitySchemes:

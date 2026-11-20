@@ -390,6 +390,33 @@ paths:
           description: Respuesta de Redsys no válida.
         '402':
           description: Pago denegado por Redsys.
+    post:
+      tags: [Reservations]
+      summary: Página de vuelta desde Redsys enviada como formulario (sin frontend)
+      description: >
+        Igual que el GET, pero con los tres parámetros de Redsys en un formulario
+        (application/x-www-form-urlencoded), que es como los reenvía Redsys en algunos terminales.
+      operationId: redsysReturnForm
+      security: []
+      requestBody:
+        required: false
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                Ds_SignatureVersion: { type: string }
+                Ds_MerchantParameters: { type: string }
+                Ds_Signature: { type: string }
+      responses:
+        '200':
+          description: Pago confirmado, o pago no completado (sin parámetros).
+          content:
+            text/html: {}
+        '400':
+          description: Respuesta de Redsys no válida.
+        '402':
+          description: Pago denegado por Redsys.
 
   # ==========================================================
   # PATH 4: MAPA DE BUTACAS OCUPADAS (público)

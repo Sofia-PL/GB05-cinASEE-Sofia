@@ -168,6 +168,8 @@
 							<generatorName>spring</generatorName>
 							<apiPackage>com.cinasee.componente3_usuarios.controllers</apiPackage>
 							<modelPackage>com.cinasee.componente3_usuarios.dto</modelPackage>
+							<!-- AssignRoleRequest está escrita a mano en src/main/java: no se genera otra -->
+							<schemaMappings>AssignRoleRequest=com.cinasee.componente3_usuarios.dto.AssignRoleRequest</schemaMappings>
 							<configOptions>
 								<interfaceOnly>true</interfaceOnly>
 								<useSpringBoot3>true</useSpringBoot3>

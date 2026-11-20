@@ -390,6 +390,33 @@ paths:
           description: Respuesta de Redsys no válida.
         '402':
           description: Pago denegado por Redsys.
+    post:
+      tags: [Reservations]
+      summary: Página de vuelta desde Redsys enviada como formulario (sin frontend)
+      description: >
+        Igual que el GET, pero con los tres parámetros de Redsys en un formulario
+        (application/x-www-form-urlencoded), que es como los reenvía Redsys en algunos terminales.
+      operationId: redsysReturnForm
+      security: []
+      requestBody:
+        required: false
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                Ds_SignatureVersion: { type: string }
+                Ds_MerchantParameters: { type: string }
+                Ds_Signature: { type: string }
+      responses:
+        '200':
+          description: Pago confirmado, o pago no completado (sin parámetros).
+          content:
+            text/html: {}
+        '400':
+          description: Respuesta de Redsys no válida.
+        '402':
+          description: Pago denegado por Redsys.
 
   # ==========================================================
   # PATH 4: MAPA DE BUTACAS OCUPADAS (público)
@@ -409,7 +436,6 @@ paths:
           required: true
           schema:
             type: string
-
       responses:
         '200':
           description: Butacas ocupadas (lo que no aparece está libre).
@@ -527,7 +553,6 @@ components:
       properties:
         showId:
           type: string
-
           description: >
             Identificador del pase/sesión. Pertenece al Componente 1 (Cartelera)
             y es utilizado por Reservas para verificar vigencia y tarifa base.
@@ -591,17 +616,14 @@ components:
           example: 8901
         showId:
           type: string
-
           description: Identificador de la sesión. Pertenece al Componente 1 (Cartelera).
           example: "1024"
         movieId:
           type: string
-
           description: Película de la sesión (copia del dato de Cartelera).
-          example: "101"
+          example: "550e8400-e29b-41d4-a716-446655440001"
         roomId:
           type: string
-
           description: Sala de la sesión (copia del dato de Cartelera).
           example: "1"
         showStartTime:
@@ -740,7 +762,7 @@ components:
           items:
             type: object
             properties:
-              movieId: { type: string, example: "1004" }
+              movieId: { type: string, example: "550e8400-e29b-41d4-a716-446655440001" }
               totalTicketsSold: { type: integer, example: 1250 }
               reservations: { type: integer, example: 600 }
               grossRevenue: { type: number, format: float, example: 11250.50 }
