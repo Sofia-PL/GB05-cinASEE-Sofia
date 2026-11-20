@@ -107,6 +107,11 @@ export function crearSesion(datos, token) {
   return apiFetch('/api/v1/sessions', { method: 'POST', body: datos, token });
 }
 
+/** POST /api/v1/sessions/batch · body { movieId, roomId, daysOfWeek, startDate, endDate, startTime, ticketPrice } */
+export function crearSesionesLote(datos, token) {
+  return apiFetch('/api/v1/sessions/batch', { method: 'POST', body: datos, token });
+}
+
 /** PATCH /api/v1/sessions/{id} · body { roomId?, startTime?, status? } */
 export function actualizarSesion(sessionId, cambios, token) {
   return apiFetch(`/api/v1/sessions/${sessionId}`, { method: 'PATCH', body: cambios, token });

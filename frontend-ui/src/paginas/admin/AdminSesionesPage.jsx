@@ -6,6 +6,7 @@ import {
   obtenerSalasCine,
   obtenerTodasSesiones,
   crearSesion,
+  crearSesionesLote,
   actualizarSesion,
   fechaIso,
   ESTADOS_SESION,
@@ -32,6 +33,16 @@ const COLOR_ESTADO = {
   CANCELADA: 'admin-badge-dark',
 };
 
+const DIAS_SEMANA = [
+  { value: 'MONDAY', label: 'Lunes' },
+  { value: 'TUESDAY', label: 'Martes' },
+  { value: 'WEDNESDAY', label: 'Miércoles' },
+  { value: 'THURSDAY', label: 'Jueves' },
+  { value: 'FRIDAY', label: 'Viernes' },
+  { value: 'SATURDAY', label: 'Sábado' },
+  { value: 'SUNDAY', label: 'Domingo' },
+];
+
 export default function AdminSesionesPage() {
   const { user } = useAuth();
   const token = user?.token;
@@ -54,6 +65,10 @@ export default function AdminSesionesPage() {
   // Modal: null, 'create' o 'edit'
   const [modalMode, setModalMode] = useState(null);
   const [formData, setFormData] = useState(null);
+  const [batchModal, setBatchModal] = useState(false);
+  const [batchForm, setBatchForm] = useState(null);
+  const [batchGuardando, setBatchGuardando] = useState(false);
+  const [batchResult, setBatchResult] = useState(null);
 
   /* Películas, cines y sesiones (todo público en Cartelera) */
   useEffect(() => {
@@ -95,6 +110,7 @@ export default function AdminSesionesPage() {
   const cineActivo = cines.find((c) => c.id === selectedCineId) || null;
   const selectedPeli = peliculas.find((p) => p.id === selectedPeliId) || null;
   const salaPorId = Object.fromEntries(salas.map((s) => [s.id, s]));
+  const salaLote = salas.find((s) => s.id === batchForm?.roomId) || null;
 
   // Sesiones del cine elegido (sus salas). Sin token no se conocen las salas: se muestran todas.
   const sesionesCine = token ? sesiones.filter((s) => salaPorId[s.roomId]) : sesiones;
@@ -122,6 +138,73 @@ export default function AdminSesionesPage() {
       ticketPrice: primera?.basePrice ?? 9.5,
     });
     setModalMode('create');
+  }
+
+  function abrirCrearLote() {
+    const primera = salas[0];
+    const fechaFin = new Date();
+    fechaFin.setDate(fechaFin.getDate() + 30);
+    setBatchForm({
+      movieId: selectedPeliId,
+      roomId: primera?.id || '',
+      daysOfWeek: [],
+      startDate: fechaIso(new Date()),
+      endDate: fechaIso(fechaFin),
+      startTime: '19:00',
+      ticketPrice: primera?.basePrice ?? 9.5,
+    });
+    setBatchResult(null);
+    setBatchModal(true);
+  }
+
+  function cambiarDiaLote(dia) {
+    setBatchForm((actual) => ({
+      ...actual,
+      daysOfWeek: actual.daysOfWeek.includes(dia)
+        ? actual.daysOfWeek.filter((seleccionado) => seleccionado !== dia)
+        : [...actual.daysOfWeek, dia],
+    }));
+  }
+
+  async function handleSubmitLote(e) {
+    e.preventDefault();
+    if (batchForm.daysOfWeek.length === 0) {
+      setAviso({ tipo: 'error', texto: 'Selecciona al menos un día de la semana para programar el lote.' });
+      return;
+    }
+    if (batchForm.endDate < batchForm.startDate) {
+      setAviso({ tipo: 'error', texto: 'La fecha final no puede ser anterior a la fecha inicial.' });
+      return;
+    }
+
+    setBatchGuardando(true);
+    try {
+      const resultado = await crearSesionesLote({
+        movieId: batchForm.movieId,
+        roomId: batchForm.roomId,
+        daysOfWeek: batchForm.daysOfWeek,
+        startDate: batchForm.startDate,
+        endDate: batchForm.endDate,
+        startTime: `${batchForm.startTime}:00`,
+        ticketPrice: Number(batchForm.ticketPrice),
+      }, token);
+      setBatchResult(resultado);
+      setBatchModal(false);
+      setSelectedPeliId(batchForm.movieId);
+      setRecarga((n) => n + 1);
+      const totalCreadas = resultado.created.length;
+      const totalConflictos = resultado.conflicts.length;
+      setAviso({
+        tipo: totalConflictos > 0 ? 'info' : 'ok',
+        texto: totalCreadas === 0 && totalConflictos === 0
+          ? 'El rango no incluye ninguno de los días seleccionados.'
+          : `Lote completado: ${totalCreadas} sesiones creadas y ${totalConflictos} con solapamiento.`,
+      });
+    } catch (err) {
+      setAviso({ tipo: 'error', texto: `No se pudo programar el lote: ${err.message}` });
+    } finally {
+      setBatchGuardando(false);
+    }
   }
 
   function abrirEditarSesion(sesion) {
@@ -227,6 +310,59 @@ export default function AdminSesionesPage() {
       {!token && <AvisoSinToken />}
       <AvisoAdmin aviso={aviso} onCerrar={() => setAviso(null)} />
 
+      {batchResult && (
+        <section className="admin-panel" role="status" style={{ marginBottom: '18px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px' }}>
+            <div>
+              <h2 style={{ color: 'var(--burgundy)', margin: '0 0 6px', fontSize: '1.2rem' }}>
+                Resultado de la programación por lote
+              </h2>
+              <p style={{ margin: 0, color: 'var(--text-muted)' }}>
+                {batchResult.created.length} sesiones creadas · {batchResult.conflicts.length} fechas con solapamiento.
+              </p>
+            </div>
+            <button
+              type="button"
+              className="admin-btn admin-btn-secondary admin-btn-sm"
+              aria-label="Cerrar resultado del lote"
+              onClick={() => setBatchResult(null)}
+            >
+              ✕
+            </button>
+          </div>
+
+          {batchResult.created.length > 0 && (
+            <details style={{ marginTop: '14px' }}>
+              <summary style={{ cursor: 'pointer', fontWeight: 700 }}>
+                Sesiones creadas ({batchResult.created.length})
+              </summary>
+              <ul style={{ margin: '8px 0 0', paddingLeft: '22px' }}>
+                {batchResult.created.map((sesion) => {
+                  const inicio = partirFechaHora(sesion.startTime);
+                  return <li key={sesion.id}>{inicio.fecha} · {inicio.hora}</li>;
+                })}
+              </ul>
+            </details>
+          )}
+
+          {batchResult.conflicts.length > 0 && (
+            <div style={{ marginTop: '14px' }}>
+              <strong>Fechas no creadas por solapamiento</strong>
+              <ul style={{ margin: '8px 0 0', paddingLeft: '22px' }}>
+                {batchResult.conflicts.map((conflicto) => {
+                  const inicio = partirFechaHora(conflicto.startTime);
+                  return (
+                    <li key={`${conflicto.startTime}-${conflicto.conflictingSessionId}`}>
+                      {inicio.fecha} · {inicio.hora} (conflicto con la sesión {conflicto.conflictingSessionId})
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
+        </section>
+      )}
+
       {/* Maestro-Detalle: Películas a la izquierda / Sesiones de esa película a la derecha */}
       <div className="admin-master-detail">
         <aside className="admin-list-sidebar">
@@ -308,15 +444,26 @@ export default function AdminSesionesPage() {
                   )}
                 </div>
 
-                <button
-                  type="button"
-                  className="admin-btn admin-btn-primary"
-                  onClick={abrirCrearSesion}
-                  disabled={!token || salas.length === 0}
-                  title={token && salas.length === 0 ? 'Este cine no tiene salas' : undefined}
-                >
-                  + Añadir Sesión a esta Película
-                </button>
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    className="admin-btn admin-btn-secondary"
+                    onClick={abrirCrearLote}
+                    disabled={!token || salas.length === 0}
+                    title={token && salas.length === 0 ? 'Este cine no tiene salas' : undefined}
+                  >
+                    Programar lote
+                  </button>
+                  <button
+                    type="button"
+                    className="admin-btn admin-btn-primary"
+                    onClick={abrirCrearSesion}
+                    disabled={!token || salas.length === 0}
+                    title={token && salas.length === 0 ? 'Este cine no tiene salas' : undefined}
+                  >
+                    + Añadir Sesión a esta Película
+                  </button>
+                </div>
               </div>
 
               {sesionesPelicula.length === 0 ? (
@@ -544,6 +691,159 @@ export default function AdminSesionesPage() {
                 </button>
                 <button type="submit" className="admin-btn admin-btn-primary" disabled={guardando}>
                   {guardando ? 'Guardando…' : modalMode === 'create' ? 'Programar Sesión' : 'Guardar Modificación'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {batchModal && batchForm && (
+        <div
+          className="admin-modal-backdrop"
+          onClick={() => { if (!batchGuardando) setBatchModal(false); }}
+        >
+          <div className="admin-modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="admin-modal-header">
+              <h2 className="admin-modal-title">Programar sesiones recurrentes</h2>
+              <button
+                type="button"
+                className="admin-btn admin-btn-secondary admin-btn-sm"
+                onClick={() => setBatchModal(false)}
+                disabled={batchGuardando}
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmitLote}>
+              <div className="admin-form-group">
+                <label className="admin-label">Película</label>
+                <input
+                  type="text"
+                  className="admin-input"
+                  value={selectedPeli?.title || ''}
+                  disabled
+                />
+              </div>
+
+              <div className="admin-form-group">
+                <label className="admin-label" htmlFor="batch-room">Sala en {cineActivo?.name} *</label>
+                <select
+                  id="batch-room"
+                  className="admin-select"
+                  required
+                  value={batchForm.roomId}
+                  onChange={(e) => {
+                    const sala = salaPorId[e.target.value];
+                    const minimo = Number(sala?.basePrice || 0);
+                    setBatchForm({
+                      ...batchForm,
+                      roomId: e.target.value,
+                      ticketPrice: Number(batchForm.ticketPrice) < minimo ? minimo : batchForm.ticketPrice,
+                    });
+                  }}
+                >
+                  {salas.map((sala) => (
+                    <option key={sala.id} value={sala.id}>
+                      {sala.name} ({TIPOS_SALA[sala.roomType] || sala.roomType})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <fieldset style={{ border: 0, padding: 0, margin: '0 0 16px' }}>
+                <legend className="admin-label">Días de la semana *</legend>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(115px, 1fr))', gap: '8px' }}>
+                  {DIAS_SEMANA.map((dia) => (
+                    <label
+                      key={dia.value}
+                      htmlFor={`batch-day-${dia.value}`}
+                      style={{ display: 'flex', alignItems: 'center', gap: '7px', cursor: 'pointer', fontSize: '0.88rem' }}
+                    >
+                      <input
+                        id={`batch-day-${dia.value}`}
+                        type="checkbox"
+                        checked={batchForm.daysOfWeek.includes(dia.value)}
+                        onChange={() => cambiarDiaLote(dia.value)}
+                      />
+                      {dia.label}
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+                <div className="admin-form-group">
+                  <label className="admin-label" htmlFor="batch-start-date">Desde *</label>
+                  <input
+                    id="batch-start-date"
+                    type="date"
+                    className="admin-input"
+                    required
+                    value={batchForm.startDate}
+                    onChange={(e) => setBatchForm({ ...batchForm, startDate: e.target.value })}
+                  />
+                </div>
+                <div className="admin-form-group">
+                  <label className="admin-label" htmlFor="batch-end-date">Hasta (incluido) *</label>
+                  <input
+                    id="batch-end-date"
+                    type="date"
+                    className="admin-input"
+                    required
+                    value={batchForm.endDate}
+                    onChange={(e) => setBatchForm({ ...batchForm, endDate: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+                <div className="admin-form-group">
+                  <label className="admin-label" htmlFor="batch-start-time">Hora del pase *</label>
+                  <input
+                    id="batch-start-time"
+                    type="time"
+                    className="admin-input"
+                    required
+                    value={batchForm.startTime}
+                    onChange={(e) => setBatchForm({ ...batchForm, startTime: e.target.value })}
+                  />
+                </div>
+                <div className="admin-form-group">
+                  <label className="admin-label" htmlFor="batch-ticket-price">Precio por entrada (€) *</label>
+                  <input
+                    id="batch-ticket-price"
+                    type="number"
+                    className="admin-input"
+                    required
+                    min={Number(salaLote?.basePrice || 0)}
+                    step="0.05"
+                    value={batchForm.ticketPrice}
+                    onChange={(e) => setBatchForm({ ...batchForm, ticketPrice: e.target.value })}
+                  />
+                  <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                    Mínimo de la sala: {Number(salaLote?.basePrice || 0).toFixed(2)} €
+                  </span>
+                </div>
+              </div>
+
+              <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: '4px 0 0' }}>
+                El rango incluye ambas fechas. Las sesiones que se solapen no se crearán y aparecerán en el resumen.
+                Las creadas quedan como «Programadas».
+              </p>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '22px', paddingTop: '16px', borderTop: '1px solid rgba(43,18,21,0.1)' }}>
+                <button
+                  type="button"
+                  className="admin-btn admin-btn-secondary"
+                  onClick={() => setBatchModal(false)}
+                  disabled={batchGuardando}
+                >
+                  Cancelar
+                </button>
+                <button type="submit" className="admin-btn admin-btn-primary" disabled={batchGuardando}>
+                  {batchGuardando ? 'Programando…' : 'Programar lote'}
                 </button>
               </div>
             </form>
