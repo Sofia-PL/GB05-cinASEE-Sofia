@@ -264,6 +264,6 @@ JWKS (`JWT_JWK_SET_URI`) y el emisor (`JWT_ISSUER`).
 
 ## 9. Documentación relacionada
 
-- [`docs/README.md`](docs/README.md) — notas originales del componente.
+- [`docs/README.md`](docs/README.md) — explicación del componente con esquemas.
 - [`docs/ejecucion-y-pruebas.md`](docs/ejecucion-y-pruebas.md) — ejecución y pruebas.
 - [`docs/seed-cartelera.md`](docs/seed-cartelera.md) — datos y decisiones para llenar la base.
