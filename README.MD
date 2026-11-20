@@ -156,7 +156,58 @@ una venta si RabbitMQ falla en ese instante.
 
 ## Puesta en marcha
 
-### Todo el sistema
+### Arranque rápido (recomendado)
+
+Un único comando comprueba Docker, construye las imágenes, levanta los
+contenedores, espera a que todos respondan por HTTP y muestra un resumen con
+URLs y credenciales.
+
+**Windows** — doble clic en `ARRANCAR.bat` o, desde PowerShell:
+
+```powershell
+.\scripts\iniciar.ps1
+```
+
+**macOS / Linux**:
+
+```bash
+./scripts/iniciar.sh
+```
+
+Si el clon no conserva el permiso de ejecución, usa `bash scripts/iniciar.sh`
+o ejecuta una vez `chmod +x scripts/*.sh`.
+
+Opciones disponibles (mismos nombres en PowerShell y en bash):
+
+| PowerShell | bash | Efecto |
+|---|---|---|
+| `-BorrarDatos` | `--borrar-datos` | `down -v` y regenera los seeds (pide confirmación) |
+| `-Reiniciar` | `--reiniciar` | `down` antes de levantar, conservando datos |
+| `-SinBuild` | `--sin-build` | Reutiliza las imágenes ya construidas |
+| `-NoAbrir` | `--no-abrir` | No abre el navegador al terminar |
+| `-TimeoutSegundos N` | `--timeout=N` | Espera máxima por servicio (240 s por defecto) |
+
+Para comprobar el estado sin arrancar nada:
+
+```powershell
+.\scripts\estado.ps1     # macOS/Linux: ./scripts/estado.sh
+```
+
+Para parar:
+
+```powershell
+.\scripts\detener.ps1              # conserva los datos
+.\scripts\detener.ps1 -BorrarDatos # borra los volúmenes
+```
+
+El script abre `http://localhost:3000` (no `127.0.0.1`) porque el CORS del
+Gateway solo permite ese origen.
+
+> Las sesiones que siembra C1 caducan a los ~3 días. Si
+> `GET /api/v1/movies?inShowcase=true` devuelve `[]`, arranca con
+> `-BorrarDatos` / `--borrar-datos` para regenerar el catálogo.
+
+### Todo el sistema (manual)
 
 ```bash
 docker compose up -d --build
@@ -256,9 +307,10 @@ Las sesiones de C1 son `LocalDateTime` sin zona. C2 las interpreta con
 
 ### 7. Seed idempotente
 
-C3 crea sus tres usuarios al arrancar y C1 debe crear sus cines, películas,
-salas y sesiones con el mismo patrón (`CommandLineRunner` + `existsById`). Se
-desactiva con `APP_SEED_ENABLED=false`. Ver
+C3 crea sus tres usuarios al arrancar y C1 crea sus cines, películas, salas y
+sesiones con el mismo patrón (`CommandLineRunner` + `existsById`). Ambos seeds
+son idempotentes: si el documento ya existe, no lo modifican. Se desactivan con
+`APP_SEED_ENABLED=false`. Ver
 [seed de cartelera](componente1-cartelera/docs/seed-cartelera.md).
 
 ### 8. Cines en C1 y filtro por cine en C4
@@ -273,10 +325,12 @@ Estado real del `cinemaId` en cada componente:
   (`GET /rooms?cinemaId=`) y descarta las filas de venta de C2 cuyo `roomId` no
   está en ese conjunto; el aforo se calcula con esas mismas salas. Si C1 no
   responde, usa un aforo estimado y no filtra, con `log.warn`.
-- **C3 (usuarios)** guarda `cinemaId` como un número libre que asigna un
-  `ADMIN`; **no se valida** contra el catálogo de C1. Ese valor solo se usa para
-  limitar qué solicitudes de rol puede revisar un `STAFF_TAQUILLA` con
-  `cinemaManager = true`.
+- **C3 (usuarios)** guarda `cinemaId` como `String`, pero **no lo valida**
+  contra el catálogo de C1. Ese valor solo se usa para limitar qué solicitudes
+  de rol puede revisar un `STAFF_TAQUILLA` con `cinemaManager = true`. El
+  `docker-compose.yml` fija `APP_SEED_STAFF_CINEMA_ID` al UUID del cine de
+  Madrid de C1 (`550e8400-e29b-41d4-a716-446655440001`) para que la taquilla
+  demo y las solicitudes de rol apunten al mismo cine.
 - **C2 (reservas)** trabaja por `sessionId`/`roomId` y su `CatalogRoom` ignora
   `cinemaId` (`@JsonIgnoreProperties(ignoreUnknown = true)`), así que no rompe
   con el C1 nuevo pero tampoco filtra por cine.
@@ -298,6 +352,9 @@ CinAsee/
 ├── frontend-ui/               React + Vite
 ├── OpenAPI specs/             Contratos de los componentes 1–4
 ├── docker-compose.yml         Infraestructura y microservicios
+├── scripts/                   Arranque, parada y estado (PowerShell y bash)
+├── ARRANCAR.bat               Doble clic para arrancar en Windows
+├── DETENER.bat                Doble clic para parar en Windows
 └── README.MD
 ```
 

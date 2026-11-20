@@ -52,6 +52,18 @@ implementan esas interfaces; la lógica está en `services/`.
 
 ### Con Docker (todo el sistema)
 
+Desde la raíz del repositorio:
+
+```bash
+# Windows
+.\ARRANCAR.bat
+# macOS / Linux
+./scripts/iniciar.sh
+```
+
+El script construye las imágenes, levanta todos los servicios, espera a que
+respondan por HTTP e imprime un resumen. También puede hacerse a mano:
+
 ```bash
 docker compose up -d --build
 ```
@@ -269,13 +281,18 @@ email ya existe, no modifica nada.
 | Email | Contraseña | Rol | Extra |
 |---|---|---|---|
 | `admin@cinasee.com` | `Admin123!` | `ADMIN` | — |
-| `staff@cinasee.com` | `Staff123!` | `STAFF_TAQUILLA` | `cinemaId = 1`, `cinemaManager = true` |
+| `staff@cinasee.com` | `Staff123!` | `STAFF_TAQUILLA` | `cinemaId = 550e8400-e29b-41d4-a716-446655440001`, `cinemaManager = true` |
 | `usuario@cinasee.com` | `Usuario123!` | `CLIENTE_REGISTRADO` | — |
 
 Se desactiva con `APP_SEED_ENABLED=false` (recomendado en producción).
-En una base migrada, `"1"` conserva su relación histórica; en una instalación
-nueva con cines UUID, configura `APP_SEED_STAFF_CINEMA_ID` con el UUID real del
-cine antes de iniciar el servicio.
+
+El `cinemaId` del staff se toma de `APP_SEED_STAFF_CINEMA_ID`. El
+`docker-compose.yml` raíz lo fija al UUID del cine de Madrid que crea el seed de
+C1, de modo que la taquilla y la revisión de solicitudes de rol funcionan sin
+configuración extra. Si cambias de cine, usa el UUID real de C1
+(`GET /api/v1/cinemas`). Como el seed es idempotente, un volumen creado con un
+valor anterior no se actualiza: hay que arrancar con
+`iniciar.ps1 -BorrarDatos` (o `iniciar.sh --borrar-datos`) una vez.
 
 ---
 
@@ -347,6 +364,7 @@ la DLQ (`default-requeue-rejected: false`).
 | `GUEST_RATE_LIMIT_MAX` | `10` | Peticiones por ventana |
 | `GUEST_RATE_LIMIT_WINDOW` | `60` | Ventana en segundos |
 | `APP_SEED_ENABLED` | `true` | Activa el seed |
+| `APP_SEED_STAFF_CINEMA_ID` | UUID de Madrid | Cine del staff (coincide con el seed de C1) |
 | `APP_SEED_*` | ver seed | Credenciales y cine del staff |
 
 > El `iss` se mantiene como `http://localhost:8083/...` incluso dentro de Docker:

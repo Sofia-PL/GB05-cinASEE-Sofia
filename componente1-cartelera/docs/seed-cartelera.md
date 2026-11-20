@@ -62,9 +62,10 @@ UUID/ULID fijos y válidos para que sus referencias sean reproducibles.
 Los IDs de las altas hechas por la API son nuevos; conserva los que devuelve
 para establecer las referencias entre recursos. Para el cine de Madrid creado
 por el script, el ID fijo es
-`550e8400-e29b-41d4-a716-446655440001`. Si se usa el usuario demo de taquilla
-de C3, configura `APP_SEED_STAFF_CINEMA_ID` con ese ID; el seed de C1 no modifica
-usuarios ni configuración de otros componentes.
+`550e8400-e29b-41d4-a716-446655440001`. El `docker-compose.yml` raíz ya
+configura `APP_SEED_STAFF_CINEMA_ID` con ese ID, de modo que el usuario demo de
+taquilla de C3 queda asignado al mismo cine; el seed de C1 no modifica usuarios
+ni configuración de otros componentes.
 
 ## Ejecutar el seed
 
