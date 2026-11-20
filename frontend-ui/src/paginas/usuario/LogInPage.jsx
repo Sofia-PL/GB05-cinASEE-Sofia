@@ -25,7 +25,7 @@ function EyeSlashIcon() {
 export default function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { login, register } = useAuth();
+  const { login, register, sesionCaducada } = useAuth();
 
   const defaultTab = location.pathname === '/registro' ? 'registro' : 'login';
   const [tab, setTab] = useState(defaultTab);
@@ -179,6 +179,12 @@ export default function LoginPage() {
             Registrarse
           </button>
         </div>
+
+        {sesionCaducada && !errorGlobal && tab === 'login' && (
+          <div className="cinasee-aviso" role="status" style={{ marginBottom: '16px' }}>
+            Tu sesión ha caducado. Vuelve a iniciar sesión para continuar.
+          </div>
+        )}
 
         {errorGlobal && (
           <div

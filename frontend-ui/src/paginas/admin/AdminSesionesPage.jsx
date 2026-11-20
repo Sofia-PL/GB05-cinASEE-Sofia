@@ -44,8 +44,8 @@ const DIAS_SEMANA = [
 ];
 
 export default function AdminSesionesPage() {
-  const { user } = useAuth();
-  const token = user?.token;
+  const { tokenUsuario } = useAuth();
+  const token = tokenUsuario(); // null si la sesión ha caducado
 
   const [peliculas, setPeliculas] = useState([]);
   const [cines, setCines] = useState([]);

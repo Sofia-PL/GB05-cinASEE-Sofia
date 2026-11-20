@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { leerJwt } from '../api/http';
+import { useState, useEffect, useCallback } from 'react';
+import { leerJwt, alRechazarseToken } from '../api/http';
 import * as usuariosApi from '../api/usuarios';
 import { AuthContext } from './useAuth';
 
@@ -58,6 +58,36 @@ function datosPerfil(perfil) {
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(cargarUsuario);
+  // true cuando la sesión se ha cerrado sola por token caducado o rechazado (lo muestra el login)
+  const [sesionCaducada, setSesionCaducada] = useState(false);
+
+  /** Cierra la sesión porque su token ya no vale, y lo deja indicado para avisar en el login */
+  const cerrarSesionCaducada = useCallback(() => {
+    try {
+      localStorage.removeItem(LS_KEY);
+    } catch {
+      // ignorar
+    }
+    setUser(null);
+    setSesionCaducada(true);
+  }, []);
+
+  /* Cierre automático al caducar el token (con el mismo margen de 30 s que tokenVigente) */
+  useEffect(() => {
+    if (!user?.tokenExp) return undefined;
+    const ms = Math.max(0, user.tokenExp * 1000 - Date.now() - 30_000);
+    const timer = window.setTimeout(cerrarSesionCaducada, ms);
+    return () => window.clearTimeout(timer);
+  }, [user?.tokenExp, cerrarSesionCaducada]);
+
+  /* Cierre si el backend rechaza el token del usuario (401), p. ej. tras reiniciar el Comp. 3 */
+  useEffect(() => {
+    if (!user?.token) return undefined;
+    const tokenSesion = user.token;
+    return alRechazarseToken((tokenRechazado) => {
+      if (tokenRechazado === tokenSesion) cerrarSesionCaducada();
+    });
+  }, [user?.token, cerrarSesionCaducada]);
 
   function guardar(userData) {
     try {
@@ -66,6 +96,7 @@ export function AuthProvider({ children }) {
       // sin almacenamiento: la sesión dura lo que la pestaña
     }
     setUser(userData);
+    setSesionCaducada(false);
     return userData;
   }
 
@@ -145,6 +176,7 @@ export function AuthProvider({ children }) {
     }
     borrarTokenInvitado();
     setUser(null);
+    setSesionCaducada(false);
   }
 
   /** Token JWT del usuario conectado (null si no hay sesión o ha caducado) */
@@ -169,6 +201,7 @@ export function AuthProvider({ children }) {
         tokenUsuario,
         tokenActivo,
         obtenerTokenInvitado,
+        sesionCaducada,
       }}
     >
       {children}

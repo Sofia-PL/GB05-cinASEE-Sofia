@@ -30,6 +30,21 @@ export class ApiError extends Error {
   }
 }
 
+/*
+ * Aviso de token rechazado: si el backend responde 401 a una petición que llevaba
+ * token, ese token ya no vale (caducado, o el Comp. 3 se reinició y cambió sus claves).
+ * El contexto de sesión se suscribe para cerrar la sesión del usuario.
+ */
+let avisoTokenRechazado = null;
+
+/** Registra la función que se llama con el token rechazado. Devuelve la función para darse de baja. */
+export function alRechazarseToken(fn) {
+  avisoTokenRechazado = fn;
+  return () => {
+    if (avisoTokenRechazado === fn) avisoTokenRechazado = null;
+  };
+}
+
 /**
  * Hace una petición JSON al gateway.
  * @param {string} path   ruta a partir del gateway, p. ej. "/v1/reservations"
@@ -75,6 +90,7 @@ export async function apiFetch(path, { method = 'GET', body, token, query } = {}
   }
 
   if (!response.ok) {
+    if (response.status === 401 && token && avisoTokenRechazado) avisoTokenRechazado(token);
     const info = data && typeof data === 'object' ? data : {};
     throw new ApiError({
       status: response.status,

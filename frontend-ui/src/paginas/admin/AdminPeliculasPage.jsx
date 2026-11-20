@@ -53,8 +53,8 @@ function cuerpoPelicula(form) {
 }
 
 export default function AdminPeliculasPage() {
-  const { user } = useAuth();
-  const token = user?.token;
+  const { tokenUsuario } = useAuth();
+  const token = tokenUsuario(); // null si la sesión ha caducado
 
   const [peliculas, setPeliculas] = useState([]);
   /** Ids de las películas con sesiones futuras no canceladas (lo calcula Cartelera) */

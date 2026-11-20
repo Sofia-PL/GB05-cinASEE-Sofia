@@ -36,9 +36,9 @@ function datosCine(c) {
 }
 
 export default function AdminSalasPage() {
-  const { user } = useAuth();
+  const { tokenUsuario } = useAuth();
   const { recargarCines } = useCine();
-  const token = user?.token;
+  const token = tokenUsuario(); // null si la sesión ha caducado
 
   const [cines, setCines] = useState([]);
   const [cargandoCines, setCargandoCines] = useState(true);

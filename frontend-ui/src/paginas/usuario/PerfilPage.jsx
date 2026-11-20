@@ -74,7 +74,6 @@ export default function PerfilPage() {
 
   // Solicitudes de cambio de rol (Comp. 3)
   const [solicitudesRol, setSolicitudesRol] = useState([]);
-  const [cargandoSolicitudes, setCargandoSolicitudes] = useState(false);
   const [recargaSolicitudes, setRecargaSolicitudes] = useState(0);
   const [rolSolicitado, setRolSolicitado] = useState(user?.rol === 'STAFF' ? 'ADMIN' : 'STAFF_TAQUILLA');
   const [cineSolicitadoId, setCineSolicitadoId] = useState('');
@@ -85,11 +84,9 @@ export default function PerfilPage() {
   useEffect(() => {
     if (!token || user?.rol === 'ADMIN') return undefined;
     let cancelado = false;
-    setCargandoSolicitudes(true);
     obtenerMisSolicitudesRol(token)
       .then((res) => { if (!cancelado) setSolicitudesRol(Array.isArray(res) ? res : []); })
-      .catch(() => { if (!cancelado) setSolicitudesRol([]); })
-      .finally(() => { if (!cancelado) setCargandoSolicitudes(false); });
+      .catch(() => { if (!cancelado) setSolicitudesRol([]); });
     return () => { cancelado = true; };
   }, [token, user?.rol, recargaSolicitudes]);
 
