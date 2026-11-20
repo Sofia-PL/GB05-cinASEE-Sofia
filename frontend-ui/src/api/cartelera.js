@@ -87,6 +87,16 @@ export function crearSala(datos, token) {
   return apiFetch('/api/v1/rooms', { method: 'POST', body: datos, token });
 }
 
+/** PUT /api/v1/rooms/{id} · body { cinemaId, name, roomType, rowsCount, columnsCount, wheelchairAccessible, basePrice } */
+export function actualizarSala(roomId, datos, token) {
+  return apiFetch(`/api/v1/rooms/${roomId}`, { method: 'PUT', body: datos, token });
+}
+
+/** DELETE /api/v1/rooms/{id} */
+export function eliminarSala(roomId, token) {
+  return apiFetch(`/api/v1/rooms/${roomId}`, { method: 'DELETE', token });
+}
+
 /** GET /api/v1/sessions (público, sin filtros) -> todas las sesiones */
 export function obtenerTodasSesiones() {
   return apiFetch('/api/v1/sessions');

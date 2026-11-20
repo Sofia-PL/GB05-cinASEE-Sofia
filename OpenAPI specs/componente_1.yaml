@@ -431,6 +431,60 @@ paths:
                 $ref: '#/components/schemas/Room'
         '404':
           description: Sala no encontrada.
+    put:
+      tags:
+        - Rooms
+      summary: Actualizar una sala
+      description: >
+        Reemplaza la configuración de una sala. El aforo se calcula automáticamente como filas por columnas.
+      operationId: updateRoom
+      parameters:
+        - name: roomId
+          in: path
+          required: true
+          description: Identificador único de la sala.
+          schema:
+            type: string
+          example: "1"
+      requestBody:
+        required: true
+        description: Configuración completa de la sala.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateRoomRequest'
+      responses:
+        '200':
+          description: Sala actualizada correctamente; el aforo devuelto refleja la nueva distribución.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Room'
+        '400':
+          description: Datos de la sala no válidos.
+        '404':
+          description: Sala o cine asociado no encontrado.
+    delete:
+      tags:
+        - Rooms
+      summary: Eliminar una sala
+      description: No permite eliminar la sala si tiene sesiones no canceladas con inicio futuro.
+      operationId: deleteRoom
+      parameters:
+        - name: roomId
+          in: path
+          required: true
+          description: Identificador único de la sala.
+          schema:
+            type: string
+          example: "1"
+      responses:
+        '204':
+          description: Sala eliminada correctamente.
+        '404':
+          description: Sala no encontrada.
+        '409':
+          description: La sala tiene sesiones futuras y no se puede eliminar.
 
 
   # ==========================================================
