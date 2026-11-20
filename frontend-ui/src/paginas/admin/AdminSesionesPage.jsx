@@ -156,6 +156,8 @@ export default function AdminSesionesPage() {
       endDate: fechaIso(fechaFin),
       startTime: '19:00',
       ticketPrice: primera?.basePrice ?? 9.5,
+      // Si se marca, las sesiones creadas se pasan a A_LA_VENTA (PATCH) al terminar el lote
+      aLaVenta: false,
     });
     setBatchResult(null);
     setBatchModal(true);
@@ -192,17 +194,31 @@ export default function AdminSesionesPage() {
         startTime: `${batchForm.startTime}:00`,
         ticketPrice: Number(batchForm.ticketPrice),
       }, token);
+
+      // Cartelera las crea PROGRAMADAS: si se pidió, se ponen a la venta con el PATCH de siempre
+      let sinPonerALaVenta = 0;
+      if (batchForm.aLaVenta && resultado.created.length > 0) {
+        const cambios = await Promise.allSettled(
+          resultado.created.map((sesion) => actualizarSesion(sesion.id, { status: 'A_LA_VENTA' }, token))
+        );
+        sinPonerALaVenta = cambios.filter((c) => c.status === 'rejected').length;
+      }
+
       setBatchResult(resultado);
       setBatchModal(false);
       setSelectedPeliId(batchForm.movieId);
       setRecarga((n) => n + 1);
       const totalCreadas = resultado.created.length;
       const totalConflictos = resultado.conflicts.length;
+      const textoCreadas = batchForm.aLaVenta ? 'sesiones creadas y puestas a la venta' : 'sesiones creadas';
+      const avisoVenta = sinPonerALaVenta > 0
+        ? ` ${sinPonerALaVenta} no se pudieron poner a la venta y siguen como «Programadas».`
+        : '';
       setAviso({
-        tipo: totalConflictos > 0 ? 'info' : 'ok',
+        tipo: totalConflictos > 0 || sinPonerALaVenta > 0 ? 'info' : 'ok',
         texto: totalCreadas === 0 && totalConflictos === 0
           ? 'El rango no incluye ninguno de los días seleccionados.'
-          : `Lote completado: ${totalCreadas} sesiones creadas y ${totalConflictos} con solapamiento.`,
+          : `Lote completado: ${totalCreadas} ${textoCreadas} y ${totalConflictos} con solapamiento.${avisoVenta}`,
       });
     } catch (err) {
       setAviso({ tipo: 'error', texto: `No se pudo programar el lote: ${err.message}` });
@@ -835,9 +851,18 @@ export default function AdminSesionesPage() {
                 </div>
               </div>
 
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 600, cursor: 'pointer', margin: '4px 0 10px' }}>
+                <input
+                  type="checkbox"
+                  checked={batchForm.aLaVenta}
+                  onChange={(e) => setBatchForm({ ...batchForm, aLaVenta: e.target.checked })}
+                />
+                Ponerlas a la venta al crearlas
+              </label>
+
               <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: '4px 0 0' }}>
                 El rango incluye ambas fechas. Las sesiones que se solapen no se crearán y aparecerán en el resumen.
-                Las creadas quedan como «Programadas».
+                {batchForm.aLaVenta ? ' Las creadas se ponen «A la venta».' : ' Las creadas quedan como «Programadas».'}
               </p>
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '22px', paddingTop: '16px', borderTop: '1px solid rgba(43,18,21,0.1)' }}>
@@ -850,7 +875,7 @@ export default function AdminSesionesPage() {
                   Cancelar
                 </button>
                 <button type="submit" className="admin-btn admin-btn-primary" disabled={batchGuardando}>
-                  {batchGuardando ? 'Programando…' : 'Programar lote'}
+                  {batchGuardando ? (batchForm.aLaVenta ? 'Programando y poniendo a la venta…' : 'Programando…') : 'Programar lote'}
                 </button>
               </div>
             </form>
