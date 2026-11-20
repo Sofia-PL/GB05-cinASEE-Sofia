@@ -25,3 +25,12 @@ app:
     enabled: ${APP_SEED_ENABLED:true}
   media:
     base-url: ${APP_MEDIA_BASE_URL:http://localhost:8080/media/posters}
+  # Las horas de las sesiones son la hora local del cine (sin zona): "ahora" se calcula en
+  # esta zona. Debe coincidir con CATALOG_TIME_ZONE del Comp. 2 y ANALYTICS_TIME_ZONE del Comp. 4.
+  catalog:
+    time-zone: ${CATALOG_TIME_ZONE:Europe/Madrid}
+  # Cambio automático de estado de las sesiones (EN_CURSO al empezar, FINALIZADA al acabar)
+  scheduling:
+    enabled: ${APP_SCHEDULING_ENABLED:true}
+  sessions:
+    status-interval: ${SESSION_STATUS_INTERVAL:60s}

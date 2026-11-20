@@ -20,8 +20,10 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -206,6 +208,107 @@ class CatalogServicesTest {
 
         assertEquals(9.5, updated.getTicketPrice());
         assertEquals("A_LA_VENTA", updated.getStatus());
+    }
+
+    // ---------- Géneros y edades normalizados (puntos 4 y 5) ----------
+
+    @Test
+    void normalizarGeneroQuitaTildesPasaAMayusculasYUsaGuionBajo() {
+        assertEquals("CIENCIA_FICCION", MovieService.normalizarGenero("Ciencia ficción"));
+        assertEquals("ANIMACION", MovieService.normalizarGenero("ANIMACIÓN"));
+        assertEquals("FANTASIA", MovieService.normalizarGenero(" fantasía "));
+        assertEquals("CIENCIA_FICCION", MovieService.normalizarGenero("CIENCIA_FICCION"));
+        assertEquals(null, MovieService.normalizarGenero(null));
+    }
+
+    @Test
+    void normalizarEdadConvierteMasCeroEnTodosLosPublicos() {
+        assertEquals("TP", MovieService.normalizarEdad("+0"));
+        assertEquals("TP", MovieService.normalizarEdad("tp"));
+        assertEquals("+12", MovieService.normalizarEdad(" +12 "));
+    }
+
+    @Test
+    void crearYEditarPeliculaGuardaGeneroYEdadNormalizados() {
+        when(movieRepository.save(any(Movie.class))).thenAnswer(inv -> inv.getArgument(0));
+        CreateMovieRequest request = CreateMovieRequest.builder()
+                .title("Ponyo").durationMinutes(101).genre("Animación").ageRating("+0").build();
+
+        Movie creada = movieService.createMovie(request);
+        assertEquals("ANIMACION", creada.getGenre());
+        assertEquals("TP", creada.getAgeRating());
+
+        when(movieRepository.findById("m1")).thenReturn(Optional.of(movie("m1")));
+        Movie editada = movieService.updateMovie("m1", CreateMovieRequest.builder()
+                .title("Ponyo").durationMinutes(101).genre("ciencia ficción").ageRating("+7").build());
+        assertEquals("CIENCIA_FICCION", editada.getGenre());
+        assertEquals("+7", editada.getAgeRating());
+    }
+
+    // ---------- Cambio automático de estado de las sesiones (punto 7) ----------
+
+    @Test
+    void sesionQueEmpiezaPasaAEnCursoYLaQueTerminaAFinalizada() {
+        LocalDateTime ahora = LocalDateTime.of(2026, 11, 20, 19, 0);
+        Session empezando = session("s1", "m1", "room-1", ahora.minusMinutes(5), ahora.plusHours(2), "A_LA_VENTA");
+        Session terminando = session("s2", "m1", "room-2", ahora.minusHours(3), ahora.minusMinutes(1), "EN_CURSO");
+        when(sessionRepository.findByStatusInAndStartTimeLessThanEqual(List.of("PROGRAMADA", "A_LA_VENTA"), ahora))
+                .thenReturn(List.of(empezando));
+        when(sessionRepository.findByStatusAndEndTimeLessThanEqual("EN_CURSO", ahora)).thenReturn(List.of(terminando));
+
+        int cambiadas = sessionService.actualizarEstadosPorHora(ahora);
+
+        assertEquals(2, cambiadas);
+        assertEquals("EN_CURSO", empezando.getStatus());
+        assertEquals("FINALIZADA", terminando.getStatus());
+        verify(sessionRepository).save(empezando);
+        verify(sessionRepository).save(terminando);
+    }
+
+    @Test
+    void sesionQueYaHaTerminadoSinEmpezarPasaDirectamenteAFinalizada() {
+        LocalDateTime ahora = LocalDateTime.of(2026, 11, 20, 23, 0);
+        Session pasada = session("s1", "m1", "room-1", ahora.minusHours(4), ahora.minusHours(2), "PROGRAMADA");
+        when(sessionRepository.findByStatusInAndStartTimeLessThanEqual(List.of("PROGRAMADA", "A_LA_VENTA"), ahora))
+                .thenReturn(List.of(pasada));
+        when(sessionRepository.findByStatusAndEndTimeLessThanEqual("EN_CURSO", ahora)).thenReturn(List.of());
+
+        sessionService.actualizarEstadosPorHora(ahora);
+
+        assertEquals("FINALIZADA", pasada.getStatus());
+    }
+
+    @Test
+    void elCambioAutomaticoSoloBuscaSesionesProgramadasALaVentaOEnCurso() {
+        LocalDateTime ahora = LocalDateTime.of(2026, 11, 20, 19, 0);
+        when(sessionRepository.findByStatusInAndStartTimeLessThanEqual(any(), any())).thenReturn(List.of());
+        when(sessionRepository.findByStatusAndEndTimeLessThanEqual(anyString(), any())).thenReturn(List.of());
+
+        assertEquals(0, sessionService.actualizarEstadosPorHora(ahora));
+
+        // CANCELADA y FINALIZADA nunca se consultan, así que nunca se modifican
+        verify(sessionRepository).findByStatusInAndStartTimeLessThanEqual(List.of("PROGRAMADA", "A_LA_VENTA"), ahora);
+        verify(sessionRepository).findByStatusAndEndTimeLessThanEqual("EN_CURSO", ahora);
+        verify(sessionRepository, never()).save(any(Session.class));
+    }
+
+    @Test
+    void inicioManualRecalculaElFinSegunLaDuracionDesdeAhora() {
+        LocalDateTime ahora = LocalDateTime.of(2026, 11, 20, 18, 30);
+        Clock relojFijo = Clock.fixed(ahora.atZone(ZoneId.of("Europe/Madrid")).toInstant(), ZoneId.of("Europe/Madrid"));
+        SessionService servicio = new SessionService(sessionRepository, movieRepository, roomRepository, relojFijo);
+        LocalDateTime inicioPrevisto = LocalDateTime.of(2026, 11, 20, 19, 0);
+        Session sesion = session("s1", "m1", "room-1", inicioPrevisto, inicioPrevisto.plusMinutes(147), "A_LA_VENTA");
+        when(sessionRepository.findById("s1")).thenReturn(Optional.of(sesion));
+        when(movieRepository.findById("m1")).thenReturn(Optional.of(movie("m1")));
+        when(sessionRepository.save(any(Session.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        Session actualizada = servicio.updateSessionStatus("s1", UpdateSessionRequest.builder().status("EN_CURSO").build());
+
+        assertEquals("EN_CURSO", actualizada.getStatus());
+        // 127 min de película + 20 de preparación, contados desde que se inició a mano
+        assertEquals(ahora.plusMinutes(147), actualizada.getEndTime());
+        assertEquals(inicioPrevisto, actualizada.getStartTime());
     }
 
     private static Movie movie(String id) {

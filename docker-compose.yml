@@ -151,6 +151,9 @@ services:
       SPRING_MONGODB_URI: mongodb://mongodb-cartelera:27017/cine_catalog_db
       APP_SEED_ENABLED: "true"
       APP_MEDIA_BASE_URL: http://localhost:8080/media/posters
+      # Las sesiones son LocalDateTime sin zona: el cambio automático de estado (EN_CURSO /
+      # FINALIZADA) compara con la hora de esta zona. Igual que CATALOG_TIME_ZONE del Comp. 2.
+      CATALOG_TIME_ZONE: Europe/Madrid
       # El JWKS se descarga por la red interna; el "iss" sigue siendo el público del Comp. 3
       JWT_JWK_SET_URI: http://componente3-usuarios:8083/v1/iam/.well-known/jwks.json
       JWT_ISSUER: http://localhost:8083/v1/iam

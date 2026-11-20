@@ -246,6 +246,7 @@ export const GENEROS = {
   COMEDIA: 'Comedia',
   TERROR: 'Terror',
   ANIMACION: 'Animación',
+  FANTASIA: 'Fantasía',
   THRILLER: 'Thriller',
   ROMANCE: 'Romance',
 };

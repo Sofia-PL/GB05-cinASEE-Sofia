@@ -15,6 +15,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -29,9 +30,14 @@ public class SessionService {
 
     private static final int PREPARATION_TIME_MINUTES = 20;
 
+    /** Estados que pasan a EN_CURSO al llegar la hora de inicio */
+    private static final List<String> ESTADOS_ANTES_DE_EMPEZAR = List.of("PROGRAMADA", "A_LA_VENTA");
+
     private final SessionRepository sessionRepository;
     private final MovieRepository movieRepository;
     private final RoomRepository roomRepository;
+    /** Hora local del cine (ver CatalogTimeConfig) */
+    private final Clock catalogClock;
 
     public List<Session> getAllSessions(LocalDate date, String movieId) {
         List<Session> sessions = sessionRepository.findAll();
@@ -166,7 +172,18 @@ public class SessionService {
         }
 
         if (request.getStatus() != null && !request.getStatus().isBlank()) {
-            session.setStatus(request.getStatus().toUpperCase());
+            String nuevoEstado = request.getStatus().toUpperCase();
+            boolean inicioManual = "EN_CURSO".equals(nuevoEstado) && !"EN_CURSO".equals(session.getStatus());
+            session.setStatus(nuevoEstado);
+
+            // Inicio manual: la sesión termina cuando acabe la película contando desde ahora
+            // (duración + preparación de sala), y la tarea periódica la finaliza a esa hora.
+            if (inicioManual) {
+                Movie movie = movieRepository.findById(session.getMovieId())
+                        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Película de la sesión no encontrada"));
+                int totalDuration = (movie.getDurationMinutes() != null ? movie.getDurationMinutes() : 0) + PREPARATION_TIME_MINUTES;
+                session.setEndTime(LocalDateTime.now(catalogClock).plusMinutes(totalDuration));
+            }
         }
 
         if (request.getTicketPrice() != null) {
@@ -174,6 +191,35 @@ public class SessionService {
         }
 
         return sessionRepository.save(session);
+    }
+
+    /**
+     * Cambia el estado de las sesiones según la hora:
+     * <ul>
+     *   <li>PROGRAMADA o A_LA_VENTA cuya hora de inicio ya ha llegado: EN_CURSO
+     *       (o FINALIZADA directamente si también ha pasado su hora de fin, por ejemplo
+     *       porque el servicio estuvo parado).</li>
+     *   <li>EN_CURSO cuya hora de fin ya ha llegado: FINALIZADA.</li>
+     * </ul>
+     * Las sesiones CANCELADA y FINALIZADA no se tocan.
+     *
+     * @param ahora hora local del cine
+     * @return número de sesiones cambiadas
+     */
+    public int actualizarEstadosPorHora(LocalDateTime ahora) {
+        int cambiadas = 0;
+        for (Session session : sessionRepository.findByStatusInAndStartTimeLessThanEqual(ESTADOS_ANTES_DE_EMPEZAR, ahora)) {
+            boolean yaTerminada = session.getEndTime() != null && !session.getEndTime().isAfter(ahora);
+            session.setStatus(yaTerminada ? "FINALIZADA" : "EN_CURSO");
+            sessionRepository.save(session);
+            cambiadas++;
+        }
+        for (Session session : sessionRepository.findByStatusAndEndTimeLessThanEqual("EN_CURSO", ahora)) {
+            session.setStatus("FINALIZADA");
+            sessionRepository.save(session);
+            cambiadas++;
+        }
+        return cambiadas;
     }
 
     private Optional<Session> findRoomOverlap(String roomId, LocalDateTime start, LocalDateTime end, String excludeSessionId) {

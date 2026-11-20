@@ -10,8 +10,10 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.text.Normalizer;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -26,7 +28,7 @@ public class MovieService {
     public List<Movie> getAllMovies(String genre, Boolean inShowcase) {
         List<Movie> movies;
         if (genre != null && !genre.isBlank()) {
-            movies = movieRepository.findByGenreIgnoreCase(genre);
+            movies = movieRepository.findByGenreIgnoreCase(normalizarGenero(genre));
         } else {
             movies = movieRepository.findAll();
         }
@@ -57,8 +59,8 @@ public class MovieService {
                 .title(request.getTitle())
                 .synopsis(request.getSynopsis())
                 .durationMinutes(request.getDurationMinutes())
-                .genre(request.getGenre())
-                .ageRating(request.getAgeRating())
+                .genre(normalizarGenero(request.getGenre()))
+                .ageRating(normalizarEdad(request.getAgeRating()))
                 .posterUrl(request.getPosterUrl())
                 .trailerUrl(request.getTrailerUrl())
                 .build();
@@ -72,8 +74,8 @@ public class MovieService {
         movie.setTitle(request.getTitle());
         movie.setSynopsis(request.getSynopsis());
         movie.setDurationMinutes(request.getDurationMinutes());
-        movie.setGenre(request.getGenre());
-        movie.setAgeRating(request.getAgeRating());
+        movie.setGenre(normalizarGenero(request.getGenre()));
+        movie.setAgeRating(normalizarEdad(request.getAgeRating()));
         movie.setPosterUrl(request.getPosterUrl());
         movie.setTrailerUrl(request.getTrailerUrl());
 
@@ -89,6 +91,28 @@ public class MovieService {
                     "No se puede eliminar la película porque tiene sesiones asociadas.");
         }
         movieRepository.deleteById(movieId);
+    }
+
+    /**
+     * Género tal como lo guarda el catálogo: en mayúsculas, sin tildes y con "_" en vez de
+     * espacios ("Ciencia ficción" -> "CIENCIA_FICCION"). Así coincide con los géneros favoritos
+     * de los usuarios (Comp. 3) que usan las recomendaciones (Comp. 4).
+     */
+    public static String normalizarGenero(String genero) {
+        if (genero == null) {
+            return null;
+        }
+        String sinTildes = Normalizer.normalize(genero.trim(), Normalizer.Form.NFD).replaceAll("\\p{M}", "");
+        return sinTildes.toUpperCase(Locale.ROOT).replaceAll("[\\s-]+", "_");
+    }
+
+    /** Calificación por edad: "+0" (o "0") significa todos los públicos y se guarda como "TP" */
+    public static String normalizarEdad(String edad) {
+        if (edad == null) {
+            return null;
+        }
+        String limpia = edad.trim().toUpperCase(Locale.ROOT);
+        return "+0".equals(limpia) || "0".equals(limpia) ? "TP" : limpia;
     }
 }
 

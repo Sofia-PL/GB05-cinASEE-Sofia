@@ -9,7 +9,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @SpringBootTest(properties = {
     "SPRING_MONGODB_URI=mongodb://mongo-test:27018/component1_test",
-    "app.seed.enabled=false"
+    "app.seed.enabled=false",
+    "app.scheduling.enabled=false"
 })
 class Componente1CarteleraApplicationTests {
 

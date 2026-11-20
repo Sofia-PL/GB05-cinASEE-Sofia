@@ -83,7 +83,7 @@ repositorios se simulan con Mockito):
 
 | Test | Qué cubre |
 |---|---|
-| `CatalogServicesTest` | Reglas de negocio: filtros de cartelera, capacidad de salas, cine inexistente, solapamientos |
+| `CatalogServicesTest` | Reglas de negocio: filtros de cartelera, capacidad de salas, cine inexistente, solapamientos, normalización de género y edad, cambio automático de estado de las sesiones |
 | `MovieControllerIntegrationTest` | Seguridad y contrato HTTP de `/movies` con `@WebMvcTest` |
 | `CarteleraAcceptanceTest` | Flujo de catálogo, sesiones por lote, roles de salas e integridad de borrado con `MockMvc` |
 | `Componente1CarteleraApplicationTests` | Arranque del contexto |
@@ -158,6 +158,14 @@ curl -X PATCH http://localhost:8081/api/v1/sessions/01ARZ3NDEKTSV4RRFFQ69G5FAV \
 `id`, `title`, `synopsis`, `durationMinutes`, `genre`, `ageRating`,
 `posterUrl`, `trailerUrl`.
 
+- `genre` se guarda **normalizado** al crear o editar: en mayúsculas, sin tildes
+  y con `_` en vez de espacios (`"Ciencia ficción"` → `CIENCIA_FICCION`). Así
+  coincide con los géneros favoritos de los usuarios (C3) que usan las
+  recomendaciones (C4). El filtro `GET /movies?genre=` aplica la misma regla.
+- `ageRating`: `TP`, `+7`, `+12`, `+16` o `+18`. Un `+0` se guarda como `TP`.
+- Al arrancar, el seed corrige las películas que ya existían con los valores
+  antiguos (géneros con tilde y `+0`).
+
 > La distribuidora **ya no** forma parte del modelo: el merge eliminó
 > `Movie.distributor`. Una película es global y puede proyectarse en varios cines.
 
@@ -186,14 +194,22 @@ curl -X PATCH http://localhost:8081/api/v1/sessions/01ARZ3NDEKTSV4RRFFQ69G5FAV \
 2. **Estado inicial:** toda sesión nueva nace en `PROGRAMADA`. El Componente 2
    **solo permite reservar** sesiones en `A_LA_VENTA` que no hayan empezado, así
    que hay que hacer `PATCH` antes de vender.
-3. **En cartelera:** `GET /movies?inShowcase=true` devuelve las películas con
+3. **Cambio automático de estado:** una tarea programada (`SessionStatusScheduler`,
+   cada `SESSION_STATUS_INTERVAL`, por defecto 60 s) pasa a `EN_CURSO` las sesiones
+   `PROGRAMADA` o `A_LA_VENTA` cuya hora de inicio ha llegado, y a `FINALIZADA` las
+   `EN_CURSO` cuya hora de fin ha pasado. Las `CANCELADA` no se tocan. Si el admin
+   pone una sesión `EN_CURSO` a mano, su `endTime` se recalcula como *ahora +
+   duración + 20 min* y se finaliza a esa hora. "Ahora" se calcula en la zona
+   `CATALOG_TIME_ZONE` (`Europe/Madrid`), porque las horas de las sesiones son
+   hora local sin zona. Se desactiva con `APP_SCHEDULING_ENABLED=false`.
+4. **En cartelera:** `GET /movies?inShowcase=true` devuelve las películas con
    alguna sesión no cancelada cuyo `endTime` aún no ha pasado.
-4. **Integridad referencial:** al crear una sala se comprueba que exista su
+5. **Integridad referencial:** al crear una sala se comprueba que exista su
    `cinemaId`; al crear una sesión se comprueba que existan la película y la sala.
-5. **Cine → salas:** `GET /cinemas/{cinemaId}/rooms` valida primero el cine y
+6. **Cine → salas:** `GET /cinemas/{cinemaId}/rooms` valida primero el cine y
    devuelve **404** si no existe. `GET /rooms?cinemaId=` hace el mismo filtro sin
    validar el cine (devuelve lista vacía si no hay salas).
-6. **Integridad al borrar:** `DELETE /movies/{movieId}` devuelve **409** si
+7. **Integridad al borrar:** `DELETE /movies/{movieId}` devuelve **409** si
    existe cualquier sesión asociada (también pasada o cancelada), y
    `DELETE /cinemas/{cinemaId}` devuelve **409** si tiene salas. No se borran
    entidades en cascada ni se dejan referencias colgantes.

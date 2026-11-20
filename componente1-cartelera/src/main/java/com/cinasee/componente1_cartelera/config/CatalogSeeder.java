@@ -8,6 +8,7 @@ import com.cinasee.componente1_cartelera.repositories.CinemaRepository;
 import com.cinasee.componente1_cartelera.repositories.MovieRepository;
 import com.cinasee.componente1_cartelera.repositories.RoomRepository;
 import com.cinasee.componente1_cartelera.repositories.SessionRepository;
+import com.cinasee.componente1_cartelera.services.MovieService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -19,6 +20,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -53,6 +55,7 @@ public class CatalogSeeder implements CommandLineRunner {
                 movieRepository.save(m);
             }
         });
+        corregirPeliculasExistentes();
 
         List<Room> rooms = buildRooms();
         rooms.forEach(r -> {
@@ -75,6 +78,30 @@ public class CatalogSeeder implements CommandLineRunner {
                 cinemas.size(), movies.size(), rooms.size(), sessions.size());
     }
 
+    /**
+     * Las bases creadas con el seed anterior guardaban géneros con tilde ("ANIMACIÓN") y la
+     * edad "+0". Como el seed no modifica documentos existentes, aquí se corrigen esos valores
+     * con las mismas reglas que al crear o editar una película. Es idempotente.
+     */
+    private void corregirPeliculasExistentes() {
+        int corregidas = 0;
+        for (Movie movie : movieRepository.findAll()) {
+            String genero = MovieService.normalizarGenero(movie.getGenre());
+            String edad = MovieService.normalizarEdad(movie.getAgeRating());
+            boolean cambia = !Objects.equals(genero, movie.getGenre())
+                    || !Objects.equals(edad, movie.getAgeRating());
+            if (cambia) {
+                movie.setGenre(genero);
+                movie.setAgeRating(edad);
+                movieRepository.save(movie);
+                corregidas++;
+            }
+        }
+        if (corregidas > 0) {
+            log.info("Corregidos el género o la edad de {} películas ya existentes.", corregidas);
+        }
+    }
+
     private List<Cinema> buildCinemas() {
         return List.of(
             cinema("550e8400-e29b-41d4-a716-446655440001", "CinAsee Madrid", "Gran Vía 1", "Madrid", "910000001"),
@@ -91,28 +118,28 @@ public class CatalogSeeder implements CommandLineRunner {
         return List.of(
             movie("00000000-0000-4000-8000-000000000101", "Ponyo en el acantilado",
                 "Ponyo, una pez mágica que sueña con convertirse en humana, conoce a un niño llamado Sosuke. Su amistad desencadena una aventura que pondrá en peligro el equilibrio entre el mar y la tierra.",
-                101, "ANIMACIÓN", "+0", "ponyo.jpg", "https://www.youtube.com/watch?v=CsR3KVgBzSM"),
+                101, "ANIMACION", "TP", "ponyo.jpg", "https://www.youtube.com/watch?v=CsR3KVgBzSM"),
             movie("00000000-0000-4000-8000-000000000102", "El castillo ambulante",
                 "La joven Sophie es víctima de una maldición que la convierte en una anciana. En su búsqueda por romper el hechizo, encuentra refugio en el misterioso castillo ambulante del mago Howl, donde deberá enfrentarse a una guerra, descubrir secretos mágicos y encontrar su verdadera fortaleza.",
-                119, "FANTASÍA", "+7", "castillo-ambulante.jpg", "https://www.youtube.com/watch?v=iwROgK94zcM"),
+                119, "FANTASIA", "+7", "castillo-ambulante.jpg", "https://www.youtube.com/watch?v=iwROgK94zcM"),
             movie("00000000-0000-4000-8000-000000000103", "Todo a la vez en todas partes",
                 "Evelyn, una inmigrante china que dirige una lavandería, descubre que debe conectar con versiones alternativas de sí misma a través del multiverso para detener una amenaza que podría destruir todas las realidades.",
-                139, "CIENCIA_FICCIÓN", "+16", "todo-a-la-vez.jpg", "https://youtu.be/U3cKYWgl2dU?si=OAk3oCJ-g4xQc5xl"),
+                139, "CIENCIA_FICCION", "+16", "todo-a-la-vez.jpg", "https://youtu.be/U3cKYWgl2dU?si=OAk3oCJ-g4xQc5xl"),
             movie("00000000-0000-4000-8000-000000000104", "Interstellar",
                 "Un grupo de exploradores viaja a través de un agujero de gusano en el espacio en un intento por garantizar la supervivencia de la humanidad.",
-                169, "CIENCIA_FICCIÓN", "+12", "interstellar.jpg", "https://youtu.be/UoSSbmD9vqc?si=IfXv_XxghC1jfzzt"),
+                169, "CIENCIA_FICCION", "+12", "interstellar.jpg", "https://youtu.be/UoSSbmD9vqc?si=IfXv_XxghC1jfzzt"),
             movie("00000000-0000-4000-8000-000000000105", "Orgullo y prejuicio",
                 "En la Inglaterra del siglo XVIII, las cinco hermanas Bennet lidian con cuestiones de matrimonio, moralidad y prejuicios cuando el adinerado Sr. Bingley y el orgulloso Sr. Darcy llegan a su vecindario.",
-                129, "ROMANCE", "+0", "orgullo-y-prejuicio.jpg", "https://www.youtube.com/watch?v=1dYv5u6v55Y"),
+                129, "ROMANCE", "TP", "orgullo-y-prejuicio.jpg", "https://www.youtube.com/watch?v=1dYv5u6v55Y"),
             movie("00000000-0000-4000-8000-000000000106", "Harry Potter y el prisionero de Azkaban",
                 "En su tercer año en Hogwarts, Harry Potter se enfrenta a la amenaza de Sirius Black, un peligroso prisionero que ha escapado de la fortaleza de Azkaban y parece ir tras él.",
-                142, "FANTASÍA", "+7", "harry-potter-azkaban.jpg", "https://www.youtube.com/watch?v=lAxgztbYDbs"),
+                142, "FANTASIA", "+7", "harry-potter-azkaban.jpg", "https://www.youtube.com/watch?v=lAxgztbYDbs"),
             movie("00000000-0000-4000-8000-000000000107", "The VelociPastor",
                 "Tras perder a sus padres, un sacerdote viaja a China, donde hereda una misteriosa habilidad que le permite convertirse en dinosaurio para luchar contra el crimen y los ninjas.",
                 75, "COMEDIA", "+16", "velocipastor.jpg", "https://youtu.be/D7wwoCBtvaA?si=QzRVMl1EPrNtQ8AF"),
             movie("00000000-0000-4000-8000-000000000108", "Los juegos del hambre: Amanecer en la cosecha",
                 "Veinticuatro años antes de los eventos de la trilogía original, en la mañana de la cosecha de los Quincuagésimos Juegos del Hambre, un joven Haymitch Abernathy es seleccionado como tributo del Distrito 12 para el Segundo Vasallaje de los Veinticinco.",
-                145, "CIENCIA_FICCIÓN", "+12", "juegos-del-hambre.jpg", "https://youtu.be/6jWXR47FCUQ?si=XLlzjCMqx1-nozNd")
+                145, "CIENCIA_FICCION", "+12", "juegos-del-hambre.jpg", "https://youtu.be/6jWXR47FCUQ?si=XLlzjCMqx1-nozNd")
         );
     }
 

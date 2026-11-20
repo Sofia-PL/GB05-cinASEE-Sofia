@@ -43,7 +43,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@SpringBootTest(properties = "app.seed.enabled=false")
+@SpringBootTest(properties = {"app.seed.enabled=false", "app.scheduling.enabled=false"})
 @AutoConfigureMockMvc
 class CarteleraAcceptanceTest {
 

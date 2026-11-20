@@ -100,8 +100,8 @@ const movies = [
     title: "Ponyo en el acantilado",
     synopsis: "Ponyo, una pez mágica que sueña con convertirse en humana, conoce a un niño llamado Sosuke. Su amistad desencadena una aventura que pondrá en peligro el equilibrio entre el mar y la tierra.",
     durationMinutes: 101,
-    genre: "ANIMACIÓN",
-    ageRating: "+0",
+    genre: "ANIMACION",
+    ageRating: "TP",
     posterUrl: "http://localhost:8080/media/posters/ponyo.jpg",
     trailerUrl: "https://www.youtube.com/watch?v=CsR3KVgBzSM",
   },
@@ -110,7 +110,7 @@ const movies = [
     title: "El castillo ambulante",
     synopsis: "La joven Sophie es víctima de una maldición que la convierte en una anciana. En su búsqueda por romper el hechizo, encuentra refugio en el misterioso castillo ambulante del mago Howl, donde deberá enfrentarse a una guerra, descubrir secretos mágicos y encontrar su verdadera fortaleza.",
     durationMinutes: 119,
-    genre: "FANTASÍA",
+    genre: "FANTASIA",
     ageRating: "+7",
     posterUrl: "http://localhost:8080/media/posters/castillo-ambulante.jpg",
     trailerUrl: "https://www.youtube.com/watch?v=iwROgK94zcM",
@@ -120,7 +120,7 @@ const movies = [
     title: "Todo a la vez en todas partes",
     synopsis: "Evelyn, una inmigrante china que dirige una lavandería, descubre que debe conectar con versiones alternativas de sí misma a través del multiverso para detener una amenaza que podría destruir todas las realidades.",
     durationMinutes: 139,
-    genre: "CIENCIA_FICCIÓN",
+    genre: "CIENCIA_FICCION",
     ageRating: "+16",
     posterUrl: "http://localhost:8080/media/posters/todo-a-la-vez.jpg",
     trailerUrl: "https://youtu.be/U3cKYWgl2dU?si=OAk3oCJ-g4xQc5xl",
@@ -130,7 +130,7 @@ const movies = [
     title: "Interstellar",
     synopsis: "Un grupo de exploradores viaja a través de un agujero de gusano en el espacio en un intento por garantizar la supervivencia de la humanidad.",
     durationMinutes: 169,
-    genre: "CIENCIA_FICCIÓN",
+    genre: "CIENCIA_FICCION",
     ageRating: "+12",
     posterUrl: "http://localhost:8080/media/posters/interstellar.jpg",
     trailerUrl: "https://youtu.be/UoSSbmD9vqc?si=IfXv_XxghC1jfzzt",
@@ -141,7 +141,7 @@ const movies = [
     synopsis: "En la Inglaterra del siglo XVIII, las cinco hermanas Bennet lidian con cuestiones de matrimonio, moralidad y prejuicios cuando el adinerado Sr. Bingley y el orgulloso Sr. Darcy llegan a su vecindario.",
     durationMinutes: 129,
     genre: "ROMANCE",
-    ageRating: "+0",
+    ageRating: "TP",
     posterUrl: "http://localhost:8080/media/posters/orgullo-y-prejuicio.jpg",
     trailerUrl: "https://www.youtube.com/watch?v=1dYv5u6v55Y",
   },
@@ -150,7 +150,7 @@ const movies = [
     title: "Harry Potter y el prisionero de Azkaban",
     synopsis: "En su tercer año en Hogwarts, Harry Potter se enfrenta a la amenaza de Sirius Black, un peligroso prisionero que ha escapado de la fortaleza de Azkaban y parece ir tras él.",
     durationMinutes: 142,
-    genre: "FANTASÍA",
+    genre: "FANTASIA",
     ageRating: "+7",
     posterUrl: "http://localhost:8080/media/posters/harry-potter-azkaban.jpg",
     trailerUrl: "https://www.youtube.com/watch?v=lAxgztbYDbs",
@@ -170,7 +170,7 @@ const movies = [
     title: "Los juegos del hambre: Amanecer en la cosecha",
     synopsis: "Veinticuatro años antes de los eventos de la trilogía original, en la mañana de la cosecha de los Quincuagésimos Juegos del Hambre, un joven Haymitch Abernathy es seleccionado como tributo del Distrito 12 para el Segundo Vasallaje de los Veinticinco.",
     durationMinutes: 145,
-    genre: "CIENCIA_FICCIÓN",
+    genre: "CIENCIA_FICCION",
     ageRating: "+12",
     posterUrl: "http://localhost:8080/media/posters/juegos-del-hambre.jpg",
     trailerUrl: "https://youtu.be/6jWXR47FCUQ?si=XLlzjCMqx1-nozNd",
@@ -494,3 +494,29 @@ insertIfMissing("cinemas", cinemas);
 insertIfMissing("movies", movies);
 insertIfMissing("rooms", rooms);
 insertIfMissing("sessions", sessions);
+// Corrige las películas creadas con el seed anterior (géneros con tilde y edad "+0"),
+// con las mismas reglas que aplica el Componente 1 al crear o editar una película.
+function normalizarGenero(genero) {
+  return genero
+    .trim()
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .toUpperCase()
+    .replace(/[\s-]+/g, "_");
+}
+
+function normalizarEdad(edad) {
+  const limpia = edad.trim().toUpperCase();
+  return limpia === "+0" || limpia === "0" ? "TP" : limpia;
+}
+
+let corregidas = 0;
+db.getCollection("movies").find({}).forEach((movie) => {
+  const genre = typeof movie.genre === "string" ? normalizarGenero(movie.genre) : movie.genre;
+  const ageRating = typeof movie.ageRating === "string" ? normalizarEdad(movie.ageRating) : movie.ageRating;
+  if (genre !== movie.genre || ageRating !== movie.ageRating) {
+    db.getCollection("movies").updateOne({ _id: movie._id }, { $set: { genre, ageRating } });
+    corregidas++;
+  }
+});
+print(`movies: corregidas ${corregidas} (género o edad antiguos)`);

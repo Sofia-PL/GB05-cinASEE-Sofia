@@ -17,6 +17,7 @@ const GENRES = [
   { value: 'COMEDIA', label: 'Comedia' },
   { value: 'TERROR', label: 'Terror' },
   { value: 'ANIMACION', label: 'Animación' },
+  { value: 'FANTASIA', label: 'Fantasía' },
   { value: 'THRILLER', label: 'Thriller' },
   { value: 'ROMANCE', label: 'Romance' },
 ];

@@ -782,11 +782,13 @@ components:
           example: 127
         genre:
           type: string
-          description: Género cinematográfico principal.
-          example: "DRAMA_ROMANTICO"
+          description: >
+            Género cinematográfico principal. Se guarda en mayúsculas, sin tildes y con "_"
+            en vez de espacios ("Ciencia ficción" se guarda como CIENCIA_FICCION).
+          example: "CIENCIA_FICCION"
         ageRating:
           type: string
-          description: Clasificación por edades recomendada.
+          description: Clasificación por edades recomendada (TP, +7, +12, +16, +18). "+0" se guarda como TP.
           example: "TP"
         posterUrl:
           type: string
@@ -824,11 +826,13 @@ components:
           example: 127
         genre:
           type: string
-          description: Género principal de la cinta.
-          example: "DRAMA_ROMANTICO"
+          description: >
+            Género principal de la cinta. Se normaliza al guardarlo: mayúsculas, sin tildes
+            y con "_" en vez de espacios.
+          example: "CIENCIA_FICCION"
         ageRating:
           type: string
-          description: Calificación legal por edad recomendada.
+          description: Calificación legal por edad recomendada (TP, +7, +12, +16, +18). "+0" se guarda como TP.
           example: "TP"
         posterUrl:
           type: string
