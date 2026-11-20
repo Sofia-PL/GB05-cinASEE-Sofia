@@ -198,6 +198,41 @@ body:not(:has(.home-page)) .site-navbar .site-navbar-logo:hover {
   transform: scale(1.06);
 }
 
+/* Sección en la que se está: subrayado dorado y texto en negrita */
+.site-navbar-link--activa {
+  position: relative;
+  font-weight: 700;
+}
+
+.site-navbar-link--activa::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -6px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--gold);
+}
+
+/* En la barra clara (resto de páginas, scroll o hover) el texto activo va en granate */
+.site-navbar:hover .site-navbar-link--activa,
+.site-navbar--scrolled .site-navbar-link--activa,
+body:not(:has(.home-page)) .site-navbar .site-navbar-link--activa {
+  color: var(--granate);
+}
+
+/* En la cuenta con rol (Admin / Taquilla) se rellena la etiqueta en vez de subrayar */
+.site-navbar-cuenta.site-navbar-link--activa::after {
+  display: none;
+}
+
+.site-navbar-cuenta.site-navbar-link--activa .site-navbar-rol {
+  background: var(--granate);
+  color: #ffffff;
+  border-color: var(--granate);
+}
+
 .site-navbar-register {
   padding: 7px 14px;
   border-radius: var(--radius-sm);
@@ -3388,4 +3423,70 @@ p {
 .viz-tabla summary {
   cursor: pointer;
   color: var(--text-muted);
+}
+/* =====================================================================
+   Impresión de entradas (confirmación del pago y "Mis entradas")
+   En pantalla no se ven; al imprimir solo salen las entradas.
+   ===================================================================== */
+
+.entradas-impresion {
+  display: none;
+}
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+
+  .entradas-impresion,
+  .entradas-impresion * {
+    visibility: visible;
+  }
+
+  .entradas-impresion {
+    display: block;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+  }
+
+  .entrada-impresa {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 24px;
+    padding: 18px 22px;
+    margin-bottom: 14px;
+    border: 2px dashed #6b1e2a;
+    border-radius: 8px;
+    color: #000;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .entrada-impresa-marca {
+    margin: 0 0 4px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #6b1e2a;
+  }
+
+  .entrada-impresa h2 {
+    margin: 0 0 8px;
+    font-size: 1.3rem;
+  }
+
+  .entrada-impresa p {
+    margin: 2px 0;
+    font-size: 0.95rem;
+  }
+
+  .entrada-impresa code {
+    display: inline-block;
+    margin-top: 6px;
+    font-size: 0.85rem;
+  }
 }

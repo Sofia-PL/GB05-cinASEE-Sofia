@@ -30,7 +30,7 @@ export default function Footer() {
           <div className="site-footer-col">
             <h4 className="site-footer-heading">Contacto</h4>
             <ul className="site-footer-contact">
-              {cines.slice(0, 4).map((c) => (
+              {cines.map((c) => (
                 <li key={c.id}>
                   <strong>{c.name}</strong>
                   {c.phone ? (

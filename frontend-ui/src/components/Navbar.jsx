@@ -8,6 +8,26 @@ const ETIQUETA_ROL = {
   ADMIN: 'Admin',
 };
 
+/**
+ * Enlace del menú que se marca cuando se está en su sección: en su ruta, en sus
+ * subpáginas (/cines/123 marca "Cines") y en las rutas de `tambien` (la ficha de una
+ * película, /peliculas/..., marca "Cartelera").
+ */
+function EnlaceMenu({ to, tambien = [], className = 'site-navbar-link', children, ...resto }) {
+  const { pathname } = useLocation();
+  const enSeccion = [to, ...tambien].some((ruta) => pathname === ruta || pathname.startsWith(`${ruta}/`));
+  return (
+    <Link
+      to={to}
+      className={`${className}${enSeccion ? ' site-navbar-link--activa' : ''}`}
+      aria-current={enSeccion ? 'page' : undefined}
+      {...resto}
+    >
+      {children}
+    </Link>
+  );
+}
+
 export default function Navbar() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
@@ -43,8 +63,8 @@ export default function Navbar() {
 
       {/* Links centrales — varían según el rol */}
       <div className="site-navbar-links">
-        <Link to="/cines"     className="site-navbar-link">Cines</Link>
-        <Link to="/cartelera" className="site-navbar-link">Cartelera</Link>
+        <EnlaceMenu to="/cines">Cines</EnlaceMenu>
+        <EnlaceMenu to="/cartelera" tambien={['/peliculas']}>Cartelera</EnlaceMenu>
 
         {/* USER y sin login */}
         {(!user || user.rol === 'USER') && null}
@@ -52,10 +72,10 @@ export default function Navbar() {
         {/* STAFF */}
         {user?.rol === 'STAFF' && (
           <>
-            <Link to="/empleados/validar-qr" className="site-navbar-link">Validar entradas</Link>
-            <Link to="/empleados/taquilla"   className="site-navbar-link">Taquilla</Link>
+            <EnlaceMenu to="/empleados/validar-qr">Validar entradas</EnlaceMenu>
+            <EnlaceMenu to="/empleados/taquilla">Taquilla</EnlaceMenu>
             {user?.canReviewRoleRequests && (
-              <Link to="/admin/solicitudes"  className="site-navbar-link">Solicitudes</Link>
+              <EnlaceMenu to="/admin/solicitudes">Solicitudes</EnlaceMenu>
             )}
           </>
         )}
@@ -63,11 +83,11 @@ export default function Navbar() {
         {/* ADMIN */}
         {user?.rol === 'ADMIN' && (
           <>
-            <Link to="/admin/peliculas" className="site-navbar-link">Películas</Link>
-            <Link to="/admin/salas"     className="site-navbar-link">Salas</Link>
-            <Link to="/admin/sesiones"  className="site-navbar-link">Sesiones</Link>
-            <Link to="/admin/metricas"  className="site-navbar-link">Métricas</Link>
-            <Link to="/admin/solicitudes" className="site-navbar-link">Solicitudes</Link>
+            <EnlaceMenu to="/admin/peliculas">Películas</EnlaceMenu>
+            <EnlaceMenu to="/admin/salas">Salas</EnlaceMenu>
+            <EnlaceMenu to="/admin/sesiones">Sesiones</EnlaceMenu>
+            <EnlaceMenu to="/admin/metricas">Métricas</EnlaceMenu>
+            <EnlaceMenu to="/admin/solicitudes">Solicitudes</EnlaceMenu>
           </>
         )}
       </div>
@@ -76,18 +96,18 @@ export default function Navbar() {
       <div className="site-navbar-actions">
         {!user ? (
           <>
-            <Link to="/login"    className="site-navbar-link">Iniciar sesión</Link>
+            <EnlaceMenu to="/login">Iniciar sesión</EnlaceMenu>
             <Link to="/registro" className="site-navbar-register">Registrarse</Link>
           </>
         ) : (
           <>
-            <Link to="/perfil" className="site-navbar-link site-navbar-cuenta" title={user.email}>
+            <EnlaceMenu to="/perfil" className="site-navbar-link site-navbar-cuenta" title={user.email}>
               {user.rol === 'USER' ? (
                 'Mi cuenta'
               ) : (
                 <span className="site-navbar-rol">{ETIQUETA_ROL[user.rol] || 'Admin'}</span>
               )}
-            </Link>
+            </EnlaceMenu>
             <button
               className="site-navbar-register site-navbar-logout"
               type="button"

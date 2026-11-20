@@ -104,6 +104,18 @@ export function leerPagoEnCurso() {
   }
 }
 
+/** Sesión elegida para comprar (la guarda la página de compra por si se recarga o se va al login) */
+export const COMPRA_KEY = 'cinasee_compra';
+
+/** Tras pagar, se olvida la compra para que no se pueda retomar volviendo atrás */
+export function borrarCompraGuardada() {
+  try {
+    sessionStorage.removeItem(COMPRA_KEY);
+  } catch {
+    // ignorar
+  }
+}
+
 export function borrarPagoEnCurso() {
   try {
     sessionStorage.removeItem(PAGO_KEY);
@@ -115,6 +127,12 @@ export function borrarPagoEnCurso() {
 /** Texto de una butaca a partir de fila y columna (1-based): fila 1 -> "A" */
 export function nombreButaca(row, column) {
   return `${String.fromCharCode(64 + row)}${column}`;
+}
+
+/** "QR-8901-8-12-K7M2QX9P" -> "H12" (el código de la entrada lleva la fila y la columna) */
+export function butacaDeCodigo(codigo) {
+  const m = /^QR-\d+-(\d+)-(\d+)-/.exec(String(codigo || ''));
+  return m ? nombreButaca(Number(m[1]), Number(m[2])) : '';
 }
 
 /** Descuentos que aplica Reservas */

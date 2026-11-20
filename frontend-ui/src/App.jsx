@@ -16,6 +16,7 @@ import PerfilPage from './paginas/usuario/PerfilPage';
 import Cines from './paginas/usuario/Cines';
 import CineDetalle from './paginas/usuario/CineDetalle';
 import PeliculaDetalle from './paginas/usuario/PeliculaDetalle';
+import SolicitarRolPage from './paginas/usuario/SolicitarRolPage';
 import CompraPage from './paginas/usuario/CompraPage';
 import PagoPage from './paginas/usuario/PagoPage';
 
@@ -54,6 +55,7 @@ export default function App() {
               <Route path="/login" element={<LoginPage />} />
               <Route path="/registro" element={<LoginPage />} />
               <Route path="/perfil" element={<RutaProtegida><PerfilPage /></RutaProtegida>} />
+              <Route path="/perfil/solicitar-rol" element={<RutaProtegida roles={['USER', 'STAFF']}><SolicitarRolPage /></RutaProtegida>} />
               <Route path="/compra" element={<CompraPage />} />
               {/* Vuelta desde la web de pago de Redsys (Comp. 2 · Reservas) */}
               <Route path="/pago/redsys/vuelta" element={<PagoPage />} />

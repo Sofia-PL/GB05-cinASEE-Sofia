@@ -11,6 +11,7 @@ import {
   guardarPagoEnCurso,
   nombreButaca,
   DESCUENTOS,
+  COMPRA_KEY,
 } from '../../api/reservas';
 import { layoutDeSala, butacaDeIndice, indicesOcupados } from '../../utils/butacas';
 import MapaButacas from '../../components/MapaButacas';
@@ -21,7 +22,7 @@ import MapaButacas from '../../components/MapaButacas';
    - Las butacas, la reserva y el pago (Redsys) van contra Reservas (Comp. 2).
    - Reservas exige un token del Comp. 3: cliente registrado o invitado.
    --------------------------------------------------------- */
-const SS_COMPRA_KEY = 'cinasee_compra';
+const SS_COMPRA_KEY = COMPRA_KEY;
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 /** Máximo de butacas por reserva que admite Reservas */
 const MAX_ENTRADAS = 10;
@@ -149,20 +150,38 @@ function PasoResumen({ data, onNext, layout, identidadProps, listo, errorSala })
   );
 }
 
-function PasoEntradas({ precio, cantidad, setCantidad, onNext, onPrev }) {
+/**
+ * @param {number|null} libres butacas libres de la sesión (null mientras se consultan)
+ */
+function PasoEntradas({ precio, cantidad, setCantidad, libres, consultando, onNext, onPrev }) {
+  // No se pueden pedir más entradas que butacas libres (ni más del máximo por operación).
+  // Si no se pudieron consultar, se deja el máximo: Reservas lo vuelve a comprobar al reservar.
+  const maximo = libres === null ? MAX_ENTRADAS : Math.min(MAX_ENTRADAS, libres);
+  const agotada = libres === 0;
+
   return (
     <div className="compra-panel">
       <h2 className="compra-panel-title">2. Número de entradas</h2>
       <p style={{ color: 'var(--text-muted)', marginBottom: '20px' }}>
-        Indica cuántas personas asistirán a esta sesión (máximo {MAX_ENTRADAS} entradas por operación):
+        Indica cuántas personas asistirán a esta sesión (máximo {maximo} {maximo === 1 ? 'entrada' : 'entradas'} por operación):
       </p>
+      {libres !== null && !agotada && libres < MAX_ENTRADAS && (
+        <div className="cinasee-aviso" role="status" style={{ marginBottom: '16px' }}>
+          Solo {libres === 1 ? 'queda 1 butaca libre' : `quedan ${libres} butacas libres`} en esta sesión.
+        </div>
+      )}
+      {agotada && (
+        <div className="cinasee-error" role="alert" style={{ marginBottom: '16px' }}>
+          Esta sesión está completa: no quedan butacas libres.
+        </div>
+      )}
 
       <div className="compra-entradas-selector">
         <button
           type="button"
           className="compra-cantidad-btn"
           onClick={() => setCantidad((n) => Math.max(1, n - 1))}
-          disabled={cantidad <= 1}
+          disabled={cantidad <= 1 || agotada}
         >
           −
         </button>
@@ -170,8 +189,8 @@ function PasoEntradas({ precio, cantidad, setCantidad, onNext, onPrev }) {
         <button
           type="button"
           className="compra-cantidad-btn"
-          onClick={() => setCantidad((n) => Math.min(MAX_ENTRADAS, n + 1))}
-          disabled={cantidad >= MAX_ENTRADAS}
+          onClick={() => setCantidad((n) => Math.min(maximo, n + 1))}
+          disabled={cantidad >= maximo || agotada}
         >
           +
         </button>
@@ -185,8 +204,8 @@ function PasoEntradas({ precio, cantidad, setCantidad, onNext, onPrev }) {
         <button className="home-button home-button-dark" type="button" onClick={onPrev}>
           Volver
         </button>
-        <button className="home-button" type="button" onClick={onNext}>
-          Continuar a selección de butacas →
+        <button className="home-button" type="button" onClick={onNext} disabled={agotada || consultando}>
+          {consultando ? 'Consultando butacas libres…' : 'Continuar a selección de butacas →'}
         </button>
       </div>
     </div>
@@ -339,11 +358,11 @@ function PasoPagoRedsys({ data, reserva, layout, token, onPrev }) {
           CinASEE no recibe ni guarda los datos de tu tarjeta.
         </p>
         <div className="compra-redsys-test">
-          <strong>Entorno de pruebas de Redsys (no se cobra dinero real).</strong> Tarjeta de prueba:
+          <strong>Entorno de pruebas de Redsys (no se cobra dinero real).</strong> Para pagar solo necesitas
+          el número de esta tarjeta de prueba:
           <ul>
             <li>Número: <code>4548 8120 4940 0004</code></li>
-            <li>Caducidad: <code>12/49</code> (cualquier fecha futura) · CVV: <code>123</code></li>
-            <li>Código de autenticación (CIP): <code>123456</code></li>
+            <li>El resto de datos (caducidad, CVV…) pueden ser cualquiera: no se comprueban.</li>
           </ul>
         </div>
       </div>
@@ -426,16 +445,22 @@ export default function CompraPage() {
     return () => { cancelado = true; };
   }, [token, data]);
 
-  // Butacas ocupadas en Reservas (se consultan al entrar en el paso de butacas)
+  // Butacas ocupadas en Reservas (se consultan al elegir el número de entradas y otra vez en el paso de butacas)
   const cargarOcupadas = useCallback(async () => {
     if (!layout) return;
     try {
       const mapa = await obtenerButacasOcupadas(data.sesion.showId);
-      setOcupadas(indicesOcupados(mapa.occupiedSeats, layout.cols));
+      const set = indicesOcupados(mapa.occupiedSeats, layout.cols);
+      setOcupadas(set);
+      // Si se habían pedido más entradas de las que quedan libres, se ajusta
+      const libresAhora = layout.filas * layout.cols - set.size;
+      setCantidad((n) => Math.max(1, Math.min(n, libresAhora)));
     } catch (err) {
       setErrorReserva(`No se pudo consultar el mapa de butacas: ${err.message}`);
     }
   }, [layout, data]);
+
+  const libres = layout && ocupadas ? layout.filas * layout.cols - ocupadas.size : null;
 
   if (!data) return null;
 
@@ -524,7 +549,7 @@ export default function CompraPage() {
         {paso === 0 && (
           <PasoResumen
             data={data}
-            onNext={avanzar}
+            onNext={() => { setOcupadas(null); setErrorReserva(''); avanzar(); cargarOcupadas(); }}
             layout={layout}
             listo={Boolean(token && layout)}
             errorSala={sala.error}
@@ -545,7 +570,9 @@ export default function CompraPage() {
             precio={data.sesion.precio}
             cantidad={cantidad}
             setCantidad={setCantidad}
-            onNext={() => { setSeleccionadas([]); setOcupadas(null); avanzar(); cargarOcupadas(); }}
+            libres={libres}
+            consultando={ocupadas === null && !errorReserva}
+            onNext={() => { setSeleccionadas([]); setOcupadas(null); setErrorReserva(''); avanzar(); cargarOcupadas(); }}
             onPrev={retroceder}
           />
         )}

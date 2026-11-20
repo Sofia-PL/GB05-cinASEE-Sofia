@@ -4,6 +4,7 @@ import { useCine } from '../../context/useCine';
 import { obtenerPeliculas, obtenerSalasCine, fechaIso, TIPOS_SALA, nombreGenero } from '../../api/cartelera';
 import { obtenerTaquilla, obtenerOcupacion } from '../../api/analitica';
 import { AvisoAdmin, AvisoSinToken } from './AdminAvisos';
+import CampoFecha from '../../components/CampoFecha';
 import BarrasHorizontales from '../../components/graficas/BarrasHorizontales';
 import Columnas from '../../components/graficas/Columnas';
 
@@ -193,9 +194,9 @@ export default function AdminMetricasPage() {
         {periodo === 'rango' && (
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', paddingBottom: '6px', flexWrap: 'wrap' }}>
             <label className="admin-label" htmlFor="met-desde" style={{ margin: 0 }}>Desde</label>
-            <input id="met-desde" type="date" className="admin-input" value={desde} onChange={(e) => setDesde(e.target.value)} style={{ width: '160px' }} />
+            <CampoFecha id="met-desde" value={desde} onChange={setDesde} style={{ width: '190px' }} />
             <label className="admin-label" htmlFor="met-hasta" style={{ margin: 0 }}>Hasta</label>
-            <input id="met-hasta" type="date" className="admin-input" value={hasta} onChange={(e) => setHasta(e.target.value)} style={{ width: '160px' }} />
+            <CampoFecha id="met-hasta" value={hasta} onChange={setHasta} style={{ width: '190px' }} />
           </div>
         )}
       </div>

@@ -13,6 +13,9 @@ import {
   TIPOS_SALA,
 } from '../../api/cartelera';
 import { AvisoAdmin, AvisoSinToken } from './AdminAvisos';
+import CampoFecha from '../../components/CampoFecha';
+import CampoHora from '../../components/CampoHora';
+import { fechaEs } from '../../utils/fechas';
 
 /** "2026-11-10T19:00:00" -> { fecha: "2026-11-10", hora: "19:00" } */
 function partirFechaHora(startTime) {
@@ -359,7 +362,7 @@ export default function AdminSesionesPage() {
               <ul style={{ margin: '8px 0 0', paddingLeft: '22px' }}>
                 {batchResult.created.map((sesion) => {
                   const inicio = partirFechaHora(sesion.startTime);
-                  return <li key={sesion.id}>{inicio.fecha} · {inicio.hora}</li>;
+                  return <li key={sesion.id}>{fechaEs(inicio.fecha)} · {inicio.hora}</li>;
                 })}
               </ul>
             </details>
@@ -376,7 +379,7 @@ export default function AdminSesionesPage() {
                     || 'otra película';
                   return (
                     <li key={`${conflicto.startTime}-${conflicto.conflictingSessionId}`}>
-                      {inicio.fecha} · {inicio.hora} (conflicto con «{tituloConflicto}»)
+                      {fechaEs(inicio.fecha)} · {inicio.hora} (conflicto con «{tituloConflicto}»)
                     </li>
                   );
                 })}
@@ -522,7 +525,7 @@ export default function AdminSesionesPage() {
                         const sala = salaPorId[sesion.roomId];
                         return (
                           <tr key={sesion.id}>
-                            <td style={{ fontWeight: 600 }}>{inicio.fecha}</td>
+                            <td style={{ fontWeight: 600 }}>{fechaEs(inicio.fecha)}</td>
                             <td>
                               <strong style={{ fontSize: '1.1rem', color: 'var(--burgundy)' }}>{inicio.hora}</strong>
                               {fin.hora && (
@@ -624,24 +627,22 @@ export default function AdminSesionesPage() {
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
                 <div className="admin-form-group">
-                  <label className="admin-label">Fecha de Proyección *</label>
-                  <input
-                    type="date"
-                    className="admin-input"
+                  <label className="admin-label" htmlFor="sesion-fecha">Fecha de Proyección *</label>
+                  <CampoFecha
+                    id="sesion-fecha"
                     required
                     value={formData.fecha}
-                    onChange={(e) => setFormData({ ...formData, fecha: e.target.value })}
+                    onChange={(fecha) => setFormData({ ...formData, fecha })}
                   />
                 </div>
 
                 <div className="admin-form-group">
-                  <label className="admin-label">Hora del Pase *</label>
-                  <input
-                    type="time"
-                    className="admin-input"
+                  <label className="admin-label" htmlFor="sesion-hora">Hora del Pase *</label>
+                  <CampoHora
+                    id="sesion-hora"
                     required
                     value={formData.hora}
-                    onChange={(e) => setFormData({ ...formData, hora: e.target.value })}
+                    onChange={(hora) => setFormData({ ...formData, hora })}
                   />
                 </div>
               </div>
@@ -799,24 +800,20 @@ export default function AdminSesionesPage() {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
                 <div className="admin-form-group">
                   <label className="admin-label" htmlFor="batch-start-date">Desde *</label>
-                  <input
+                  <CampoFecha
                     id="batch-start-date"
-                    type="date"
-                    className="admin-input"
                     required
                     value={batchForm.startDate}
-                    onChange={(e) => setBatchForm({ ...batchForm, startDate: e.target.value })}
+                    onChange={(startDate) => setBatchForm({ ...batchForm, startDate })}
                   />
                 </div>
                 <div className="admin-form-group">
                   <label className="admin-label" htmlFor="batch-end-date">Hasta (incluido) *</label>
-                  <input
+                  <CampoFecha
                     id="batch-end-date"
-                    type="date"
-                    className="admin-input"
                     required
                     value={batchForm.endDate}
-                    onChange={(e) => setBatchForm({ ...batchForm, endDate: e.target.value })}
+                    onChange={(endDate) => setBatchForm({ ...batchForm, endDate })}
                   />
                 </div>
               </div>
@@ -824,13 +821,11 @@ export default function AdminSesionesPage() {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
                 <div className="admin-form-group">
                   <label className="admin-label" htmlFor="batch-start-time">Hora del pase *</label>
-                  <input
+                  <CampoHora
                     id="batch-start-time"
-                    type="time"
-                    className="admin-input"
                     required
                     value={batchForm.startTime}
-                    onChange={(e) => setBatchForm({ ...batchForm, startTime: e.target.value })}
+                    onChange={(startTime) => setBatchForm({ ...batchForm, startTime })}
                   />
                 </div>
                 <div className="admin-form-group">

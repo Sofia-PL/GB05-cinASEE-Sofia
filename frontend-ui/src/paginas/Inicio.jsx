@@ -114,7 +114,7 @@ export default function Inicio() {
           {!cargandoCines && !errorCines && cines.length === 0 && <SinDatos>Todavía no hay cines dados de alta.</SinDatos>}
 
           <div className="cines-grid">
-            {cines.slice(0, 6).map((cine) => (
+            {cines.map((cine) => (
               <article className="cine-card" key={cine.id}>
                 <div className="cine-card-header">
                   <span className="cine-card-city">{cine.city}</span>
@@ -128,12 +128,6 @@ export default function Inicio() {
               </article>
             ))}
           </div>
-
-          {cines.length > 6 && (
-            <Link className="home-button" to="/cines">
-              Ver todos los cines
-            </Link>
-          )}
         </div>
       </section>
 

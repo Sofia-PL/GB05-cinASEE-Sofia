@@ -16,6 +16,7 @@ import { obtenerPerfil } from '../../api/usuarios';
 import { layoutDeSala, butacaDeIndice, indicesOcupados, etiquetaButaca } from '../../utils/butacas';
 import MapaButacas from '../../components/MapaButacas';
 import { AvisoAdmin } from '../admin/AdminAvisos';
+import CampoFecha from '../../components/CampoFecha';
 
 /* =========================================================
    Taquilla presencial
@@ -303,13 +304,12 @@ export default function TaquillaPage() {
 
               <div className="admin-form-group">
                 <label className="admin-label" htmlFor="tq-fecha">Fecha</label>
-                <input
+                <CampoFecha
                   id="tq-fecha"
-                  type="date"
-                  className="admin-input"
+                  required
                   value={fecha}
                   min={fechaIso(new Date())}
-                  onChange={(e) => { setFecha(e.target.value); setPeliculaId(''); setShowId(''); reiniciarSeleccion(); }}
+                  onChange={(nueva) => { setFecha(nueva); setPeliculaId(''); setShowId(''); reiniciarSeleccion(); }}
                   disabled={reserva !== null}
                 />
               </div>

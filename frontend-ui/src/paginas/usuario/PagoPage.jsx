@@ -9,8 +9,12 @@ import {
   leerPagoEnCurso,
   guardarPagoEnCurso,
   borrarPagoEnCurso,
+  borrarCompraGuardada,
+  butacaDeCodigo,
 } from '../../api/reservas';
 import CodigoQR from '../../components/CodigoQR';
+import EntradasImprimibles from '../../components/EntradasImprimibles';
+import { fechaEs } from '../../utils/fechas';
 
 /* =========================================================
    Página de vuelta de Redsys  (/pago/redsys/vuelta)
@@ -82,6 +86,7 @@ export default function PagoPage() {
         setConfirmacion(res);
         setEstado('ok');
         borrarPagoEnCurso();
+        borrarCompraGuardada();
         // La URL deja de llevar los parámetros de Redsys (por si se recarga la página)
         window.history.replaceState(null, '', window.location.pathname);
       })
@@ -95,6 +100,19 @@ export default function PagoPage() {
         }
       });
   }, [inicial, pago, parametros, token]);
+
+  /*
+   * Con el pago ya confirmado no se puede volver atrás (a la web de Redsys o a la compra):
+   * se añade una entrada al historial y, si el usuario pulsa "atrás", se vuelve a añadir.
+   * Desde aquí se sale con los botones de la página (mis entradas, inicio, nueva venta).
+   */
+  useEffect(() => {
+    if (estado !== 'ok') return undefined;
+    const quedarse = () => window.history.pushState(window.history.state, '', window.location.href);
+    quedarse();
+    window.addEventListener('popstate', quedarse);
+    return () => window.removeEventListener('popstate', quedarse);
+  }, [estado]);
 
   async function reintentar() {
     setReintentando(true);
@@ -166,16 +184,27 @@ export default function PagoPage() {
             <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>
               Presenta estos códigos QR en el control de acceso de la sala.
             </p>
+            <EntradasImprimibles
+              entradas={(confirmacion.tickets || []).map((codigo, i) => ({
+                codigo,
+                pelicula: pago.pelicula,
+                cine: pago.cine,
+                sala: pago.sala,
+                fecha: fechaEs(pago.fecha),
+                hora: pago.hora,
+                butaca: butacaDeCodigo(codigo) || pago.butacas?.[i],
+                reserva: confirmacion.reservationId,
+              }))}
+            />
+
             <div className="compra-nav-btns" style={{ width: '100%', maxWidth: '520px' }}>
+              <button className="home-button home-button-dark" type="button" onClick={() => window.print()} style={{ flex: 1, justifyContent: 'center' }}>
+                Imprimir entradas
+              </button>
               {pago.taquilla ? (
-                <>
-                  <button className="home-button home-button-dark" type="button" onClick={() => window.print()} style={{ flex: 1, justifyContent: 'center' }}>
-                    Imprimir entradas
-                  </button>
-                  <Link className="home-button" to="/empleados/taquilla" style={{ flex: 1, justifyContent: 'center' }}>
-                    Nueva venta
-                  </Link>
-                </>
+                <Link className="home-button" to="/empleados/taquilla" style={{ flex: 1, justifyContent: 'center' }}>
+                  Nueva venta
+                </Link>
               ) : (
                 <>
                   {!pago.invitado && (
