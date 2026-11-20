@@ -355,6 +355,7 @@ CinAsee/
 ├── scripts/                   Arranque, parada y estado (PowerShell y bash)
 ├── ARRANCAR.bat               Doble clic para arrancar en Windows
 ├── DETENER.bat                Doble clic para parar en Windows
+├── LICENSE
 └── README.MD
 ```
 
@@ -371,3 +372,9 @@ CinAsee/
 | [C4](componente4-analitica/README.md) | Ocupación, Box Office y recomendaciones |
 | [C5](componente5-gateway/README.md) | Rutas, CORS y validación de tokens |
 | [Frontend](frontend-ui/README.md) | Comandos y comunicación con el Gateway |
+
+## Licencia
+
+Este proyecto está bajo la licencia **PolyForm Noncommercial License 1.0.0**.
+Se permite su uso, estudio y modificación únicamente con fines no comerciales o académicos.
+Consulta el archivo [LICENSE](./LICENSE) para más detalles.
