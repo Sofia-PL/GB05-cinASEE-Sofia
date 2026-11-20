@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 
 import { AuthProvider } from './context/AuthContext';
 import { CineProvider } from './context/CineContext';
@@ -27,6 +27,7 @@ import AdminPeliculasPage from './paginas/admin/AdminPeliculasPage';
 import AdminSalasPage from './paginas/admin/AdminSalasPage';
 import AdminSesionesPage from './paginas/admin/AdminSesionesPage';
 import AdminMetricasPage from './paginas/admin/AdminMetricasPage';
+import AdminSolicitudesPage from './paginas/admin/AdminSolicitudesPage';
 
 export default function App() {
   return (
@@ -57,12 +58,16 @@ export default function App() {
               {/* Rutas de Empleados */}
               <Route path="/empleados/validar-qr" element={<RutaProtegida roles={['STAFF', 'ADMIN']}><ValidacionQRPage /></RutaProtegida>} />
               <Route path="/empleados/taquilla" element={<RutaProtegida roles={['STAFF', 'ADMIN']}><TaquillaPage /></RutaProtegida>} />
+              {/* Alias directos para empleados/admin */}
+              <Route path="/taquilla" element={<Navigate to="/empleados/taquilla" replace />} />
+              <Route path="/validar-qr" element={<Navigate to="/empleados/validar-qr" replace />} />
 
               {/* Rutas de Administrador */}
               <Route path="/admin/peliculas" element={<RutaProtegida roles={['ADMIN']}><AdminPeliculasPage /></RutaProtegida>} />
               <Route path="/admin/salas" element={<RutaProtegida roles={['ADMIN']}><AdminSalasPage /></RutaProtegida>} />
               <Route path="/admin/sesiones" element={<RutaProtegida roles={['ADMIN']}><AdminSesionesPage /></RutaProtegida>} />
               <Route path="/admin/metricas" element={<RutaProtegida roles={['ADMIN']}><AdminMetricasPage /></RutaProtegida>} />
+              <Route path="/admin/solicitudes" element={<RutaProtegida roles={['ADMIN', 'STAFF']}><AdminSolicitudesPage /></RutaProtegida>} />
             </Routes>
           </main>
           {/* Pie de página con información de contacto, datos legales y enlaces */}

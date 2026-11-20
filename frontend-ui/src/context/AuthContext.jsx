@@ -27,7 +27,13 @@ const ROLES_FRONT = {
 function cargarUsuario() {
   try {
     const u = JSON.parse(localStorage.getItem(LS_KEY) || 'null');
-    if (u && tokenVigente(u.token, u.tokenExp)) return u;
+    if (u && tokenVigente(u.token, u.tokenExp)) {
+      if (!u.id && u.token) {
+        const claims = leerJwt(u.token);
+        if (claims?.sub) u.id = Number(claims.sub);
+      }
+      return u;
+    }
     localStorage.removeItem(LS_KEY);
   } catch {
     // almacenamiento no disponible: sin sesión
@@ -38,6 +44,7 @@ function cargarUsuario() {
 /** Datos del perfil del Comp. 3 que usa el frontend */
 function datosPerfil(perfil) {
   return {
+    id: perfil.id,
     name: perfil.fullName,
     email: perfil.email,
     phone: perfil.phone || '',
@@ -45,6 +52,7 @@ function datosPerfil(perfil) {
     preferredGenres: perfil.preferredGenres || [],
     loyaltyPoints: perfil.loyaltyPoints ?? 0,
     cinemaId: perfil.cinemaId || null,
+    canReviewRoleRequests: Boolean(perfil.canReviewRoleRequests || perfil.role === 'ADMIN'),
   };
 }
 

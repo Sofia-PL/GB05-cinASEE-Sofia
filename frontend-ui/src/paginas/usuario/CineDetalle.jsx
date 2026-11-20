@@ -251,6 +251,20 @@ export default function CineDetalle() {
                         {peli.durationMinutes > 0 && (
                           <span className="cartelera-badge-tag cartelera-badge-tag--dark">{durHoras}h {durMin}m</span>
                         )}
+                        {peli.trailerUrl && (
+                          <a
+                            href={peli.trailerUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="detalle-trailer-btn"
+                            title={`Ver tráiler de ${peli.title}`}
+                          >
+                            <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true">
+                              <path d="M18 4l2 4h-3l-2-4h-2l2 4h-3l-2-4H8l2 4H7L5 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V4h-4zM4 20V10h16v10H4z"/>
+                            </svg>
+                            <span>Ver tráiler</span>
+                          </a>
+                        )}
                       </div>
                       <h2 className="detalle-peli-heading">{peli.title}</h2>
                       <p className="detalle-peli-synopsis-body">{peli.synopsis}</p>

@@ -54,6 +54,9 @@ export default function Navbar() {
           <>
             <Link to="/empleados/validar-qr" className="site-navbar-link">Validar QR</Link>
             <Link to="/empleados/taquilla"   className="site-navbar-link">Taquilla</Link>
+            {user?.canReviewRoleRequests && (
+              <Link to="/admin/solicitudes"  className="site-navbar-link">Solicitudes</Link>
+            )}
           </>
         )}
 
@@ -64,6 +67,7 @@ export default function Navbar() {
             <Link to="/admin/salas"     className="site-navbar-link">Salas</Link>
             <Link to="/admin/sesiones"  className="site-navbar-link">Sesiones</Link>
             <Link to="/admin/metricas"  className="site-navbar-link">Métricas</Link>
+            <Link to="/admin/solicitudes" className="site-navbar-link">Solicitudes</Link>
           </>
         )}
       </div>
@@ -78,8 +82,11 @@ export default function Navbar() {
         ) : (
           <>
             <Link to="/perfil" className="site-navbar-link site-navbar-cuenta" title={user.email}>
-              Mi cuenta
-              <span className="site-navbar-rol">{ETIQUETA_ROL[user.rol] || 'Cliente'}</span>
+              {user.rol === 'USER' ? (
+                'Mi cuenta'
+              ) : (
+                <span className="site-navbar-rol">{ETIQUETA_ROL[user.rol] || 'Admin'}</span>
+              )}
             </Link>
             <button
               className="site-navbar-register site-navbar-logout"

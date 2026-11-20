@@ -66,7 +66,23 @@ export default function Inicio() {
         )}
         <div key={movie?.id} className="home-carousel-overlay">
           <h1>{movie?.title || 'CinASEE'}</h1>
-          <Link className="home-button" to="/cines">Encuentra tu cine</Link>
+          <div className="home-carousel-actions">
+            <Link className="home-button" to="/cines">Encuentra tu cine</Link>
+            {movie?.trailerUrl && (
+              <a
+                className="home-button home-button-trailer"
+                href={movie.trailerUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                title={`Ver tráiler de ${movie.title}`}
+              >
+                <svg className="icono-pelicula" viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true">
+                  <path d="M18 4l2 4h-3l-2-4h-2l2 4h-3l-2-4H8l2 4H7L5 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V4h-4zM4 20V10h16v10H4z"/>
+                </svg>
+                <span>Ver tráiler</span>
+              </a>
+            )}
+          </div>
         </div>
         {destacadas.length > 1 && (
           <>

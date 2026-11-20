@@ -4,6 +4,24 @@ import { useAuth } from '../../context/useAuth';
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+function EyeIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  );
+}
+
+function EyeSlashIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+      <line x1="1" y1="1" x2="23" y2="23" />
+    </svg>
+  );
+}
+
 export default function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -17,6 +35,10 @@ export default function LoginPage() {
 
   const [loginData, setLoginData] = useState({ email: '', password: '' });
   const [regData, setRegData] = useState({ name: '', email: '', password: '', confirm: '' });
+
+  const [mostrarLoginPass, setMostrarLoginPass] = useState(false);
+  const [mostrarRegPass, setMostrarRegPass] = useState(false);
+  const [mostrarRegConfirm, setMostrarRegConfirm] = useState(false);
 
   function redirigirSegunRol(rol) {
     // Si se llegó al login desde la compra, se vuelve a ella para terminarla
@@ -202,18 +224,29 @@ export default function LoginPage() {
 
             <div className="login-field">
               <label htmlFor="login-pass">Contraseña</label>
-              <input
-                id="login-pass"
-                type="password"
-                autoComplete="current-password"
-                placeholder="Introduce tu contraseña"
-                value={loginData.password}
-                onChange={(e) => {
-                  setLoginData((p) => ({ ...p, password: e.target.value }));
-                  if (campoErrores.password) setCampoErrores((prev) => ({ ...prev, password: '' }));
-                }}
-                style={campoErrores.password ? { borderColor: '#d9383a', background: '#fff5f5' } : {}}
-              />
+              <div className="login-password-wrapper">
+                <input
+                  id="login-pass"
+                  type={mostrarLoginPass ? 'text' : 'password'}
+                  autoComplete="current-password"
+                  placeholder="Introduce tu contraseña"
+                  value={loginData.password}
+                  onChange={(e) => {
+                    setLoginData((p) => ({ ...p, password: e.target.value }));
+                    if (campoErrores.password) setCampoErrores((prev) => ({ ...prev, password: '' }));
+                  }}
+                  style={campoErrores.password ? { borderColor: '#d9383a', background: '#fff5f5' } : {}}
+                />
+                <button
+                  type="button"
+                  className="login-toggle-password"
+                  onClick={() => setMostrarLoginPass((prev) => !prev)}
+                  title={mostrarLoginPass ? 'Ocultar contraseña' : 'Ver contraseña'}
+                  aria-label={mostrarLoginPass ? 'Ocultar contraseña' : 'Ver contraseña'}
+                >
+                  {mostrarLoginPass ? <EyeSlashIcon /> : <EyeIcon />}
+                </button>
+              </div>
               {campoErrores.password && (
                 <span style={{ color: '#d9383a', fontSize: '0.8rem', marginTop: '4px' }}>
                   {campoErrores.password}
@@ -278,18 +311,29 @@ export default function LoginPage() {
 
             <div className="login-field">
               <label htmlFor="reg-pass">Contraseña (mínimo 8 caracteres)</label>
-              <input
-                id="reg-pass"
-                type="password"
-                autoComplete="new-password"
-                placeholder="Mínimo 8 caracteres"
-                value={regData.password}
-                onChange={(e) => {
-                  setRegData((p) => ({ ...p, password: e.target.value }));
-                  if (campoErrores.password) setCampoErrores((prev) => ({ ...prev, password: '' }));
-                }}
-                style={campoErrores.password ? { borderColor: '#d9383a', background: '#fff5f5' } : {}}
-              />
+              <div className="login-password-wrapper">
+                <input
+                  id="reg-pass"
+                  type={mostrarRegPass ? 'text' : 'password'}
+                  autoComplete="new-password"
+                  placeholder="Mínimo 8 caracteres"
+                  value={regData.password}
+                  onChange={(e) => {
+                    setRegData((p) => ({ ...p, password: e.target.value }));
+                    if (campoErrores.password) setCampoErrores((prev) => ({ ...prev, password: '' }));
+                  }}
+                  style={campoErrores.password ? { borderColor: '#d9383a', background: '#fff5f5' } : {}}
+                />
+                <button
+                  type="button"
+                  className="login-toggle-password"
+                  onClick={() => setMostrarRegPass((prev) => !prev)}
+                  title={mostrarRegPass ? 'Ocultar contraseña' : 'Ver contraseña'}
+                  aria-label={mostrarRegPass ? 'Ocultar contraseña' : 'Ver contraseña'}
+                >
+                  {mostrarRegPass ? <EyeSlashIcon /> : <EyeIcon />}
+                </button>
+              </div>
               {campoErrores.password && (
                 <span style={{ color: '#d9383a', fontSize: '0.8rem', marginTop: '4px' }}>
                   {campoErrores.password}
@@ -299,18 +343,29 @@ export default function LoginPage() {
 
             <div className="login-field">
               <label htmlFor="reg-confirm">Confirmar contraseña</label>
-              <input
-                id="reg-confirm"
-                type="password"
-                autoComplete="new-password"
-                placeholder="Repite la contraseña"
-                value={regData.confirm}
-                onChange={(e) => {
-                  setRegData((p) => ({ ...p, confirm: e.target.value }));
-                  if (campoErrores.confirm) setCampoErrores((prev) => ({ ...prev, confirm: '' }));
-                }}
-                style={campoErrores.confirm ? { borderColor: '#d9383a', background: '#fff5f5' } : {}}
-              />
+              <div className="login-password-wrapper">
+                <input
+                  id="reg-confirm"
+                  type={mostrarRegConfirm ? 'text' : 'password'}
+                  autoComplete="new-password"
+                  placeholder="Repite la contraseña"
+                  value={regData.confirm}
+                  onChange={(e) => {
+                    setRegData((p) => ({ ...p, confirm: e.target.value }));
+                    if (campoErrores.confirm) setCampoErrores((prev) => ({ ...prev, confirm: '' }));
+                  }}
+                  style={campoErrores.confirm ? { borderColor: '#d9383a', background: '#fff5f5' } : {}}
+                />
+                <button
+                  type="button"
+                  className="login-toggle-password"
+                  onClick={() => setMostrarRegConfirm((prev) => !prev)}
+                  title={mostrarRegConfirm ? 'Ocultar contraseña' : 'Ver contraseña'}
+                  aria-label={mostrarRegConfirm ? 'Ocultar contraseña' : 'Ver contraseña'}
+                >
+                  {mostrarRegConfirm ? <EyeSlashIcon /> : <EyeIcon />}
+                </button>
+              </div>
               {campoErrores.confirm && (
                 <span style={{ color: '#d9383a', fontSize: '0.8rem', marginTop: '4px' }}>
                   {campoErrores.confirm}

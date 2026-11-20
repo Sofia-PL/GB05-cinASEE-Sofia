@@ -77,7 +77,24 @@ export default function CarteleraPage() {
               <div className="cartelera-content">
                 <div className="cartelera-meta-header">
                   <span className="cartelera-genre-label">{nombreGenero(movie.genre)}</span>
-                  <span className={`cartelera-plus-icon${isHovered ? ' active' : ''}`} aria-hidden="true">+</span>
+                  <div className="cartelera-header-actions">
+                    {movie.trailerUrl && (
+                      <a
+                        href={movie.trailerUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="cartelera-trailer-btn"
+                        title={`Ver tráiler de ${movie.title}`}
+                        onClick={(e) => e.stopPropagation()}
+                        aria-label={`Ver tráiler de ${movie.title}`}
+                      >
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true">
+                          <path d="M18 4l2 4h-3l-2-4h-2l2 4h-3l-2-4H8l2 4H7L5 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V4h-4zM4 20V10h16v10H4z"/>
+                        </svg>
+                      </a>
+                    )}
+                    <span className={`cartelera-plus-icon${isHovered ? ' active' : ''}`} aria-hidden="true">+</span>
+                  </div>
                 </div>
 
                 <h2 className="cartelera-movie-title">{movie.title}</h2>

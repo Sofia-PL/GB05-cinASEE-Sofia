@@ -101,3 +101,34 @@ export function actualizarPerfil(userId, datos, token) {
 export function obtenerHistorial(userId, token) {
   return apiFetch(`/v1/iam/users/${userId}/history`, { token });
 }
+
+/** POST /v1/iam/role-requests -> crea una solicitud de rol */
+export function crearSolicitudRol(datos, token) {
+  return apiFetch('/v1/iam/role-requests', {
+    method: 'POST',
+    body: datos,
+    token,
+  });
+}
+
+/** GET /v1/iam/role-requests/me -> solicitudes del usuario actual */
+export function obtenerMisSolicitudesRol(token) {
+  return apiFetch('/v1/iam/role-requests/me', { token });
+}
+
+/** GET /v1/iam/role-requests -> listado para administradores/managers */
+export function obtenerSolicitudesRol(filtros = {}, token) {
+  return apiFetch('/v1/iam/role-requests', {
+    query: filtros,
+    token,
+  });
+}
+
+/** PATCH /v1/iam/role-requests/{id} -> aprobar o rechazar */
+export function revisarSolicitudRol(requestId, datos, token) {
+  return apiFetch(`/v1/iam/role-requests/${requestId}`, {
+    method: 'PATCH',
+    body: datos,
+    token,
+  });
+}

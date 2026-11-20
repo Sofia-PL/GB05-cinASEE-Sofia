@@ -68,7 +68,7 @@ export default function TaquillaPage() {
     return () => { cancelado = true; };
   }, [cineId, fecha, token]);
 
-  const peliculas = cargandoCartelera ? [] : cartelera.peliculas;
+  const peliculas = cargandoCartelera ? [] : Array.from(new Map((cartelera.peliculas || []).map((p) => [p.id, p])).values());
   const pelicula = peliculas.find((p) => p.id === peliculaId) || peliculas[0] || null;
   const sesiones = pelicula ? cartelera.sesionesPorPelicula[pelicula.id] || [] : [];
   const sesion = sesiones.find((s) => s.showId === showId) || sesiones[0] || null;
@@ -96,7 +96,7 @@ export default function TaquillaPage() {
 
   useEffect(() => cargarOcupadas(), [cargarOcupadas]);
 
-  const ocupadasSet = ocupadas?.showId === sesion?.showId ? ocupadas.set : null;
+  const ocupadasSet = (ocupadas && sesion && ocupadas.showId === sesion.showId) ? ocupadas.set : null;
 
   function reiniciarSeleccion() {
     setButacas([]);
@@ -248,7 +248,11 @@ export default function TaquillaPage() {
                   onChange={(e) => { setCineElegido(e.target.value); setPeliculaId(''); setShowId(''); reiniciarSeleccion(); }}
                   disabled={(user?.rol !== 'ADMIN' && Boolean(cineAsignado)) || reserva !== null}
                 >
-                  {cines.map((c) => <option key={c.id} value={c.id}>{c.name} ({c.city})</option>)}
+                  {cines.length === 0 ? (
+                    <option value="">Sin cines disponibles</option>
+                  ) : (
+                    cines.map((c) => <option key={c.id} value={c.id}>{c.name} ({c.city})</option>)
+                  )}
                 </select>
               </div>
 
@@ -290,7 +294,7 @@ export default function TaquillaPage() {
                 >
                   {sesiones.map((s) => (
                     <option key={s.showId} value={s.showId}>
-                      {s.hora} — {s.salaNombre} ({s.formato}) — {s.precio.toFixed(2)} €
+                      {s.hora} — {s.salaNombre} ({s.formato}) — {Number(s.precio || 0).toFixed(2)} €
                     </option>
                   ))}
                 </select>
@@ -378,9 +382,9 @@ export default function TaquillaPage() {
                 fontSize: '0.88rem',
                 lineHeight: 1.6,
               }}>
-                <div>Película: <strong>{pelicula.title}</strong></div>
-                <div>Sesión: <strong>{sesion.hora} · {sesion.salaNombre}</strong></div>
-                <div>Entradas: <strong>{cantidad} × {sesion.precio.toFixed(2)} €</strong></div>
+                <div>Película: <strong>{pelicula?.title || 'Sin seleccionar'}</strong></div>
+                <div>Sesión: <strong>{sesion?.hora || ''} · {sesion?.salaNombre || ''}</strong></div>
+                <div>Entradas: <strong>{cantidad} × {Number(sesion?.precio || 0).toFixed(2)} €</strong></div>
                 <div>Butacas: <strong style={{ color: 'var(--granate)' }}>{etiquetas || 'Sin asignar'}</strong></div>
               </div>
 
@@ -417,9 +421,13 @@ export default function TaquillaPage() {
                     type="number"
                     min={1}
                     className="admin-input"
+                    placeholder="Ej. 1"
                     value={cliente.userId}
                     onChange={(e) => setCliente({ ...cliente, userId: e.target.value })}
                   />
+                  <small style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginTop: '4px', display: 'block' }}>
+                    Indica el nº de cliente que el usuario tiene en su perfil para sumarle puntos.
+                  </small>
                 </div>
               )}
 
