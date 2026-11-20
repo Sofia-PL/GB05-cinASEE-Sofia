@@ -12,6 +12,7 @@ import {
   nombreButaca,
   DESCUENTOS,
 } from '../../api/reservas';
+import { obtenerPerfil } from '../../api/usuarios';
 import { layoutDeSala, butacaDeIndice, indicesOcupados, etiquetaButaca } from '../../utils/butacas';
 import MapaButacas from '../../components/MapaButacas';
 import { AvisoAdmin } from '../admin/AdminAvisos';
@@ -56,6 +57,45 @@ export default function TaquillaPage() {
   const [reserva, setReserva] = useState(null);
   const [procesando, setProcesando] = useState(false);
   const [aviso, setAviso] = useState(null);
+  // Errores de reservar/cobrar: se muestran junto al botón, no arriba de la página
+  const [errorCobro, setErrorCobro] = useState('');
+  // Comprobación del nº de cliente contra Usuarios (Comp. 3)
+  const [resultadoCliente, setResultadoCliente] = useState({ id: '', estado: '', nombre: '', texto: '' });
+  const valorCliente = cliente.userId.trim();
+  const idCliente = Number(valorCliente);
+  const idClienteValido = cliente.tipo === 'registrado' && valorCliente !== '' && Number.isInteger(idCliente) && idCliente > 0;
+
+  /* Comprueba el nº de cliente mientras se escribe (con una pequeña espera) */
+  useEffect(() => {
+    if (!idClienteValido || !token) return undefined;
+    let cancelado = false;
+    const espera = setTimeout(() => {
+      obtenerPerfil(idCliente, token)
+        .then((perfil) => {
+          if (!cancelado) setResultadoCliente({ id: valorCliente, estado: 'ok', nombre: perfil.fullName || perfil.email || '', texto: '' });
+        })
+        .catch((err) => {
+          if (cancelado) return;
+          if (err.status === 404) {
+            setResultadoCliente({ id: valorCliente, estado: 'noExiste', nombre: '', texto: '' });
+          } else {
+            // No se pudo comprobar (servicio caído, etc.): no se bloquea la venta, Reservas lo vuelve a validar
+            setResultadoCliente({ id: valorCliente, estado: 'error', nombre: '', texto: err.message });
+          }
+        });
+    }, 400);
+    return () => { cancelado = true; clearTimeout(espera); };
+  }, [idClienteValido, idCliente, valorCliente, token]);
+
+  // Estado mostrado: 'vacio' | 'comprobando' | 'ok' | 'noExiste' | 'error'
+  const clienteVerificado = !idClienteValido
+    ? { id: valorCliente, estado: 'vacio', nombre: '', texto: '' }
+    : resultadoCliente.id === valorCliente
+      ? resultadoCliente
+      : { id: valorCliente, estado: 'comprobando', nombre: '', texto: '' };
+
+  const clienteNoValido = cliente.tipo === 'registrado'
+    && (clienteVerificado.estado === 'noExiste' || clienteVerificado.estado === 'comprobando');
 
   /* Sesiones a la venta del cine en la fecha elegida */
   useEffect(() => {
@@ -101,6 +141,7 @@ export default function TaquillaPage() {
   function reiniciarSeleccion() {
     setButacas([]);
     setAviso(null);
+    setErrorCobro('');
   }
 
   function cambiarCantidad(n) {
@@ -157,8 +198,9 @@ export default function TaquillaPage() {
   async function handleReservar(e) {
     e.preventDefault();
     setAviso(null);
+    setErrorCobro('');
     if (butacas.length !== cantidad) {
-      setAviso({ tipo: 'error', texto: `Selecciona ${cantidad} butaca${cantidad > 1 ? 's' : ''} en el mapa.` });
+      setErrorCobro(`Selecciona ${cantidad} butaca${cantidad > 1 ? 's' : ''} en el mapa.`);
       return;
     }
     setProcesando(true);
@@ -170,7 +212,9 @@ export default function TaquillaPage() {
       }, token);
       setReserva(nueva);
     } catch (err) {
-      setAviso({ tipo: 'error', texto: `No se pudo reservar: ${err.message}` });
+      setErrorCobro(err.status === 404 && cliente.tipo === 'registrado'
+        ? `No existe ningún cliente registrado con el número ${cliente.userId}.`
+        : `No se pudo reservar: ${err.message}`);
       if (err.status === 409) {
         setButacas([]);
         cargarOcupadas();
@@ -182,6 +226,7 @@ export default function TaquillaPage() {
 
   async function handleCobrar() {
     setProcesando(true);
+    setErrorCobro('');
     try {
       const formulario = await iniciarPagoRedsys(reserva.id, token);
       guardarPagoEnCurso({
@@ -199,7 +244,7 @@ export default function TaquillaPage() {
       irARedsys(formulario);
     } catch (err) {
       setProcesando(false);
-      setAviso({ tipo: 'error', texto: `No se pudo iniciar el cobro: ${err.message}` });
+      setErrorCobro(`No se pudo iniciar el cobro: ${err.message}`);
     }
   }
 
@@ -423,10 +468,21 @@ export default function TaquillaPage() {
                     className="admin-input"
                     placeholder="Ej. 1"
                     value={cliente.userId}
-                    onChange={(e) => setCliente({ ...cliente, userId: e.target.value })}
+                    onChange={(e) => { setCliente({ ...cliente, userId: e.target.value }); setErrorCobro(''); }}
+                    aria-invalid={clienteVerificado.estado === 'noExiste'}
+                    aria-describedby="tq-userid-estado"
+                    style={clienteVerificado.estado === 'noExiste' ? { borderColor: '#d9383a', background: '#fff5f5' } : undefined}
                   />
-                  <small style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginTop: '4px', display: 'block' }}>
-                    Indica el nº de cliente que el usuario tiene en su perfil para sumarle puntos.
+                  <small id="tq-userid-estado" role="status" style={{ fontSize: '0.8rem', marginTop: '4px', display: 'block', color: 'var(--text-muted)' }}>
+                    {clienteVerificado.estado === 'comprobando' && 'Comprobando cliente…'}
+                    {clienteVerificado.estado === 'ok' && (
+                      <span style={{ color: '#1e7b34', fontWeight: 600 }}>{clienteVerificado.nombre || `Cliente nº ${clienteVerificado.id}`}</span>
+                    )}
+                    {clienteVerificado.estado === 'noExiste' && (
+                      <span style={{ color: '#d9383a', fontWeight: 600 }}>No existe ningún cliente registrado con ese número.</span>
+                    )}
+                    {clienteVerificado.estado === 'error' && `No se pudo comprobar el cliente (${clienteVerificado.texto}).`}
+                    {clienteVerificado.estado === 'vacio' && 'Indica el nº de cliente que el usuario tiene en su perfil para sumarle puntos.'}
                   </small>
                 </div>
               )}
@@ -447,11 +503,13 @@ export default function TaquillaPage() {
                 <strong style={{ fontSize: '1.4rem', color: 'var(--granate)' }}>{total} €</strong>
               </div>
 
+              {errorCobro && <div className="cinasee-error" role="alert" style={{ marginBottom: '12px' }}>{errorCobro}</div>}
+
               <button
                 type="submit"
                 className="admin-btn admin-btn-primary"
                 style={{ width: '100%', padding: '12px', fontSize: '0.95rem' }}
-                disabled={butacas.length !== cantidad || procesando || !token}
+                disabled={butacas.length !== cantidad || procesando || !token || clienteNoValido}
               >
                 {procesando ? 'Bloqueando butacas…' : 'Reservar butacas'}
               </button>
@@ -469,6 +527,7 @@ export default function TaquillaPage() {
               <p style={{ fontSize: '1.3rem', fontWeight: 700, color: 'var(--granate)' }}>
                 Total a cobrar: {Number(reserva.totalAmount).toFixed(2)} €
               </p>
+              {errorCobro && <div className="cinasee-error" role="alert" style={{ marginBottom: '12px' }}>{errorCobro}</div>}
               <button
                 type="button"
                 className="admin-btn admin-btn-primary"

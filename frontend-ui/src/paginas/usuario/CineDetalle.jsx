@@ -5,27 +5,7 @@ import { useAuth } from '../../context/useAuth';
 import { tokenParaLeer } from '../../api/usuarios';
 import { obtenerCine, cargarCarteleraCine, nombreGenero } from '../../api/cartelera';
 import { Cargando, ErrorCarga, SinDatos } from '../../components/EstadoCarga';
-
-function generarDias() {
-  const dias = [];
-  const hoy = new Date();
-  hoy.setHours(0, 0, 0, 0);
-  for (let i = 0; i < 7; i++) {
-    const d = new Date(hoy);
-    d.setDate(hoy.getDate() + i);
-    dias.push(d);
-  }
-  return dias;
-}
-
-const DIAS_SEMANA = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
-const MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
-
-function formatDia(d, index) {
-  if (index === 0) return { label: 'Hoy', sub: `${d.getDate()} ${MESES[d.getMonth()]}` };
-  if (index === 1) return { label: 'Mañana', sub: `${d.getDate()} ${MESES[d.getMonth()]}` };
-  return { label: DIAS_SEMANA[d.getDay()], sub: `${d.getDate()} ${MESES[d.getMonth()]}` };
-}
+import { generarDias, formatDia } from '../../utils/dias';
 
 export default function CineDetalle() {
   const { cineId } = useParams();

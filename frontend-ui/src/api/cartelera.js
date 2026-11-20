@@ -169,16 +169,7 @@ export async function cargarCarteleraCine(cinemaId, fecha, token) {
     .filter((s) => s.status === 'A_LA_VENTA' && salaPorId.has(s.roomId) && fechaSesion(s.startTime).getTime() > ahora)
     .sort((a, b) => String(a.startTime).localeCompare(String(b.startTime)))
     .forEach((s) => {
-      const sala = salaPorId.get(s.roomId);
-      (porPelicula[s.movieId] ||= []).push({
-        showId: s.id,                // id de la sesión en Cartelera = showId en Reservas
-        roomId: s.roomId,
-        startTime: s.startTime,
-        hora: horaSesion(s.startTime),
-        salaNombre: sala.name || '',
-        formato: TIPOS_SALA[sala.roomType] || sala.roomType || '',
-        precio: Number(s.ticketPrice) || 0,
-      });
+      (porPelicula[s.movieId] ||= []).push(adaptarSesion(s, salaPorId.get(s.roomId)));
     });
 
   const catalogo = new Map((pelis || []).map((m) => [m.id, m]));
@@ -186,6 +177,46 @@ export async function cargarCarteleraCine(cinemaId, fecha, token) {
     .filter((movieId) => catalogo.has(movieId))
     .map((movieId) => adaptarPelicula(catalogo.get(movieId)));
   return { peliculas, sesionesPorPelicula: porPelicula };
+}
+
+/** GET /api/v1/sessions?movieId= (público) -> todas las sesiones de una película */
+export function obtenerSesionesPelicula(movieId) {
+  return apiFetch('/api/v1/sessions', { query: { movieId } });
+}
+
+/**
+ * Pases de una película: sesiones A_LA_VENTA que aún no han empezado, en cualquier cine,
+ * ordenadas por hora. Cada pase lleva su cinemaId y su día (AAAA-MM-DD) para agruparlos.
+ * Leer las salas exige token (el del usuario o uno de invitado).
+ */
+export async function cargarSesionesPelicula(movieId, token) {
+  const [salas, sesiones] = await Promise.all([
+    obtenerSalas(token),
+    obtenerSesionesPelicula(movieId),
+  ]);
+  const salaPorId = new Map((salas || []).map((s) => [s.id, s]));
+  const ahora = Date.now();
+
+  return (sesiones || [])
+    .filter((s) => s.status === 'A_LA_VENTA' && salaPorId.has(s.roomId) && fechaSesion(s.startTime).getTime() > ahora)
+    .sort((a, b) => String(a.startTime).localeCompare(String(b.startTime)))
+    .map((s) => {
+      const sala = salaPorId.get(s.roomId);
+      return { ...adaptarSesion(s, sala), cinemaId: sala.cinemaId, dia: fechaIso(fechaSesion(s.startTime)) };
+    });
+}
+
+/** Sesión de Cartelera en el formato que usan las fichas y la compra */
+function adaptarSesion(s, sala) {
+  return {
+    showId: s.id,                // id de la sesión en Cartelera = showId en Reservas
+    roomId: s.roomId,
+    startTime: s.startTime,
+    hora: horaSesion(s.startTime),
+    salaNombre: sala.name || '',
+    formato: TIPOS_SALA[sala.roomType] || sala.roomType || '',
+    precio: Number(s.ticketPrice) || 0,
+  };
 }
 
 /** Película de Cartelera con valores por defecto para los campos opcionales */
