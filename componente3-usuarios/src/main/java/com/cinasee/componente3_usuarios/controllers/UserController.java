@@ -1,13 +1,18 @@
 package com.cinasee.componente3_usuarios.controllers;
 
+import com.cinasee.componente3_usuarios.dto.AssignRoleRequest;
 import com.cinasee.componente3_usuarios.dto.PurchaseHistoryItem;
 import com.cinasee.componente3_usuarios.dto.UpdateUserProfileRequest;
 import com.cinasee.componente3_usuarios.dto.UserProfile;
 import com.cinasee.componente3_usuarios.services.UserService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.parameters.P;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -53,5 +58,18 @@ public class UserController implements UsersApi {
     @PreAuthorize("hasAnyRole('ADMIN', 'STAFF_TAQUILLA') or #userId.toString() == authentication.name")
     public ResponseEntity<List<PurchaseHistoryItem>> getUserHistory(@P("userId") Long userId) {
         return ResponseEntity.ok(userService.getUserHistory(userId));
+    }
+
+    /**
+     * Asignación directa de rol a un usuario por parte de un Administrador.
+     */
+    @PutMapping("/users/{userId}/role")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<Void> assignUserRole(
+            @PathVariable Long userId,
+            @RequestBody @Valid AssignRoleRequest request
+    ) {
+        userService.assignRole(userId, request);
+        return ResponseEntity.ok().build();
     }
 }

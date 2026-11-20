@@ -132,3 +132,12 @@ export function revisarSolicitudRol(requestId, datos, token) {
     token,
   });
 }
+
+/** PUT /v1/iam/users/{id}/role -> asignar rol directamente por ID (solo ADMIN) */
+export function asignarRolUsuario(userId, datos, token) {
+  return apiFetch(`/v1/iam/users/${userId}/role`, {
+    method: 'PUT',
+    body: datos,
+    token,
+  });
+}

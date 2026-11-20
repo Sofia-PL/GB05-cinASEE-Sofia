@@ -1,5 +1,6 @@
 package com.cinasee.componente3_usuarios.services;
 
+import com.cinasee.componente3_usuarios.dto.AssignRoleRequest;
 import com.cinasee.componente3_usuarios.dto.PurchaseHistoryItem;
 import com.cinasee.componente3_usuarios.dto.UpdateUserProfileRequest;
 import com.cinasee.componente3_usuarios.dto.UserProfile;
@@ -93,6 +94,35 @@ public class UserServiceImpl implements UserService {
         return purchaseHistoryRepository.findByUserIdOrderByPurchaseDateDesc(userId).stream()
                 .map(this::toPurchaseHistoryItem)
                 .toList();
+    }
+
+    @Override
+    @Transactional
+    public void assignRole(Long userId, AssignRoleRequest request) {
+        User user = findUser(userId);
+
+        Role newRole;
+        try {
+            newRole = Role.valueOf(request.getRole());
+        } catch (IllegalArgumentException | NullPointerException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Rol no válido: " + request.getRole());
+        }
+
+        user.setRole(newRole);
+
+        if (newRole == Role.STAFF_TAQUILLA) {
+            if (request.getCinemaId() != null && !request.getCinemaId().isBlank()) {
+                user.setCinemaId(request.getCinemaId().trim());
+            }
+            if (request.getCinemaManager() != null) {
+                user.setCinemaManager(request.getCinemaManager());
+            }
+        } else {
+            user.setCinemaId(null);
+            user.setCinemaManager(false);
+        }
+
+        userRepository.save(user);
     }
 
     private User findUser(Long userId) {
