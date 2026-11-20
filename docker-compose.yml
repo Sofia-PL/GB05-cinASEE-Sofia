@@ -125,6 +125,7 @@ services:
       MONGO_INITDB_DATABASE: cine_catalog_db
     volumes:
       - mongo_data:/data/db
+      - mongo_config_data:/data/configdb
     healthcheck:
       test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
       interval: 10s
@@ -345,6 +346,8 @@ services:
 # ==========================================
 volumes:
   mongo_data:
+  mongo_config_data:
+    name: cinasee-mongo-config
   postgres_reservas_data:
   postgres_analitica_data:
   rabbitmq_data:
