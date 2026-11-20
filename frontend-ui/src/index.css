@@ -740,11 +740,12 @@ p {
 }
 
 
+/* Todos los cines a la vista: sin recorte ni difuminado, para que se pueda entrar en cualquiera */
 .cines-preview {
   --cols: 4;
   --gap: 20px;
   position: relative;
-  padding-bottom: 56px;
+  padding-bottom: 8px;
   container-type: inline-size;
 }
 
@@ -753,35 +754,6 @@ p {
   gap: var(--gap);
   margin: 0;
   padding: 8px 4px 0;
-  /* Altura equilibrada para mostrar la primera fila y el inicio de la segunda */
-  max-height: 380px;
-  overflow: hidden;
-  overflow: clip;
-}
-
-/* Difuminado suave hacia el fondo sobre la segunda fila */
-.cines-preview::after {
-  content: '';
-  position: absolute;
-  top: 240px;
-  right: -8px;
-  bottom: 46px;
-  left: -8px;
-  z-index: 2;
-  background: linear-gradient(180deg,
-      rgba(247, 235, 221, 0) 0%,
-      rgba(247, 235, 221, 0.72) 42%,
-      var(--cream) 100%);
-  pointer-events: none;
-}
-
-/* Botón centrado debajo del difuminado */
-.cines-preview>.home-button {
-  position: absolute;
-  left: 50%;
-  bottom: 0;
-  z-index: 3;
-  translate: -50% 0;
 }
 
 /* Proporciones más armónicas y compactas en el avance para que no queden alargadas */
