@@ -147,7 +147,10 @@ export default function AdminSalasPage() {
       setRecargaCines((n) => n + 1);
       recargarCines();
     } catch (err) {
-      setAviso({ tipo: 'error', texto: `No se pudo eliminar el cine: ${err.message}` });
+      const texto = err.status === 409
+        ? `No se puede eliminar "${cineActivo.name}" porque todavía tiene salas asociadas. Elimina primero las salas del cine.`
+        : `No se pudo eliminar el cine: ${err.message}`;
+      setAviso({ tipo: 'error', texto });
     }
   }
 

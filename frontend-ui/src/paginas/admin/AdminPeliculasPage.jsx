@@ -139,7 +139,10 @@ export default function AdminPeliculasPage() {
       setAviso({ tipo: 'ok', texto: `Película "${peli.title}" eliminada.` });
       setRecarga((n) => n + 1);
     } catch (err) {
-      setAviso({ tipo: 'error', texto: `No se pudo eliminar la película: ${err.message}` });
+      const texto = err.status === 409
+        ? `No se puede eliminar "${peli.title}" porque tiene sesiones asociadas. Resuelve esas sesiones antes de eliminarla.`
+        : `No se pudo eliminar la película: ${err.message}`;
+      setAviso({ tipo: 'error', texto });
     }
   }
 
