@@ -52,7 +52,7 @@ export default function Navbar() {
         {/* STAFF */}
         {user?.rol === 'STAFF' && (
           <>
-            <Link to="/empleados/validar-qr" className="site-navbar-link">Validar QR</Link>
+            <Link to="/empleados/validar-qr" className="site-navbar-link">Validar entradas</Link>
             <Link to="/empleados/taquilla"   className="site-navbar-link">Taquilla</Link>
             {user?.canReviewRoleRequests && (
               <Link to="/admin/solicitudes"  className="site-navbar-link">Solicitudes</Link>

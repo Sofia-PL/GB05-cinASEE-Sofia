@@ -1,11 +1,13 @@
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { useAuth } from '../../context/useAuth';
 import { useCine } from '../../context/useCine';
 import { validarEntrada, nombreButaca } from '../../api/reservas';
 import { obtenerSala, obtenerSesion, obtenerPelicula } from '../../api/cartelera';
 
-/** El navegador puede leer QR con la cámara (API BarcodeDetector) */
-const LECTOR_DISPONIBLE = typeof window !== 'undefined' && 'BarcodeDetector' in window;
+/*
+ * Validación de entradas por código. La lectura del QR la hace un dispositivo
+ * asignado a cada empleado, fuera de esta aplicación: aquí solo se introduce el código.
+ */
 
 /** Título de la película y nombre de la sala de la entrada validada (si Cartelera responde) */
 async function detallesEntrada(c, token) {
@@ -18,58 +20,6 @@ async function detallesEntrada(c, token) {
   return { sala, pelicula };
 }
 
-/** Lector de QR con la cámara: llama a onCodigo con el texto leído */
-function LectorCamara({ onCodigo, onCerrar }) {
-  const video = useRef(null);
-  const [error, setError] = useState('');
-
-  useEffect(() => {
-    let stream = null;
-    let timer = null;
-    let activo = true;
-    const detector = new window.BarcodeDetector({ formats: ['qr_code'] });
-
-    navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
-      .then((s) => {
-        if (!activo) { s.getTracks().forEach((t) => t.stop()); return; }
-        stream = s;
-        video.current.srcObject = s;
-        video.current.play();
-        timer = window.setInterval(async () => {
-          try {
-            const codigos = await detector.detect(video.current);
-            if (codigos.length > 0 && activo) {
-              activo = false;
-              onCodigo(codigos[0].rawValue);
-            }
-          } catch {
-            // fotograma no listo: se vuelve a intentar
-          }
-        }, 300);
-      })
-      .catch(() => setError('No se pudo acceder a la cámara. Revisa los permisos del navegador.'));
-
-    return () => {
-      activo = false;
-      window.clearInterval(timer);
-      stream?.getTracks().forEach((t) => t.stop());
-    };
-  }, [onCodigo]);
-
-  return (
-    <div style={{ marginBottom: '24px', textAlign: 'center' }}>
-      {error ? (
-        <div className="cinasee-error" role="alert">{error}</div>
-      ) : (
-        <video ref={video} muted playsInline style={{ width: '100%', maxHeight: '320px', borderRadius: 'var(--radius-sm)', background: '#180507' }} />
-      )}
-      <button type="button" className="home-button home-button-dark" onClick={onCerrar} style={{ marginTop: '10px' }}>
-        Cerrar cámara
-      </button>
-    </div>
-  );
-}
-
 export default function ValidacionQRPage() {
   const { tokenUsuario } = useAuth();
   const { cines } = useCine();
@@ -77,13 +27,12 @@ export default function ValidacionQRPage() {
   const [codigo, setCodigo] = useState('');
   const [resultado, setResultado] = useState(null);
   const [validando, setValidando] = useState(false);
-  const [camara, setCamara] = useState(false);
 
   /** La entrada se valida en Reservas (Comp. 2), que la marca como usada */
   async function validar(codigoLeido) {
     const cleanCode = (codigoLeido || '').trim();
     if (!cleanCode) {
-      setResultado({ valido: false, mensaje: 'Introduce o escanea un código de entrada antes de validar.' });
+      setResultado({ valido: false, mensaje: 'Introduce un código de entrada antes de validar.' });
       return;
     }
     setValidando(true);
@@ -125,21 +74,15 @@ export default function ValidacionQRPage() {
     validar(codigo);
   }
 
-  function handleCodigoCamara(texto) {
-    setCamara(false);
-    setCodigo(texto);
-    validar(texto);
-  }
-
   return (
     <div style={{ maxWidth: '800px', margin: '0 auto', padding: 'clamp(28px, 4vw, 56px) var(--gutter)' }}>
       <header style={{ marginBottom: '28px', textAlign: 'center' }}>
         <p className="home-eyebrow">Terminal de Staff</p>
         <h1 style={{ color: 'var(--burgundy)', fontSize: '2.4rem', margin: '6px 0' }}>
-          Validación de Entradas QR
+          Validación de Entradas
         </h1>
         <p style={{ color: 'var(--text-muted)' }}>
-          Escanea el código QR de la entrada o introduce su código para dar acceso a sala.
+          Introduce el código de la entrada para dar acceso a sala.
         </p>
       </header>
 
@@ -154,8 +97,6 @@ export default function ValidacionQRPage() {
         {!token && (
           <div className="cinasee-error" role="alert">Tu sesión ha caducado. Vuelve a iniciar sesión para validar entradas.</div>
         )}
-
-        {camara && <LectorCamara onCodigo={handleCodigoCamara} onCerrar={() => setCamara(false)} />}
 
         <form onSubmit={handleSubmit} style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
           <input
@@ -178,17 +119,6 @@ export default function ValidacionQRPage() {
           <button className="home-button" type="submit" disabled={validando || !token} style={{ padding: '0.8em 1.6em' }}>
             {validando ? 'Validando…' : 'Validar código'}
           </button>
-          {LECTOR_DISPONIBLE && !camara && (
-            <button
-              type="button"
-              className="home-button home-button-dark"
-              onClick={() => { setResultado(null); setCamara(true); }}
-              disabled={!token}
-              style={{ padding: '0.8em 1.2em' }}
-            >
-              Escanear con la cámara
-            </button>
-          )}
         </form>
 
         {resultado && (
