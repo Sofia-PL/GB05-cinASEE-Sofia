@@ -312,15 +312,59 @@ describe lo que ya existe.
 
 ---
 
-## 12. Decisiones y limitaciones conocidas
+## 12. Tests
+
+```bash
+cd componente2-reservas
+./mvnw test        # Windows: .\mvnw.cmd test
+```
+
+No necesitan Docker ni ningún otro servicio. El perfil `test`
+(`src/test/resources/application-test.yaml`) usa:
+
+- **H2 en memoria** en modo PostgreSQL, en lugar de PostgreSQL.
+- **Mocks** (`@MockitoBean`) para los clientes Feign de C1 y C3 y para el
+  publicador de RabbitMQ.
+- **Pasarela simulada** y una clave de Redsys inventada solo para tests. Nunca se
+  conecta a Redsys.
+- **Tareas programadas desactivadas:** el barrido de expiradas y el relay del
+  outbox se invocan a mano para que los tests sean deterministas.
+- **Reloj controlado** (`MutableClock`) para avanzar el tiempo y probar los TTL
+  sin esperar.
+
+| Test | Tipo | Qué cubre |
+|---|---|---|
+| `ReservationFlowIntegrationTest` | Integración (`@SpringBootTest` + H2) | Doble venta imposible con concurrencia real (varios hilos a la vez), bloqueo hasta que caduca el TTL, barrido periódico, flujo reservar → pagar → `PaymentCompleted`, cancelación y devolución (`PaymentRefunded`), check-in una sola vez, informes que solo cuentan `CONFIRMED` |
+| `RedsysFlowIntegrationTest` | Integración (`@SpringBootTest` + H2) | Flujo completo con Redsys, butacas protegidas durante el pago, pago abandonado que caduca al acabar el margen, pago denegado y reintento con otro pedido |
+| `ReservationControllerTest` | Capa web (`@WebMvcTest`) | Contrato HTTP, validación, códigos de estado y permisos por rol y propietario |
+| `ReservationServiceTest` | Unitaria (Mockito) | Creación de reservas, validación contra el catálogo y transiciones de estado |
+| `PricingServiceTest` | Unitaria | Precio base, día del espectador, descuento por puntos y que los descuentos no se acumulen |
+| `PaymentServiceTest`, `RedsysPaymentServiceTest` | Unitaria (Mockito) | Pago simulado y Redsys: confirmación, rechazo y respuestas inválidas |
+| `RedsysSignatureTest` | Unitaria | Firma y verificación HMAC-SHA256 + 3DES; clave de longitud incorrecta |
+| `TicketServiceTest`, `TicketCodeGeneratorTest` | Unitaria | Emisión y validación de entradas; códigos únicos |
+| `ReservationAccessPolicyTest`, `CallerIdentityTest` | Unitaria | Quién puede ver o modificar cada reserva; identidad extraída del JWT |
+| `ReservationExpirationSchedulerTest` | Unitaria (Mockito) | Barrido de reservas caducadas |
+| `OutboxRelayTest` | Unitaria (Mockito) | Publica los pendientes y los marca; con el broker caído anota el error y detiene el lote |
+| `PaymentCompletedContractTest` | Contrato | El JSON publicado lo pueden leer C3 y C4, incluida la compra de invitado (`userId` nulo) |
+| `RemoteDataServiceTest`, `ForwardJwtFeignConfigTest` | Unitaria | Llamadas a C1/C3 y sus errores; propagación del token (*token relay*) |
+| `CatalogTimeTest` | Unitaria | Hora de las sesiones interpretada en `CATALOG_TIME_ZONE` |
+| `Componente2ReservasApplicationTests` | Arranque | El contexto arranca con el perfil `test` |
+
+Para pruebas manuales sin C1 ni C3 está el perfil `isolated` con WireMock:
+ver [docs/ejecucion-aislada.md](docs/ejecucion-aislada.md).
+
+---
+
+## 13. Decisiones y limitaciones conocidas
 
 - **Database per service:** C2 nunca lee Mongo de C1 ni MySQL de C3; todo pasa
   por HTTP.
 - **Outbox:** evita perder eventos si el broker cae entre el pago y la
   publicación.
 - **Sin seed:** la base arranca vacía; las reservas se crean con la aplicación.
-- **Sin perfil de test aislado:** los tests de integración necesitan PostgreSQL
-  y RabbitMQ reales.
+- **Tests sobre H2, no sobre PostgreSQL:** H2 en modo PostgreSQL respeta la
+  restricción `UNIQUE` de butacas, pero no es idéntico a PostgreSQL. Para validar
+  contra la base real hay que usar el entorno aislado o el compose.
 - **Check-in:** valida el código de la entrada y marca `checked_in_at`; no
   comprueba la hora de la sesión.
 # Migración de IDs de Cartelera

@@ -231,7 +231,34 @@ errores se registran y no se relanzan para no bloquear la cola.
 
 ---
 
-## 8. Decisiones y limitaciones conocidas
+## 8. Tests
+
+```bash
+cd componente4-analitica
+./mvnw test        # Windows: .\mvnw.cmd test
+```
+
+No necesitan Docker ni ningún otro servicio. El perfil `test`
+(`src/test/resources/application-test.yml`) usa:
+
+- **H2 en memoria** en modo PostgreSQL, en lugar de PostgreSQL.
+- **Listener de RabbitMQ sin arrancar** (`auto-startup: false`), así que no
+  intenta conectar al broker.
+- **URLs ficticias** para C1, C2 y C3: los clientes Feign se sustituyen por mocks.
+
+| Test | Tipo | Qué cubre |
+|---|---|---|
+| `AnalyticsServiceTest` | Unitaria (Mockito, `@Nested`) | Ocupación (filtros por cine, sala, día y franja; aforo estimado si C1 falla), Box Office, recomendaciones (puntuación y orden) y respaldo con `analytics_events` si C2 falla |
+| `AnalyticsControllerTest` | Capa web (`@WebMvcTest`) | Endpoints de métricas, informes y recomendaciones; acceso por rol y propietario; validación de parámetros |
+| `AnalyticsEventRepositoryTest` | Repositorio (`@DataJpaTest` + H2) | Agregaciones: entradas por cine, sala y día; media por cine; taquilla por película y periodo; géneros más vistos por usuario |
+| `PaymentEventListenerTest` | Unitaria (Mockito) | Guardado del hecho de venta, enriquecimiento con título y género desde C1, y que un error no bloquee la cola |
+| `PaymentCompletedContractTest` | Contrato | Deserialización del evento que publica C2 |
+| `ForwardJwtFeignConfigTest` | Unitaria | Propagación del token hacia C1, C2 y C3 |
+| `AnaliticaApplicationTests` | Arranque | El contexto arranca con el perfil `test` |
+
+---
+
+## 9. Decisiones y limitaciones conocidas
 
 - **C2 como fuente principal, eventos como respaldo:** se evita duplicar la
   lógica de ventas y se mantiene el histórico para recomendaciones.
@@ -245,11 +272,9 @@ errores se registran y no se relanzan para no bloquear la cola.
 - **`distributorId` sin efecto:** el catálogo ya no guarda la distribuidora
   (`Movie.distributor` se eliminó). Para que funcione habría que reintroducirla
   en C1, preferiblemente con id numérico.
-- **Sin perfil de test aislado:** el único test es
-  `AnaliticaApplicationTests.contextLoads`, un `@SpringBootTest` que necesita
-  PostgreSQL. Sin la base de datos levantada, `mvn test` falla al crear el
-  `EntityManagerFactory`. Para ejecutarlo hay que arrancar `postgres-analitica`
-  o añadir un perfil de test con H2.
+- **Tests sobre H2, no sobre PostgreSQL:** las consultas de agregación se
+  prueban con H2 en modo PostgreSQL. Es compatible para estas consultas, pero no
+  idéntico a PostgreSQL.
 - **Zona horaria explícita:** evita que un contenedor en UTC desplace las franjas
   horarias de las sesiones.
 # Migración de IDs de Cartelera
