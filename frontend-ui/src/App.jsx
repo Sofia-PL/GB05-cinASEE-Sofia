@@ -15,6 +15,7 @@ import LoginPage from './paginas/usuario/LogInPage';
 import PerfilPage from './paginas/usuario/PerfilPage';
 import Cines from './paginas/usuario/Cines';
 import CineDetalle from './paginas/usuario/CineDetalle';
+import PeliculaDetalle from './paginas/usuario/PeliculaDetalle';
 import CompraPage from './paginas/usuario/CompraPage';
 import PagoPage from './paginas/usuario/PagoPage';
 
@@ -45,7 +46,9 @@ export default function App() {
 
               {/* Rutas de Usuario / Cliente */}
               <Route path="/cartelera" element={<CarteleraPage />} />
-              <Route path="/entradas" element={<CarteleraPage />} />
+              <Route path="/peliculas/:peliculaId" element={<PeliculaDetalle />} />
+              {/* Antes era un duplicado de la cartelera: se redirige para no romper enlaces antiguos */}
+              <Route path="/entradas" element={<Navigate to="/cartelera" replace />} />
               <Route path="/cines" element={<Cines />} />
               <Route path="/cines/:cineId" element={<CineDetalle />} />
               <Route path="/login" element={<LoginPage />} />

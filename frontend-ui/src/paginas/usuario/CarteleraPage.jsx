@@ -24,7 +24,7 @@ export default function CarteleraPage() {
   }, [recarga]);
 
   function handleComprar(peliculaId) {
-    navigate('/cines', { state: { peliculaId } });
+    navigate(`/peliculas/${peliculaId}`);
   }
 
   return (
