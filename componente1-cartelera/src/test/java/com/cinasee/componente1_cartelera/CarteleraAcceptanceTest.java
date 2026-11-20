@@ -27,12 +27,15 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -94,6 +97,10 @@ class CarteleraAcceptanceTest {
             rooms.put(room.getId(), room);
             return room;
         });
+        org.mockito.Mockito.doAnswer(invocation -> {
+            rooms.remove(invocation.getArgument(0));
+            return null;
+        }).when(roomRepository).deleteById(org.mockito.ArgumentMatchers.anyString());
 
         when(sessionRepository.findAll()).thenAnswer(invocation -> new ArrayList<>(sessions.values()));
         when(sessionRepository.findById(org.mockito.ArgumentMatchers.anyString())).thenAnswer(invocation -> Optional.ofNullable(sessions.get(invocation.getArgument(0))));
@@ -106,6 +113,73 @@ class CarteleraAcceptanceTest {
             sessions.put(session.getId(), session);
             return session;
         });
+    }
+
+    @Test
+    void roomCanBeUpdatedAndCapacityIsRecalculated() throws Exception {
+        cinemas.put("cinema-1", Cinema.builder().id("cinema-1").build());
+        rooms.put("room-1", Room.builder()
+                .id("room-1")
+                .cinemaId("cinema-1")
+                .name("Sala antigua")
+                .roomType("ESTANDAR_2D")
+                .rowsCount(8)
+                .columnsCount(10)
+                .capacity(80)
+                .build());
+
+        mockMvc.perform(put("/api/v1/rooms/room-1").contextPath("/api/v1")
+                        .with(jwt().jwt(token -> token.subject("acceptance-test")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(roomRequest("cinema-1", "Sala renovada", 12, 14)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("Sala renovada"))
+                .andExpect(jsonPath("$.capacity").value(168))
+                .andExpect(jsonPath("$.rowsCount").value(12))
+                .andExpect(jsonPath("$.columnsCount").value(14));
+    }
+
+    @Test
+    void updatingUnknownRoomReturnsNotFound() throws Exception {
+        cinemas.put("cinema-1", Cinema.builder().id("cinema-1").build());
+
+        mockMvc.perform(put("/api/v1/rooms/missing").contextPath("/api/v1")
+                        .with(jwt().jwt(token -> token.subject("acceptance-test")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(roomRequest("cinema-1", "Sala nueva", 10, 12)))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void roomWithFutureSessionCannotBeDeleted() throws Exception {
+        rooms.put("room-1", Room.builder().id("room-1").build());
+        sessions.put("session-1", Session.builder()
+                .id("session-1")
+                .roomId("room-1")
+                .startTime(LocalDateTime.now().plusDays(1))
+                .status("PROGRAMADA")
+                .build());
+
+        mockMvc.perform(delete("/api/v1/rooms/room-1").contextPath("/api/v1")
+                        .with(jwt().jwt(token -> token.subject("acceptance-test"))))
+                .andExpect(status().isConflict());
+        assertTrue(rooms.containsKey("room-1"));
+    }
+
+    @Test
+    void roomWithoutFutureSessionsCanBeDeleted() throws Exception {
+        rooms.put("room-1", Room.builder().id("room-1").build());
+        sessions.put("session-1", Session.builder()
+                .id("session-1")
+                .roomId("room-1")
+                .startTime(LocalDateTime.now().plusDays(1))
+                .status("CANCELADA")
+                .build());
+
+        mockMvc.perform(delete("/api/v1/rooms/room-1").contextPath("/api/v1")
+                        .with(jwt().jwt(token -> token.subject("acceptance-test"))))
+                .andExpect(status().isNoContent());
+        assertFalse(rooms.containsKey("room-1"));
     }
 
     @Test
@@ -200,5 +274,17 @@ class CarteleraAcceptanceTest {
                   "ticketPrice": 8.5
                 }
                 """.formatted(movieId, roomId, start);
+    }
+
+    private static String roomRequest(String cinemaId, String name, int rows, int columns) {
+        return """
+                {
+                  "cinemaId": "%s",
+                  "name": "%s",
+                  "roomType": "ESTANDAR_2D",
+                  "rowsCount": %d,
+                  "columnsCount": %d
+                }
+                """.formatted(cinemaId, name, rows, columns);
     }
 }

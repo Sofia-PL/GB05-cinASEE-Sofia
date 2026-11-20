@@ -82,7 +82,8 @@ app:
     staff-password: ${APP_SEED_STAFF_PASSWORD:Staff123!}
     user-email: ${APP_SEED_USER_EMAIL:usuario@cinasee.com}
     user-password: ${APP_SEED_USER_PASSWORD:Usuario123!}
-    staff-cinema-id: ${APP_SEED_STAFF_CINEMA_ID:1}
+    # UUID del cine de Madrid que siembra C1; así la demo y la taquilla coinciden
+    staff-cinema-id: ${APP_SEED_STAFF_CINEMA_ID:550e8400-e29b-41d4-a716-446655440001}
   guest:
     rate-limit:
       # 10 peticiones de token de invitado por minuto y dispositivo

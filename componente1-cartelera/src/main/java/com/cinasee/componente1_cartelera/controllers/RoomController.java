@@ -43,5 +43,17 @@ public class RoomController {
                 .map(ResponseEntity::ok)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Sala no encontrada con ID: " + roomId));
     }
+
+    @PutMapping("/{roomId}")
+    public ResponseEntity<Room> updateRoom(@PathVariable String roomId, @RequestBody @Valid CreateRoomRequest request) {
+        Room updatedRoom = roomService.updateRoom(roomId, request);
+        return ResponseEntity.ok(updatedRoom);
+    }
+
+    @DeleteMapping("/{roomId}")
+    public ResponseEntity<Void> deleteRoom(@PathVariable String roomId) {
+        roomService.deleteRoom(roomId);
+        return ResponseEntity.noContent().build();
+    }
 }
 

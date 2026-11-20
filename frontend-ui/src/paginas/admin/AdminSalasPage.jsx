@@ -8,6 +8,8 @@ import {
   eliminarCine,
   obtenerSalasCine,
   crearSala,
+  actualizarSala,
+  eliminarSala,
   TIPOS_SALA,
 } from '../../api/cartelera';
 import { AvisoAdmin, AvisoSinToken } from './AdminAvisos';
@@ -59,6 +61,7 @@ export default function AdminSalasPage() {
   // Modales
   const [salaModal, setSalaModal] = useState(false);
   const [salaForm, setSalaForm] = useState(SALA_VACIA);
+  const [salaEnEdicion, setSalaEnEdicion] = useState(null);
   const [nuevoCineModal, setNuevoCineModal] = useState(false);
   const [nuevoCineForm, setNuevoCineForm] = useState(CINE_VACIO);
 
@@ -149,7 +152,21 @@ export default function AdminSalasPage() {
   }
 
   function abrirCrearSala() {
+    setSalaEnEdicion(null);
     setSalaForm({ ...SALA_VACIA, name: `Sala ${salas.length + 1}` });
+    setSalaModal(true);
+  }
+
+  function abrirEditarSala(sala) {
+    setSalaEnEdicion(sala.id);
+    setSalaForm({
+      name: sala.name || '',
+      roomType: sala.roomType || 'ESTANDAR_2D',
+      rowsCount: sala.rowsCount || 1,
+      columnsCount: sala.columnsCount || 1,
+      wheelchairAccessible: !!sala.wheelchairAccessible,
+      basePrice: sala.basePrice ?? 0,
+    });
     setSalaModal(true);
   }
 
@@ -157,22 +174,39 @@ export default function AdminSalasPage() {
     e.preventDefault();
     setGuardando(true);
     try {
-      await crearSala({
-        cinemaId: cineActivo.id,
+      const datos = {
+        cinemaId: salas.find((sala) => sala.id === salaEnEdicion)?.cinemaId || cineActivo.id,
         name: salaForm.name.trim(),
         roomType: salaForm.roomType,
         rowsCount: parseInt(salaForm.rowsCount, 10),
         columnsCount: parseInt(salaForm.columnsCount, 10),
         wheelchairAccessible: !!salaForm.wheelchairAccessible,
         basePrice: salaForm.basePrice === '' ? null : Number(salaForm.basePrice),
-      }, token);
-      setAviso({ tipo: 'ok', texto: `Sala "${salaForm.name}" creada en ${cineActivo.name}.` });
+      };
+      if (salaEnEdicion) {
+        await actualizarSala(salaEnEdicion, datos, token);
+        setAviso({ tipo: 'ok', texto: `Sala "${salaForm.name}" actualizada.` });
+      } else {
+        await crearSala(datos, token);
+        setAviso({ tipo: 'ok', texto: `Sala "${salaForm.name}" creada en ${cineActivo.name}.` });
+      }
       setSalaModal(false);
       setRecargaSalas((n) => n + 1);
     } catch (err) {
-      setAviso({ tipo: 'error', texto: `No se pudo crear la sala: ${err.message}` });
+      setAviso({ tipo: 'error', texto: `No se pudo ${salaEnEdicion ? 'actualizar' : 'crear'} la sala: ${err.message}` });
     } finally {
       setGuardando(false);
+    }
+  }
+
+  async function handleEliminarSala(sala) {
+    if (!window.confirm(`¿Confirmas la eliminación de la sala "${sala.name}"?`)) return;
+    try {
+      await eliminarSala(sala.id, token);
+      setAviso({ tipo: 'ok', texto: `Sala "${sala.name}" eliminada.` });
+      setRecargaSalas((n) => n + 1);
+    } catch (err) {
+      setAviso({ tipo: 'error', texto: `No se pudo eliminar la sala: ${err.message}` });
     }
   }
 
@@ -289,14 +323,28 @@ export default function AdminSalasPage() {
                         <div>Aforo: <strong>{sala.capacity} butacas</strong></div>
                         <div>Precio mínimo por entrada: <strong>{Number(sala.basePrice || 0).toFixed(2)} €</strong></div>
                       </div>
+                      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '14px' }}>
+                        <button
+                          type="button"
+                          className="admin-btn admin-btn-secondary admin-btn-sm"
+                          onClick={() => abrirEditarSala(sala)}
+                          disabled={!token}
+                        >
+                          Editar
+                        </button>
+                        <button
+                          type="button"
+                          className="admin-btn admin-btn-danger admin-btn-sm"
+                          onClick={() => handleEliminarSala(sala)}
+                          disabled={!token}
+                        >
+                          Eliminar
+                        </button>
+                      </div>
                     </article>
                   ))}
                 </div>
               )}
-
-              <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '18px' }}>
-                Cartelera no permite todavía modificar ni eliminar salas: solo crearlas.
-              </p>
             </>
           )}
 
@@ -319,7 +367,7 @@ export default function AdminSalasPage() {
         <div className="admin-modal-backdrop" onClick={() => setSalaModal(false)}>
           <div className="admin-modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="admin-modal-header">
-              <h2 className="admin-modal-title">Nueva Sala para {cineActivo.name}</h2>
+              <h2 className="admin-modal-title">{salaEnEdicion ? 'Editar sala' : 'Nueva Sala'} para {cineActivo.name}</h2>
               <button type="button" className="admin-btn admin-btn-secondary admin-btn-sm" onClick={() => setSalaModal(false)}>
                 ✕
               </button>
@@ -416,7 +464,7 @@ export default function AdminSalasPage() {
                   Cancelar
                 </button>
                 <button type="submit" className="admin-btn admin-btn-primary" disabled={guardando}>
-                  {guardando ? 'Guardando…' : 'Crear Sala'}
+                  {guardando ? 'Guardando…' : salaEnEdicion ? 'Guardar cambios' : 'Crear Sala'}
                 </button>
               </div>
             </form>
