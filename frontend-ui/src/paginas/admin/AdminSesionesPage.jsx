@@ -111,6 +111,10 @@ export default function AdminSesionesPage() {
   const selectedPeli = peliculas.find((p) => p.id === selectedPeliId) || null;
   const salaPorId = Object.fromEntries(salas.map((s) => [s.id, s]));
   const salaLote = salas.find((s) => s.id === batchForm?.roomId) || null;
+  const sesionPorId = new Map([
+    ...sesiones,
+    ...(batchResult?.created || []),
+  ].map((sesion) => [sesion.id, sesion]));
 
   // Sesiones del cine elegido (sus salas). Sin token no se conocen las salas: se muestran todas.
   const sesionesCine = token ? sesiones.filter((s) => salaPorId[s.roomId]) : sesiones;
@@ -351,9 +355,12 @@ export default function AdminSesionesPage() {
               <ul style={{ margin: '8px 0 0', paddingLeft: '22px' }}>
                 {batchResult.conflicts.map((conflicto) => {
                   const inicio = partirFechaHora(conflicto.startTime);
+                  const sesionConflicto = sesionPorId.get(conflicto.conflictingSessionId);
+                  const tituloConflicto = peliculas.find((pelicula) => pelicula.id === sesionConflicto?.movieId)?.title
+                    || 'otra película';
                   return (
                     <li key={`${conflicto.startTime}-${conflicto.conflictingSessionId}`}>
-                      {inicio.fecha} · {inicio.hora} (conflicto con la sesión {conflicto.conflictingSessionId})
+                      {inicio.fecha} · {inicio.hora} (conflicto con «{tituloConflicto}»)
                     </li>
                   );
                 })}
