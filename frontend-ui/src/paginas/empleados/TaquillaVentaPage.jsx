@@ -339,7 +339,7 @@ export default function TaquillaPage() {
                 >
                   {sesiones.map((s) => (
                     <option key={s.showId} value={s.showId}>
-                      {s.hora} — {s.salaNombre} ({s.formato}) — {Number(s.precio || 0).toFixed(2)} €
+                      {s.hora}, {s.salaNombre} ({s.formato}), {Number(s.precio || 0).toFixed(2)} €
                     </option>
                   ))}
                 </select>
@@ -375,7 +375,7 @@ export default function TaquillaPage() {
                   </h2>
                   <span style={{ fontSize: '0.84rem', color: 'var(--text-muted)' }}>
                     {layout.filas} filas × {layout.cols} columnas
-                    {ocupadasSet && ` · Libres: ${layout.filas * layout.cols - ocupadasSet.size}`}
+                    {ocupadasSet && `, libres: ${layout.filas * layout.cols - ocupadasSet.size}`}
                   </span>
                 </div>
                 {reserva === null && (
@@ -428,7 +428,7 @@ export default function TaquillaPage() {
                 lineHeight: 1.6,
               }}>
                 <div>Película: <strong>{pelicula?.title || 'Sin seleccionar'}</strong></div>
-                <div>Sesión: <strong>{sesion?.hora || ''} · {sesion?.salaNombre || ''}</strong></div>
+                <div>Sesión: <strong>{[sesion?.hora, sesion?.salaNombre].filter(Boolean).join(', ')}</strong></div>
                 <div>Entradas: <strong>{cantidad} × {Number(sesion?.precio || 0).toFixed(2)} €</strong></div>
                 <div>Butacas: <strong style={{ color: 'var(--granate)' }}>{etiquetas || 'Sin asignar'}</strong></div>
               </div>
@@ -522,7 +522,7 @@ export default function TaquillaPage() {
               </div>
               <p style={{ fontSize: '0.9rem' }}>
                 Precio por entrada: {Number(reserva.unitPrice).toFixed(2)} €
-                {DESCUENTOS[reserva.discountApplied] && ` · ${DESCUENTOS[reserva.discountApplied]}`}
+                {DESCUENTOS[reserva.discountApplied] && `, ${DESCUENTOS[reserva.discountApplied]}`}
               </p>
               <p style={{ fontSize: '1.3rem', fontWeight: 700, color: 'var(--granate)' }}>
                 Total a cobrar: {Number(reserva.totalAmount).toFixed(2)} €

@@ -274,7 +274,7 @@ export default function CineDetalle() {
                             >
                               <span className="detalle-hora-time">{ses.hora}</span>
                               <span className="detalle-hora-meta">
-                                {[ses.formato, ses.salaNombre].filter(Boolean).join(' · ') || 'Sala de proyección'}
+                                {[ses.formato, ses.salaNombre].filter(Boolean).join(', ') || 'Sala de proyección'}
                               </span>
                               <span className="detalle-hora-price">{ses.precio.toFixed(2)} €</span>
                             </button>

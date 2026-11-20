@@ -5,7 +5,8 @@ import { useCine } from '../../context/useCine';
 import { misReservas, cancelarReserva, nombreButaca } from '../../api/reservas';
 import { obtenerPelicula, obtenerSala, GENEROS, nombreGenero } from '../../api/cartelera';
 import { obtenerRecomendaciones } from '../../api/analitica';
-import CodigoQR from '../../components/CodigoQR';
+import EntradaTicket from '../../components/entrada/EntradaTicket';
+import { construirEntrada } from '../../components/entrada/datosEntrada';
 import EntradasImprimibles from '../../components/EntradasImprimibles';
 import { Cargando, ErrorCarga } from '../../components/EstadoCarga';
 
@@ -29,11 +30,11 @@ const ESTADOS_RESERVA = {
 /** Reservas del usuario (Comp. 2) con título de la película (Comp. 1) y sala */
 async function cargarEntradas(token) {
   const reservas = (await misReservas(token)).filter((r) => r.status === 'CONFIRMED' || r.status === 'REFUNDED');
-  const titulos = {};
+  const peliculas = {};
   const salas = {};
   await Promise.all([
     ...[...new Set(reservas.map((r) => r.movieId))].map(async (id) => {
-      try { titulos[id] = (await obtenerPelicula(id)).title; } catch { titulos[id] = 'Película'; }
+      try { peliculas[id] = await obtenerPelicula(id); } catch { peliculas[id] = null; }
     }),
     ...[...new Set(reservas.map((r) => r.roomId))].map(async (id) => {
       try { salas[id] = await obtenerSala(id, token); } catch { salas[id] = null; }
@@ -43,12 +44,15 @@ async function cargarEntradas(token) {
     .map((r) => ({
       id: r.id,
       estado: r.status,
-      pelicula: titulos[r.movieId],
+      pelicula: peliculas[r.movieId]?.title || 'Película',
+      peliculaDatos: peliculas[r.movieId],
       sala: salas[r.roomId]?.name || 'Sala',
+      salaDatos: salas[r.roomId],
       cinemaId: salas[r.roomId]?.cinemaId || null,
       inicio: r.showStartTime,
+      descuento: r.discountApplied,
       futura: new Date(r.showStartTime).getTime() > Date.now(),
-      butacas: (r.seats || []).map((s) => ({ nombre: nombreButaca(s.row, s.column), codigo: s.ticketCode })),
+      butacas: (r.seats || []).map((s) => ({ nombre: nombreButaca(s.row, s.column), codigo: s.ticketCode, precio: s.price })),
       total: Number(r.totalAmount).toFixed(2),
     }))
     .sort((a, b) => String(b.inicio).localeCompare(String(a.inicio)));
@@ -143,19 +147,21 @@ export default function PerfilPage() {
   // Entradas que se pueden imprimir: las butacas con código de las reservas pagadas
   const entradasImprimibles = entradas.lista
     .filter((e) => e.estado === 'CONFIRMED')
-    .flatMap((e) => {
-      const inicio = new Date(e.inicio);
-      return e.butacas.filter((b) => b.codigo).map((b) => ({
-        codigo: b.codigo,
-        pelicula: e.pelicula,
-        cine: nombreCine(e.cinemaId),
-        sala: e.sala,
-        fecha: inicio.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' }),
-        hora: inicio.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),
-        butaca: b.nombre,
-        reserva: e.id,
-      }));
+    .flatMap((e) => e.butacas.filter((b) => b.codigo).map((b) => entradaDeButaca(e, b)));
+
+  /** Datos que dibuja la entrada de una butaca */
+  function entradaDeButaca(e, b) {
+    return construirEntrada({
+      codigo: b.codigo,
+      pelicula: e.peliculaDatos || { title: e.pelicula },
+      cine: nombreCine(e.cinemaId),
+      sala: e.salaDatos || { name: e.sala },
+      inicio: e.inicio,
+      precio: b.precio,
+      descuento: e.descuento,
+      reserva: e.id,
     });
+  }
   const seleccionadas = entradasImprimibles.filter((x) => paraImprimir.includes(x.codigo));
   const todasSeleccionadas = entradasImprimibles.length > 0 && seleccionadas.length === entradasImprimibles.length;
 
@@ -170,10 +176,12 @@ export default function PerfilPage() {
         <div>
           <p className="home-eyebrow" style={{ margin: '0 0 4px' }}>Mi Cuenta CinASEE</p>
           <h1 style={{ fontSize: '2rem', color: 'var(--burgundy)', margin: '4px 0 6px' }}>{user.name}</h1>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.92rem', margin: 0 }}>
-            {user.email} &nbsp;·&nbsp; Nº de cliente: <strong style={{ color: 'var(--burgundy)' }}>#{user.id}</strong> &nbsp;·&nbsp; Puntos de fidelización: <strong style={{ color: 'var(--granate)' }}>{user.loyaltyPoints}</strong>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.92rem', margin: 0, display: 'flex', flexWrap: 'wrap', columnGap: '22px', rowGap: '4px' }}>
+            <span>{user.email}</span>
+            <span>Nº de cliente: <strong style={{ color: 'var(--burgundy)' }}>#{user.id}</strong></span>
+            <span>Puntos de fidelización: <strong style={{ color: 'var(--granate)' }}>{user.loyaltyPoints}</strong></span>
             {cineHabitual && (
-              <> &nbsp;·&nbsp; Cine habitual: <strong style={{ color: 'var(--burgundy)' }}>{cineHabitual.name}</strong></>
+              <span>Cine habitual: <strong style={{ color: 'var(--burgundy)' }}>{cineHabitual.name}</strong></span>
             )}
           </p>
         </div>
@@ -284,7 +292,7 @@ export default function PerfilPage() {
           <ul style={{ margin: 0, paddingLeft: '18px', lineHeight: 1.7 }}>
             {recomendaciones.map((r) => (
               <li key={r.movieId}>
-                <strong>{r.title}</strong> — <span style={{ color: 'var(--text-muted)' }}>{r.reason}</span>
+                <strong>{r.title}</strong>: <span style={{ color: 'var(--text-muted)' }}>{r.reason}</span>
               </li>
             ))}
           </ul>
@@ -361,14 +369,14 @@ export default function PerfilPage() {
                       fontWeight: 700,
                       marginBottom: '8px',
                     }}>
-                      Reserva nº {e.id} · {ESTADOS_RESERVA[e.estado] || e.estado}
+                      Reserva nº {e.id}, {(ESTADOS_RESERVA[e.estado] || e.estado).toLowerCase()}
                     </span>
                     <h3 style={{ fontSize: '1.4rem', color: 'var(--burgundy)', margin: '0 0 6px' }}>{e.pelicula}</h3>
                     <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '8px' }}>
-                      {nombreCine(e.cinemaId)} — {e.sala}
+                      {nombreCine(e.cinemaId)}, {e.sala}
                     </p>
                     <p style={{ fontSize: '0.95rem', color: 'var(--dark-burgundy)', margin: '0 0 4px' }}>
-                      {inicio.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })} ·{' '}
+                      {inicio.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })}, a las{' '}
                       <strong>{inicio.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</strong>
                     </p>
                     <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '8px' }}>
@@ -392,20 +400,13 @@ export default function PerfilPage() {
                     {e.butacas.map((b) => (
                       <div
                         key={b.codigo || b.nombre}
-                        style={{
-                          display: 'flex',
-                          flexDirection: 'column',
-                          alignItems: 'center',
-                          gap: '6px',
-                          padding: '12px',
-                          borderRadius: 'var(--radius-sm)',
-                          background: 'rgba(247, 235, 221, 0.5)',
-                          border: '1px dashed rgba(217, 164, 65, 0.5)',
-                        }}
+                        style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}
                       >
-                        <strong style={{ color: 'var(--granate)' }}>Butaca {b.nombre}</strong>
-                        {b.codigo && <CodigoQR texto={b.codigo} />}
-                        {b.codigo && <code className="perfil-codigo-entrada">{b.codigo}</code>}
+                        {b.codigo ? (
+                          <EntradaTicket entrada={entradaDeButaca(e, b)} ancho={250} />
+                        ) : (
+                          <strong style={{ color: 'var(--granate)' }}>Butaca {b.nombre}</strong>
+                        )}
                         {b.codigo && (
                           <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.82rem', cursor: 'pointer' }}>
                             <input

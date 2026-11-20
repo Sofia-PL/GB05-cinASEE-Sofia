@@ -10,11 +10,12 @@ import {
   guardarPagoEnCurso,
   borrarPagoEnCurso,
   borrarCompraGuardada,
-  butacaDeCodigo,
+  obtenerReserva,
 } from '../../api/reservas';
-import CodigoQR from '../../components/CodigoQR';
+import { obtenerSala, obtenerPelicula } from '../../api/cartelera';
+import EntradaTicket from '../../components/entrada/EntradaTicket';
+import { construirEntrada } from '../../components/entrada/datosEntrada';
 import EntradasImprimibles from '../../components/EntradasImprimibles';
-import { fechaEs } from '../../utils/fechas';
 
 /* =========================================================
    Página de vuelta de Redsys  (/pago/redsys/vuelta)
@@ -71,6 +72,8 @@ export default function PagoPage() {
   const [estado, setEstado] = useState(inicial.estado); // confirmando | ok | fallido | error
   const [mensaje, setMensaje] = useState(inicial.mensaje);
   const [confirmacion, setConfirmacion] = useState(null);
+  // Datos para dibujar las entradas: reserva (precio y descuento), sala (tipo y tamaño) y película
+  const [detalle, setDetalle] = useState(null);
   const [reintentando, setReintentando] = useState(false);
   const enviado = useRef(false);
 
@@ -100,6 +103,25 @@ export default function PagoPage() {
         }
       });
   }, [inicial, pago, parametros, token]);
+
+  /* Con el pago confirmado, se cargan los datos que dibujan las entradas. Si falla, se dibujan con los de la compra. */
+  useEffect(() => {
+    if (!confirmacion?.reservationId || !token) return undefined;
+    let cancelado = false;
+    (async () => {
+      try {
+        const reserva = await obtenerReserva(confirmacion.reservationId, token);
+        const [sala, pelicula] = await Promise.all([
+          obtenerSala(reserva.roomId, token).catch(() => null),
+          obtenerPelicula(reserva.movieId).catch(() => null),
+        ]);
+        if (!cancelado) setDetalle({ reserva, sala, pelicula });
+      } catch {
+        // sin detalle: las entradas se dibujan con los datos guardados de la compra
+      }
+    })();
+    return () => { cancelado = true; };
+  }, [confirmacion?.reservationId, token]);
 
   /*
    * Con el pago ya confirmado no se puede volver atrás (a la web de Redsys o a la compra):
@@ -151,15 +173,27 @@ export default function PagoPage() {
   }
 
   if (estado === 'ok') {
+    // Entradas de la reserva: con los datos completos si ya han llegado, o con los de la compra
+    const precioPorCodigo = new Map((detalle?.reserva?.seats || []).map((s) => [s.ticketCode, s.price]));
+    const entradas = (confirmacion.tickets || []).map((codigo) => construirEntrada({
+      codigo,
+      pelicula: detalle?.pelicula || { title: pago.pelicula },
+      cine: pago.cine,
+      sala: detalle?.sala || { name: pago.sala },
+      inicio: detalle?.reserva?.showStartTime || pago.fecha,
+      precio: precioPorCodigo.get(codigo),
+      descuento: detalle?.reserva?.discountApplied,
+      reserva: confirmacion.reservationId,
+    }));
+
     return (
       <div className="compra-page">
         <div className="compra-container">
           <div className="compra-panel compra-pago-ok">
-            <div className="compra-pago-check">✓</div>
             <h2>Pago completado con éxito</h2>
             <p style={{ fontSize: '1.1rem' }}>
               Reserva nº <strong style={{ color: 'var(--granate)' }}>{confirmacion.reservationId}</strong>
-              {confirmacion.paymentReference && <> · Pedido Redsys {confirmacion.paymentReference}</>}
+              {confirmacion.paymentReference && <>, pedido Redsys {confirmacion.paymentReference}</>}
             </p>
             <div className="compra-resumen" style={{ textAlign: 'left', width: '100%', maxWidth: '520px' }}>
               {pago.pelicula && <p><strong>Película:</strong> {pago.pelicula}</p>}
@@ -170,32 +204,17 @@ export default function PagoPage() {
               <p><strong>Importe total:</strong> {Number(confirmacion.totalAmount).toFixed(2)} €</p>
             </div>
 
-            <div className="compra-entradas-qr">
-              <p className="compra-redsys-title">{pago.taquilla ? 'Entradas emitidas' : 'Tus entradas'}</p>
-              {(confirmacion.tickets || []).map((codigo, i) => (
-                <div key={codigo} className="compra-entrada-codigo">
-                  <span>{pago.butacas?.[i] ? `Butaca ${pago.butacas[i]}` : `Entrada ${i + 1}`}</span>
-                  <CodigoQR texto={codigo} tamano={110} />
-                  <code>{codigo}</code>
-                </div>
+            <p className="compra-redsys-title">{pago.taquilla ? 'Entradas emitidas' : 'Tus entradas'}</p>
+            <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '24px', margin: '8px 0 16px' }}>
+              {entradas.map((entrada) => (
+                <EntradaTicket key={entrada.codigo} entrada={entrada} ancho={270} />
               ))}
             </div>
 
             <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>
-              Presenta estos códigos QR en el control de acceso de la sala.
+              Presenta estos códigos QR en el control de acceso de la sala. Puedes descargarlas o imprimirlas.
             </p>
-            <EntradasImprimibles
-              entradas={(confirmacion.tickets || []).map((codigo, i) => ({
-                codigo,
-                pelicula: pago.pelicula,
-                cine: pago.cine,
-                sala: pago.sala,
-                fecha: fechaEs(pago.fecha),
-                hora: pago.hora,
-                butaca: butacaDeCodigo(codigo) || pago.butacas?.[i],
-                reserva: confirmacion.reservationId,
-              }))}
-            />
+            <EntradasImprimibles entradas={entradas} />
 
             <div className="compra-nav-btns" style={{ width: '100%', maxWidth: '520px' }}>
               <button className="home-button home-button-dark" type="button" onClick={() => window.print()} style={{ flex: 1, justifyContent: 'center' }}>

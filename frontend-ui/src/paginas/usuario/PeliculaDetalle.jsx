@@ -116,7 +116,7 @@ export default function PeliculaDetalle() {
       <section className="detalle-cine-cartelera-panel">
         <div className="detalle-cine-container">
           <Link to="/cartelera" className="detalle-cartelera-intro" style={{ display: 'inline-block', marginBottom: '12px' }}>
-            ← Volver a la cartelera
+            Volver a la cartelera
           </Link>
           <article className="detalle-peli-card">
             <div className="detalle-peli-row">
@@ -227,7 +227,7 @@ export default function PeliculaDetalle() {
                                 >
                                   <span className="detalle-hora-time">{pase.hora}</span>
                                   <span className="detalle-hora-meta">
-                                    {[pase.formato, pase.salaNombre].filter(Boolean).join(' · ') || 'Sala de proyección'}
+                                    {[pase.formato, pase.salaNombre].filter(Boolean).join(', ') || 'Sala de proyección'}
                                   </span>
                                   <span className="detalle-hora-price">{pase.precio.toFixed(2)} €</span>
                                 </button>

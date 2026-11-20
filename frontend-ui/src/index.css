@@ -2437,19 +2437,6 @@ p {
   padding: 20px 0;
 }
 
-.compra-pago-check {
-  width: 72px;
-  height: 72px;
-  border-radius: 50%;
-  background: var(--granate);
-  color: white;
-  font-size: 2rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: var(--shadow-lg);
-}
-
 .compra-pago-ok h2 {
   color: var(--granate);
 }
@@ -3230,54 +3217,10 @@ p {
   padding-left: 18px;
 }
 
-.compra-redsys-test code,
-.compra-entrada-codigo code,
-.perfil-codigo-entrada {
+.compra-redsys-test code {
   font-family: monospace;
   letter-spacing: 0.04em;
-}
-
-.compra-redsys-test code {
   color: var(--gold-light);
-}
-
-/* --- Entradas emitidas tras el pago --- */
-.compra-entradas-qr {
-  width: 100%;
-  max-width: 520px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 18px;
-  border-radius: var(--radius-sm);
-  background: var(--grad-card);
-  box-shadow: var(--shadow-md);
-}
-
-.compra-entrada-codigo {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-  padding: 10px 12px;
-  border-radius: 6px;
-  border: 1px dashed rgba(217, 164, 65, 0.5);
-  color: var(--cream);
-  font-size: 0.9rem;
-}
-
-.compra-entrada-codigo code {
-  color: var(--gold-light);
-  font-weight: 700;
-}
-
-.perfil-codigo-entrada {
-  padding: 3px 8px;
-  border-radius: 4px;
-  background: var(--burgundy);
-  color: var(--cream);
-  font-size: 0.75rem;
 }
 
 .cinasee-aviso-link {
@@ -3443,8 +3386,12 @@ p {
     visibility: visible;
   }
 
+  /* Las entradas, de dos en dos por fila, sin partir ninguna entre páginas */
   .entradas-impresion {
-    display: block;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 18px;
     position: absolute;
     top: 0;
     left: 0;
@@ -3452,41 +3399,18 @@ p {
   }
 
   .entrada-impresa {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 24px;
-    padding: 18px 22px;
-    margin-bottom: 14px;
-    border: 2px dashed #6b1e2a;
-    border-radius: 8px;
-    color: #000;
     break-inside: avoid;
     page-break-inside: avoid;
   }
 
-  .entrada-impresa-marca {
-    margin: 0 0 4px;
-    font-size: 0.8rem;
-    font-weight: 700;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: #6b1e2a;
+  /* Los colores de fondo de la entrada también se imprimen */
+  .entrada-impresa svg {
+    filter: none !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
 
-  .entrada-impresa h2 {
-    margin: 0 0 8px;
-    font-size: 1.3rem;
-  }
-
-  .entrada-impresa p {
-    margin: 2px 0;
-    font-size: 0.95rem;
-  }
-
-  .entrada-impresa code {
-    display: inline-block;
-    margin-top: 6px;
-    font-size: 0.85rem;
+  .no-imprimir {
+    display: none !important;
   }
 }

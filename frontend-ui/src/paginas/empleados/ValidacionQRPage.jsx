@@ -138,12 +138,12 @@ export default function ValidacionQRPage() {
               <div style={{ background: 'white', padding: '16px', borderRadius: '6px', border: '1px solid rgba(0,0,0,0.08)' }}>
                 <p style={{ margin: '0 0 4px' }}><strong>Película:</strong> {resultado.ticket.pelicula}</p>
                 <p style={{ margin: '0 0 4px' }}>
-                  <strong>Sala:</strong> {[resultado.ticket.cine, resultado.ticket.sala].filter(Boolean).join(' — ')}
+                  <strong>Sala:</strong> {[resultado.ticket.cine, resultado.ticket.sala].filter(Boolean).join(', ')}
                 </p>
                 <p style={{ margin: '0 0 4px' }}><strong>Sesión:</strong> {resultado.ticket.hora}</p>
                 <p style={{ margin: '0 0 4px' }}><strong>Butaca:</strong> {resultado.ticket.butaca}</p>
                 <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                  Reserva nº {resultado.ticket.reserva} · <code>{resultado.ticket.codigo}</code>
+                  Reserva nº {resultado.ticket.reserva}, código <code>{resultado.ticket.codigo}</code>
                 </p>
               </div>
             )}

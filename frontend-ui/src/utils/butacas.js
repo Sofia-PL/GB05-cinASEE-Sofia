@@ -17,7 +17,7 @@ export function layoutDeSala(room) {
     formato,
     descripcion: [formato && `Formato ${formato}`, room.wheelchairAccessible && 'accesible en silla de ruedas']
       .filter(Boolean)
-      .join(' · ') || 'Sala de proyección',
+      .join(', ') || 'Sala de proyección',
   };
 }
 

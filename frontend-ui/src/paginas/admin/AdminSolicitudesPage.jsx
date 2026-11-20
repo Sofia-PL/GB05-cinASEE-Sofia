@@ -365,8 +365,8 @@ export default function AdminSolicitudesPage() {
                 {decision === 'APPROVED' ? 'Aprobar Solicitud' : 'Rechazar Solicitud'} #{solicitudEnRevision.id}
               </h2>
               <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginBottom: '16px' }}>
-                Usuario ID: <strong>#{solicitudEnRevision.userId}</strong> · Rol: <strong>{ETIQUETA_ROL[solicitudEnRevision.requestedRole] || solicitudEnRevision.requestedRole}</strong>
-                {solicitudEnRevision.cinemaId && <> · Cine: <strong>{nombreCine(solicitudEnRevision.cinemaId)}</strong></>}
+                Usuario ID: <strong>#{solicitudEnRevision.userId}</strong>, rol: <strong>{ETIQUETA_ROL[solicitudEnRevision.requestedRole] || solicitudEnRevision.requestedRole}</strong>
+                {solicitudEnRevision.cinemaId && <>, cine: <strong>{nombreCine(solicitudEnRevision.cinemaId)}</strong></>}
               </p>
 
               {solicitudEnRevision.motivation && (
@@ -447,7 +447,7 @@ export default function AdminSolicitudesPage() {
                       </td>
                       <td>{nombreCine(sol.cinemaId)}</td>
                       <td style={{ maxWidth: '240px', fontSize: '0.86rem', color: 'var(--text-muted)' }}>
-                        {sol.motivation || '—'}
+                        {sol.motivation || '-'}
                       </td>
                       <td style={{ fontSize: '0.84rem', whiteSpace: 'nowrap' }}>
                         {fecha.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' })}

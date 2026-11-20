@@ -42,7 +42,7 @@ function Stepper({ paso }) {
           role="listitem"
           className={`compra-step${i < paso ? ' compra-step--done' : ''}${i === paso ? ' compra-step--active' : ''}`}
         >
-          <div className="compra-step-circle">{i < paso ? '✓' : i + 1}</div>
+          <div className="compra-step-circle">{i + 1}</div>
           <span className="compra-step-label">{nombre}</span>
           {i < PASOS.length - 1 && <div className="compra-step-line" />}
         </div>
@@ -143,7 +143,7 @@ function PasoResumen({ data, onNext, layout, identidadProps, listo, errorSala })
           disabled={!listo}
           style={{ flex: 1, justifyContent: 'center' }}
         >
-          Continuar a selección de entradas →
+          Continuar a selección de entradas
         </button>
       </div>
     </div>
@@ -205,7 +205,7 @@ function PasoEntradas({ precio, cantidad, setCantidad, libres, consultando, onNe
           Volver
         </button>
         <button className="home-button" type="button" onClick={onNext} disabled={agotada || consultando}>
-          {consultando ? 'Consultando butacas libres…' : 'Continuar a selección de butacas →'}
+          {consultando ? 'Consultando butacas libres…' : 'Continuar a selección de butacas'}
         </button>
       </div>
     </div>
@@ -237,7 +237,7 @@ function PasoButacas({ data, layout, ocupadas, cantidad, seleccionadas, setSelec
         color: 'var(--dark-burgundy)',
         marginBottom: '16px',
       }}>
-        {data.cineName} · {tipo} ({filas} filas × {cols} columnas — Capacidad: {filas * cols} asientos).
+        {data.cineName}, {tipo} ({filas} filas × {cols} columnas, capacidad: {filas * cols} asientos).
       </div>
 
       <p className="compra-butacas-hint">
@@ -267,7 +267,7 @@ function PasoButacas({ data, layout, ocupadas, cantidad, seleccionadas, setSelec
             ? 'Bloqueando butacas…'
             : seleccionadas.length < cantidad
               ? `Selecciona ${cantidad - seleccionadas.length} butaca(s) más`
-              : 'Reservar butacas y pagar →'}
+              : 'Reservar butacas y pagar'}
         </button>
       </div>
     </div>
@@ -340,8 +340,8 @@ function PasoPagoRedsys({ data, reserva, layout, token, onPrev }) {
 
       <div className="compra-resumen compra-resumen--small" style={{ marginBottom: '16px' }}>
         <p><strong>{data.peliculaTitle}</strong> en {data.cineName}</p>
-        <p>Sesión {data.sesion.hora} · {layout.tipo} · Butacas: <strong>{butacas.join(', ')}</strong></p>
-        <p>Precio por entrada: {formatoEuros(reserva.unitPrice)} €{descuento && ` · ${descuento}`}</p>
+        <p>Sesión {data.sesion.hora}, {layout.tipo}. Butacas: <strong>{butacas.join(', ')}</strong></p>
+        <p>Precio por entrada: {formatoEuros(reserva.unitPrice)} €{descuento && `, ${descuento}`}</p>
         <p className="compra-total-grande">Importe total: <strong>{formatoEuros(reserva.totalAmount)} €</strong></p>
       </div>
 

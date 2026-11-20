@@ -76,7 +76,7 @@ export default function SolicitarRolPage() {
   return (
     <div style={{ maxWidth: '960px', margin: '0 auto', padding: 'clamp(28px, 4vw, 56px) var(--gutter)' }}>
       <Link to="/perfil" style={{ display: 'inline-block', marginBottom: '14px', color: 'var(--burgundy)' }}>
-        ← Volver a mi cuenta
+        Volver a mi cuenta
       </Link>
       <section style={tarjeta}>
         <div style={{ marginBottom: '18px' }}>
@@ -125,7 +125,7 @@ export default function SolicitarRolPage() {
                   >
                     <div>
                       <div style={{ fontWeight: 700, color: 'var(--dark-burgundy)', fontSize: '0.95rem' }}>
-                        Solicitud #{sol.id} · Rol pedido: {sol.requestedRole === 'STAFF_TAQUILLA' ? 'Personal de Taquilla' : 'Administrador'}
+                        Solicitud #{sol.id}, rol pedido: {sol.requestedRole === 'STAFF_TAQUILLA' ? 'Personal de Taquilla' : 'Administrador'}
                         {sol.cinemaId && ` (${nombreCine(sol.cinemaId)})`}
                       </div>
                       {sol.motivation && (

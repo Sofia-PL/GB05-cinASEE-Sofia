@@ -203,7 +203,7 @@ export default function AdminMetricasPage() {
 
       <p style={{ margin: '-10px 0 20px', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
         {rangoValido ? rango.texto : 'La fecha de inicio no puede ser posterior a la de fin.'}
-        {cargandoTaquilla && ' · Cargando…'}
+        {cargandoTaquilla && ', cargando…'}
       </p>
 
       {taquilla.error && taquilla.clave === claveTaquilla && (
@@ -211,9 +211,9 @@ export default function AdminMetricasPage() {
       )}
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '18px', marginBottom: '28px' }}>
-        <Kpi titulo="Ingresos de taquilla" valor={total ? euros(ingresosTotales) : '—'} />
-        <Kpi titulo="Entradas vendidas" valor={total ? entradasTotales.toLocaleString('es-ES') : '—'} />
-        <Kpi titulo="Precio medio por entrada" valor={total && entradasTotales > 0 ? euros(ingresosTotales / entradasTotales) : '—'} />
+        <Kpi titulo="Ingresos de taquilla" valor={total ? euros(ingresosTotales) : '-'} />
+        <Kpi titulo="Entradas vendidas" valor={total ? entradasTotales.toLocaleString('es-ES') : '-'} />
+        <Kpi titulo="Precio medio por entrada" valor={total && entradasTotales > 0 ? euros(ingresosTotales / entradasTotales) : '-'} />
       </div>
 
       {/* Evolución diaria de ingresos */}
@@ -308,7 +308,7 @@ export default function AdminMetricasPage() {
                     <td style={{ textAlign: 'right', fontWeight: 700, color: 'var(--burgundy)' }}>{euros(f.ingresos)}</td>
                     <td style={{ textAlign: 'right' }}>
                       <span className="admin-badge admin-badge-warning">
-                        {ingresosTotales > 0 ? `${Math.round((f.ingresos / ingresosTotales) * 100)}%` : '—'}
+                        {ingresosTotales > 0 ? `${Math.round((f.ingresos / ingresosTotales) * 100)}%` : '-'}
                       </span>
                     </td>
                   </tr>
@@ -384,9 +384,9 @@ export default function AdminMetricasPage() {
                       <td><strong style={{ color: 'var(--burgundy)' }}>{sala.name}</strong></td>
                       <td>{TIPOS_SALA[sala.roomType] || sala.roomType}</td>
                       <td style={{ textAlign: 'right' }}>{metrica?.totalCapacity ?? sala.capacity}</td>
-                      <td style={{ textAlign: 'right' }}>{metrica ? metrica.totalTicketsSold : '—'}</td>
+                      <td style={{ textAlign: 'right' }}>{metrica ? metrica.totalTicketsSold : '-'}</td>
                       <td style={{ textAlign: 'right' }}>
-                        <span className="admin-badge admin-badge-warning">{metrica ? `${metrica.occupancyPercentage}%` : '—'}</span>
+                        <span className="admin-badge admin-badge-warning">{metrica ? `${metrica.occupancyPercentage}%` : '-'}</span>
                       </td>
                     </tr>
                   ))}

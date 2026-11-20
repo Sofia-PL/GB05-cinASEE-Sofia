@@ -285,7 +285,7 @@ export default function AdminSalasPage() {
             <>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px', flexWrap: 'wrap', gap: '10px' }}>
                 <p style={{ margin: 0, fontSize: '0.9rem', color: 'var(--text-muted)' }}>
-                  Cine: <strong>{cineActivo.name}</strong> · Aforo total: <strong>{aforoTotal} butacas</strong>
+                  Cine: <strong>{cineActivo.name}</strong>, aforo total: <strong>{aforoTotal} butacas</strong>
                 </p>
                 <button className="admin-btn admin-btn-primary" type="button" onClick={abrirCrearSala} disabled={!token}>
                   + Añadir Sala

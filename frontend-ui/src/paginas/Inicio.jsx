@@ -196,7 +196,7 @@ export default function Inicio() {
                       <strong className="flotante-cine-name">{c.name}</strong>
                       <span className="flotante-cine-address">{c.address}</span>
                     </div>
-                    <span className="flotante-cine-action">Seleccionar →</span>
+                    <span className="flotante-cine-action">Seleccionar</span>
                   </button>
                 ))
               )}

@@ -341,7 +341,7 @@ export default function AdminSesionesPage() {
                 Resultado de la programación por lote
               </h2>
               <p style={{ margin: 0, color: 'var(--text-muted)' }}>
-                {batchResult.created.length} sesiones creadas · {batchResult.conflicts.length} fechas con solapamiento.
+                {batchResult.created.length} sesiones creadas y {batchResult.conflicts.length} fechas con solapamiento.
               </p>
             </div>
             <button
@@ -362,7 +362,7 @@ export default function AdminSesionesPage() {
               <ul style={{ margin: '8px 0 0', paddingLeft: '22px' }}>
                 {batchResult.created.map((sesion) => {
                   const inicio = partirFechaHora(sesion.startTime);
-                  return <li key={sesion.id}>{fechaEs(inicio.fecha)} · {inicio.hora}</li>;
+                  return <li key={sesion.id}>{fechaEs(inicio.fecha)}, {inicio.hora}</li>;
                 })}
               </ul>
             </details>
@@ -379,7 +379,7 @@ export default function AdminSesionesPage() {
                     || 'otra película';
                   return (
                     <li key={`${conflicto.startTime}-${conflicto.conflictingSessionId}`}>
-                      {fechaEs(inicio.fecha)} · {inicio.hora} (conflicto con «{tituloConflicto}»)
+                      {fechaEs(inicio.fecha)}, {inicio.hora} (conflicto con «{tituloConflicto}»)
                     </li>
                   );
                 })}
@@ -458,7 +458,7 @@ export default function AdminSesionesPage() {
               }}>
                 <div>
                   <span className="admin-badge admin-badge-warning" style={{ marginBottom: '4px' }}>
-                    {selectedPeli.genre} · {selectedPeli.ageRating} · {selectedPeli.durationMinutes} min
+                    {selectedPeli.genre}, {selectedPeli.ageRating}, {selectedPeli.durationMinutes} min
                   </span>
                   <h2 style={{ color: 'var(--burgundy)', margin: '2px 0 0', fontSize: '1.4rem' }}>
                     Sesiones de: {selectedPeli.title}
@@ -696,7 +696,7 @@ export default function AdminSesionesPage() {
                   type="text"
                   className="admin-input"
                   disabled
-                  value={TIPOS_SALA[salaPorId[formData.roomId]?.roomType] || salaPorId[formData.roomId]?.roomType || '—'}
+                  value={TIPOS_SALA[salaPorId[formData.roomId]?.roomType] || salaPorId[formData.roomId]?.roomType || '-'}
                 />
                 <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '3px' }}>
                   El formato lo da el tipo de la sala elegida.
