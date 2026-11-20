@@ -21,6 +21,8 @@ import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import tools.jackson.databind.json.JsonMapper;
 
+import java.time.DayOfWeek;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -78,8 +80,18 @@ class CarteleraAcceptanceTest {
             cinemas.put(cinema.getId(), cinema);
             return cinema;
         });
+        org.mockito.Mockito.doAnswer(invocation -> {
+            cinemas.remove(invocation.getArgument(0));
+            return null;
+        }).when(cinemaRepository).deleteById(org.mockito.ArgumentMatchers.anyString());
         when(movieRepository.findAll()).thenAnswer(invocation -> new ArrayList<>(movies.values()));
         when(movieRepository.findById(org.mockito.ArgumentMatchers.anyString())).thenAnswer(invocation -> Optional.ofNullable(movies.get(invocation.getArgument(0))));
+        when(movieRepository.findByGenreIgnoreCase(org.mockito.ArgumentMatchers.anyString())).thenAnswer(invocation -> {
+            String genre = invocation.getArgument(0);
+            return movies.values().stream()
+                    .filter(movie -> genre.equalsIgnoreCase(movie.getGenre()))
+                    .toList();
+        });
         when(movieRepository.existsById(org.mockito.ArgumentMatchers.anyString())).thenAnswer(invocation -> movies.containsKey(invocation.getArgument(0)));
         when(movieRepository.save(any(Movie.class))).thenAnswer(invocation -> {
             Movie movie = invocation.getArgument(0);
@@ -93,6 +105,9 @@ class CarteleraAcceptanceTest {
 
         when(roomRepository.findAll()).thenAnswer(invocation -> new ArrayList<>(rooms.values()));
         when(roomRepository.findById(org.mockito.ArgumentMatchers.anyString())).thenAnswer(invocation -> Optional.ofNullable(rooms.get(invocation.getArgument(0))));
+        when(roomRepository.findByCinemaId(org.mockito.ArgumentMatchers.anyString())).thenAnswer(invocation -> rooms.values().stream()
+                .filter(room -> invocation.getArgument(0).equals(room.getCinemaId()))
+                .toList());
         when(roomRepository.existsById(org.mockito.ArgumentMatchers.anyString())).thenAnswer(invocation -> rooms.containsKey(invocation.getArgument(0)));
         when(roomRepository.save(any(Room.class))).thenAnswer(invocation -> {
             Room room = invocation.getArgument(0);
@@ -106,6 +121,9 @@ class CarteleraAcceptanceTest {
 
         when(sessionRepository.findAll()).thenAnswer(invocation -> new ArrayList<>(sessions.values()));
         when(sessionRepository.findById(org.mockito.ArgumentMatchers.anyString())).thenAnswer(invocation -> Optional.ofNullable(sessions.get(invocation.getArgument(0))));
+        when(sessionRepository.findByMovieId(org.mockito.ArgumentMatchers.anyString())).thenAnswer(invocation -> sessions.values().stream()
+                .filter(session -> invocation.getArgument(0).equals(session.getMovieId()))
+                .toList());
         when(sessionRepository.findByRoomIdAndStatusNot(org.mockito.ArgumentMatchers.anyString(), any())).thenAnswer(invocation -> sessions.values().stream()
                 .filter(session -> invocation.getArgument(0).equals(session.getRoomId()))
                 .filter(session -> !invocation.getArgument(1).equals(session.getStatus()))
@@ -203,6 +221,88 @@ class CarteleraAcceptanceTest {
                         .with(tokenWithRole("CLIENTE_REGISTRADO")))
                 .andExpect(status().isForbidden());
         assertTrue(rooms.containsKey("room-1"));
+    }
+
+    @Test
+    void batchCreatesAvailableDatesAndReturnsScheduleConflicts() throws Exception {
+        movies.put("movie-1", Movie.builder().id("movie-1").durationMinutes(100).build());
+        rooms.put("room-1", Room.builder().id("room-1").build());
+        sessions.put("existing-session", Session.builder()
+                .id("existing-session")
+                .movieId("movie-1")
+                .roomId("room-1")
+                .startTime(LocalDate.of(2026, 11, 23).atTime(17, 0))
+                .endTime(LocalDate.of(2026, 11, 23).atTime(20, 0))
+                .status("PROGRAMADA")
+                .build());
+
+        mockMvc.perform(post("/api/v1/sessions/batch").contextPath("/api/v1")
+                        .with(jwt().jwt(token -> token.subject("acceptance-test")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "movieId": "movie-1",
+                                  "roomId": "room-1",
+                                  "daysOfWeek": ["MONDAY", "WEDNESDAY"],
+                                  "startDate": "2026-11-23",
+                                  "endDate": "2026-11-25",
+                                  "startTime": "18:00",
+                                  "ticketPrice": 9.5
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.created.length()").value(1))
+                .andExpect(jsonPath("$.created[0].startTime").value("2026-11-25T18:00:00"))
+                .andExpect(jsonPath("$.created[0].endTime").value("2026-11-25T20:00:00"))
+                .andExpect(jsonPath("$.conflicts.length()").value(1))
+                .andExpect(jsonPath("$.conflicts[0].startTime").value("2026-11-23T18:00:00"))
+                .andExpect(jsonPath("$.conflicts[0].conflictingSessionId").value("existing-session"));
+    }
+
+    @Test
+    void batchRejectsAnInvertedDateRange() throws Exception {
+        mockMvc.perform(post("/api/v1/sessions/batch").contextPath("/api/v1")
+                        .with(jwt().jwt(token -> token.subject("acceptance-test")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "movieId": "movie-1",
+                                  "roomId": "room-1",
+                                  "daysOfWeek": ["MONDAY"],
+                                  "startDate": "2026-11-25",
+                                  "endDate": "2026-11-23",
+                                  "startTime": "18:00",
+                                  "ticketPrice": 9.5
+                                }
+                                """))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void movieWithAnySessionCannotBeDeleted() throws Exception {
+        movies.put("movie-1", Movie.builder().id("movie-1").build());
+        sessions.put("session-1", Session.builder()
+                .id("session-1")
+                .movieId("movie-1")
+                .startTime(LocalDateTime.now().minusDays(1))
+                .status("CANCELADA")
+                .build());
+
+        mockMvc.perform(delete("/api/v1/movies/movie-1").contextPath("/api/v1")
+                        .with(jwt().jwt(token -> token.subject("acceptance-test"))))
+                .andExpect(status().isConflict());
+        assertTrue(movies.containsKey("movie-1"));
+    }
+
+    @Test
+    void cinemaWithAnyRoomCannotBeDeleted() throws Exception {
+        cinemas.put("cinema-1", Cinema.builder().id("cinema-1").build());
+        rooms.put("room-1", Room.builder().id("room-1").cinemaId("cinema-1").build());
+
+        mockMvc.perform(delete("/api/v1/cinemas/cinema-1").contextPath("/api/v1")
+                        .with(jwt().jwt(token -> token.subject("acceptance-test"))))
+                .andExpect(status().isConflict());
+        assertTrue(cinemas.containsKey("cinema-1"));
     }
 
     @Test

@@ -85,7 +85,7 @@ repositorios se simulan con Mockito):
 |---|---|
 | `CatalogServicesTest` | Reglas de negocio: filtros de cartelera, capacidad de salas, cine inexistente, solapamientos |
 | `MovieControllerIntegrationTest` | Seguridad y contrato HTTP de `/movies` con `@WebMvcTest` |
-| `CarteleraAcceptanceTest` | Flujo completo cine → película → sala → sesión con `MockMvc` |
+| `CarteleraAcceptanceTest` | Flujo de catálogo, sesiones por lote, roles de salas e integridad de borrado con `MockMvc` |
 | `Componente1CarteleraApplicationTests` | Arranque del contexto |
 
 `CarteleraAcceptanceTest` simula `CinemaRepository`, `MovieRepository`,
@@ -104,19 +104,22 @@ Ruta base: `http://localhost:8081/api/v1`.
 | `GET` | `/cinemas/{cinemaId}` | Público | Detalle del cine |
 | `POST` | `/cinemas` | JWT válido | Crea cine |
 | `PUT` | `/cinemas/{cinemaId}` | JWT válido | Actualiza cine |
-| `DELETE` | `/cinemas/{cinemaId}` | JWT válido | Borra cine |
+| `DELETE` | `/cinemas/{cinemaId}` | JWT válido | Borra cine (409 si tiene salas) |
 | `GET` | `/cinemas/{cinemaId}/rooms` | Público | Salas de un cine (404 si el cine no existe) |
 | `GET` | `/movies` | Público | Lista películas (`genre`, `inShowcase`) |
 | `GET` | `/movies/{movieId}` | Público | Detalle |
 | `POST` | `/movies` | JWT válido | Crea película |
 | `PUT` | `/movies/{movieId}` | JWT válido | Actualiza |
-| `DELETE` | `/movies/{movieId}` | JWT válido | Borra |
+| `DELETE` | `/movies/{movieId}` | JWT válido | Borra (409 si tiene sesiones) |
 | `GET` | `/rooms` | JWT válido | Lista salas; filtro opcional `cinemaId` |
 | `GET` | `/rooms/{roomId}` | JWT válido | Detalle de sala |
 | `POST` | `/rooms` | JWT válido | Crea sala (requiere `cinemaId` existente) |
+| `PUT` | `/rooms/{roomId}` | ADMIN | Actualiza sala y recalcula aforo |
+| `DELETE` | `/rooms/{roomId}` | ADMIN | Borra sala (409 si tiene sesiones futuras no canceladas) |
 | `GET` | `/sessions` | Público | Lista sesiones (`date`, `movieId`) |
 | `GET` | `/sessions/{sessionId}` | JWT válido | Detalle de sesión |
 | `POST` | `/sessions` | JWT válido | Programa una sesión |
+| `POST` | `/sessions/batch` | JWT válido | Programa sesiones por días de la semana en un rango inclusivo |
 | `PATCH` | `/sessions/{sessionId}` | JWT válido | Cambia estado, sala u hora |
 
 > `GET /rooms` **no** es público: el Componente 2 lo llama propagando el JWT del
@@ -178,7 +181,8 @@ curl -X PATCH http://localhost:8081/api/v1/sessions/01ARZ3NDEKTSV4RRFFQ69G5FAV \
 
 1. **Solapamiento:** una sala no puede tener dos sesiones cuyos intervalos
    (incluida la preparación) se crucen. Si ocurre, `POST /sessions` devuelve
-   **409**.
+   **409**. `POST /sessions/batch` crea las fechas compatibles y devuelve por
+   separado las creadas y las que chocaron.
 2. **Estado inicial:** toda sesión nueva nace en `PROGRAMADA`. El Componente 2
    **solo permite reservar** sesiones en `A_LA_VENTA` que no hayan empezado, así
    que hay que hacer `PATCH` antes de vender.
@@ -189,8 +193,10 @@ curl -X PATCH http://localhost:8081/api/v1/sessions/01ARZ3NDEKTSV4RRFFQ69G5FAV \
 5. **Cine → salas:** `GET /cinemas/{cinemaId}/rooms` valida primero el cine y
    devuelve **404** si no existe. `GET /rooms?cinemaId=` hace el mismo filtro sin
    validar el cine (devuelve lista vacía si no hay salas).
-6. **Borrado de películas:** no comprueba si tiene sesiones asociadas; hay que
-   evitarlo desde el cliente. Lo mismo ocurre al borrar un cine con salas.
+6. **Integridad al borrar:** `DELETE /movies/{movieId}` devuelve **409** si
+   existe cualquier sesión asociada (también pasada o cancelada), y
+   `DELETE /cinemas/{cinemaId}` devuelve **409** si tiene salas. No se borran
+   entidades en cascada ni se dejan referencias colgantes.
 
 ---
 
@@ -200,11 +206,12 @@ Es un *OAuth2 Resource Server*: valida los JWT RS256 del Componente 3 con el
 JWKS (`JWT_JWK_SET_URI`) y el emisor (`JWT_ISSUER`).
 
 - Lecturas de `cinemas`, `movies` y `sessions`: públicas.
-- Lecturas de `rooms` y todas las escrituras: cualquier JWT válido.
+- Lecturas de `rooms` y las escrituras salvo las indicadas abajo: cualquier JWT válido.
+- `PUT` y `DELETE /rooms/{roomId}`: solo usuarios con rol `ADMIN`.
 
-> **Limitación conocida:** las escrituras no comprueban rol. Cualquier token
-> válido (incluido uno de invitado) puede crear, editar o borrar catálogo. Lo
-> correcto sería exigir `ADMIN` o `STAFF_TAQUILLA`.
+> **Limitación conocida:** las demás escrituras todavía no comprueban rol.
+> Cualquier token válido puede usarlas; convendría limitar las operaciones
+> administrativas del catálogo a `ADMIN`.
 
 ---
 

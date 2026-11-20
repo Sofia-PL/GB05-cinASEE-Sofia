@@ -1,9 +1,11 @@
 package com.cinasee.componente1_cartelera.services;
 
 import com.cinasee.componente1_cartelera.models.CreateSessionRequest;
+import com.cinasee.componente1_cartelera.models.CreateSessionBatchRequest;
 import com.cinasee.componente1_cartelera.models.Movie;
 import com.cinasee.componente1_cartelera.models.Room;
 import com.cinasee.componente1_cartelera.models.Session;
+import com.cinasee.componente1_cartelera.models.SessionBatchResponse;
 import com.cinasee.componente1_cartelera.models.UpdateSessionRequest;
 import com.cinasee.componente1_cartelera.repositories.MovieRepository;
 import com.cinasee.componente1_cartelera.repositories.RoomRepository;
@@ -16,6 +18,7 @@ import org.springframework.web.server.ResponseStatusException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -68,8 +71,7 @@ public class SessionService {
         LocalDateTime endTime = startTime.plusMinutes(totalDuration);
 
         // Control de solapamiento horario en la misma sala
-        boolean hasOverlap = checkRoomOverlap(room.getId(), startTime, endTime, null);
-        if (hasOverlap) {
+        if (findRoomOverlap(room.getId(), startTime, endTime, null).isPresent()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "Solapamiento horario detectado. La sala seleccionada ya está ocupada en ese intervalo de tiempo (duración + tiempo de preparación).");
         }
@@ -84,6 +86,54 @@ public class SessionService {
                 .build();
 
         return sessionRepository.save(session);
+    }
+
+    public SessionBatchResponse createSessionsBatch(CreateSessionBatchRequest request) {
+        if (request.getEndDate().isBefore(request.getStartDate())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "La fecha final no puede ser anterior a la fecha inicial.");
+        }
+
+        Movie movie = movieRepository.findById(request.getMovieId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "Película no encontrada con ID: " + request.getMovieId()));
+        Room room = roomRepository.findById(request.getRoomId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "Sala no encontrada con ID: " + request.getRoomId()));
+
+        int totalDuration = (movie.getDurationMinutes() != null ? movie.getDurationMinutes() : 0)
+                + PREPARATION_TIME_MINUTES;
+        List<Session> created = new ArrayList<>();
+        List<SessionBatchResponse.Conflict> conflicts = new ArrayList<>();
+
+        for (LocalDate date = request.getStartDate();
+             !date.isAfter(request.getEndDate());
+             date = date.plusDays(1)) {
+            if (!request.getDaysOfWeek().contains(date.getDayOfWeek())) {
+                continue;
+            }
+
+            LocalDateTime startTime = date.atTime(request.getStartTime());
+            LocalDateTime endTime = startTime.plusMinutes(totalDuration);
+            Optional<Session> conflictingSession = findRoomOverlap(room.getId(), startTime, endTime, null);
+            if (conflictingSession.isPresent()) {
+                conflicts.add(new SessionBatchResponse.Conflict(
+                        startTime, endTime, conflictingSession.get().getId()));
+                continue;
+            }
+
+            Session session = Session.builder()
+                    .movieId(movie.getId())
+                    .roomId(room.getId())
+                    .startTime(startTime)
+                    .endTime(endTime)
+                    .status("PROGRAMADA")
+                    .ticketPrice(request.getTicketPrice())
+                    .build();
+            created.add(sessionRepository.save(session));
+        }
+
+        return new SessionBatchResponse(created, conflicts);
     }
 
     public Session updateSessionStatus(String sessionId, UpdateSessionRequest request) {
@@ -105,8 +155,7 @@ public class SessionService {
             int totalDuration = (movie.getDurationMinutes() != null ? movie.getDurationMinutes() : 0) + PREPARATION_TIME_MINUTES;
             LocalDateTime targetEndTime = targetStartTime.plusMinutes(totalDuration);
 
-            boolean hasOverlap = checkRoomOverlap(targetRoomId, targetStartTime, targetEndTime, sessionId);
-            if (hasOverlap) {
+            if (findRoomOverlap(targetRoomId, targetStartTime, targetEndTime, sessionId).isPresent()) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT,
                         "Conflicto de solapamiento con el nuevo horario o sala seleccionada.");
             }
@@ -127,14 +176,15 @@ public class SessionService {
         return sessionRepository.save(session);
     }
 
-    private boolean checkRoomOverlap(String roomId, LocalDateTime start, LocalDateTime end, String excludeSessionId) {
+    private Optional<Session> findRoomOverlap(String roomId, LocalDateTime start, LocalDateTime end, String excludeSessionId) {
         List<Session> roomSessions = sessionRepository.findByRoomIdAndStatusNot(roomId, "CANCELADA");
 
         return roomSessions.stream()
                 .filter(s -> excludeSessionId == null || !excludeSessionId.equals(s.getId()))
-                .anyMatch(s -> s.getStartTime() != null && s.getEndTime() != null
+                .filter(s -> s.getStartTime() != null && s.getEndTime() != null
                         && s.getStartTime().isBefore(end)
-                        && s.getEndTime().isAfter(start));
+                        && s.getEndTime().isAfter(start))
+                .findFirst();
     }
 }
 

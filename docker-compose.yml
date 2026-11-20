@@ -1,5 +1,8 @@
 services:
 
+# ==========================================
+# SERVICIO DE MEDIA (POSTERS)
+# ==========================================
   media-server:
     build:
       context: ./media

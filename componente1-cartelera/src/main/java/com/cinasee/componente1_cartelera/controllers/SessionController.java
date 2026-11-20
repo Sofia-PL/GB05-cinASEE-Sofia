@@ -1,7 +1,9 @@
 package com.cinasee.componente1_cartelera.controllers;
 
 import com.cinasee.componente1_cartelera.models.CreateSessionRequest;
+import com.cinasee.componente1_cartelera.models.CreateSessionBatchRequest;
 import com.cinasee.componente1_cartelera.models.Session;
+import com.cinasee.componente1_cartelera.models.SessionBatchResponse;
 import com.cinasee.componente1_cartelera.models.UpdateSessionRequest;
 import com.cinasee.componente1_cartelera.services.SessionService;
 import jakarta.validation.Valid;
@@ -34,6 +36,12 @@ public class SessionController {
     public ResponseEntity<Session> createSession(@RequestBody @Valid CreateSessionRequest request) {
         Session createdSession = sessionService.createSession(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(createdSession);
+    }
+
+    @PostMapping("/batch")
+    public ResponseEntity<SessionBatchResponse> createSessionsBatch(
+            @RequestBody @Valid CreateSessionBatchRequest request) {
+        return ResponseEntity.ok(sessionService.createSessionsBatch(request));
     }
 
     @GetMapping("/{sessionId}")

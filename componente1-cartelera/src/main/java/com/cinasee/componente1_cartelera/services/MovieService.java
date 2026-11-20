@@ -84,6 +84,10 @@ public class MovieService {
         if (!movieRepository.existsById(movieId)) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Película no encontrada con ID: " + movieId);
         }
+        if (!sessionRepository.findByMovieId(movieId).isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "No se puede eliminar la película porque tiene sesiones asociadas.");
+        }
         movieRepository.deleteById(movieId);
     }
 }

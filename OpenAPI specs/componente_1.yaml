@@ -161,6 +161,7 @@ paths:
       tags:
         - Cinemas
       summary: Eliminar un cine
+      description: No permite eliminar el cine si tiene salas asociadas; devuelve 409 para evitar referencias colgantes.
       operationId: deleteCinema
       parameters:
         - name: cinemaId
@@ -171,6 +172,10 @@ paths:
       responses:
         '204':
           description: Cine eliminado correctamente.
+        '404':
+          description: Cine no encontrado.
+        '409':
+          description: El cine tiene salas asociadas y no se puede eliminar.
 
 
   /cinemas/{cinemaId}/rooms:
@@ -327,6 +332,7 @@ paths:
       tags:
         - Movies
       summary: Eliminar una película
+      description: No permite eliminar la película si tiene sesiones asociadas; devuelve 409 para evitar referencias colgantes.
       operationId: deleteMovie
       parameters:
         - name: movieId
@@ -337,6 +343,10 @@ paths:
       responses:
         '204':
           description: Película eliminada correctamente.
+        '404':
+          description: Película no encontrada.
+        '409':
+          description: La película tiene sesiones asociadas y no se puede eliminar.
 # -----------------------------------------------------------------------------
 
 
@@ -570,6 +580,43 @@ paths:
           description: >
             Conflict: Solapamiento horario detectado. La sala seleccionada ya está ocupada
             en ese intervalo de tiempo (duración de la película + tiempo de preparación).
+
+
+  /sessions/batch:
+    post:
+      tags:
+        - Sessions
+      summary: Programar sesiones recurrentes
+      description: >
+        Crea sesiones en los días de la semana indicados dentro del rango inclusivo.
+        Las fechas que se solapen con otra sesión de la sala no se crean y aparecen
+        en la lista de conflictos; las demás se crean normalmente.
+      operationId: createSessionsBatch
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSessionBatchRequest'
+            example:
+              movieId: "550e8400-e29b-41d4-a716-446655440001"
+              roomId: "550e8400-e29b-41d4-a716-446655440002"
+              daysOfWeek: [MONDAY, WEDNESDAY, FRIDAY]
+              startDate: "2026-11-23"
+              endDate: "2026-12-23"
+              startTime: "18:30:00"
+              ticketPrice: 8.50
+      responses:
+        '200':
+          description: Resultado parcial; contiene sesiones creadas y fechas con solapamiento.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionBatchResponse'
+        '400':
+          description: Datos no válidos o fecha final anterior a la fecha inicial.
+        '404':
+          description: La película o la sala indicada no existe.
 
 
   /sessions/{sessionId}:
@@ -970,6 +1017,79 @@ components:
           minimum: 0 # Restricción para evitar que las entradas tengan precio negativo 
           description: Precio fijado para la sesión.
           example: 8.50
+
+    CreateSessionBatchRequest:
+      type: object
+      required:
+        - movieId
+        - roomId
+        - daysOfWeek
+        - startDate
+        - endDate
+        - startTime
+        - ticketPrice
+      properties:
+        movieId:
+          type: string
+          description: ID de la película que se va a proyectar.
+        roomId:
+          type: string
+          description: ID de la sala asignada.
+        daysOfWeek:
+          type: array
+          minItems: 1
+          description: Días ISO de la semana incluidos en la programación.
+          items:
+            type: string
+            enum: [MONDAY, TUESDAY, WEDNESDAY, THURSDAY, FRIDAY, SATURDAY, SUNDAY]
+        startDate:
+          type: string
+          format: date
+          description: Primer día incluido en el rango.
+        endDate:
+          type: string
+          format: date
+          description: Último día incluido en el rango; no puede ser anterior a startDate.
+        startTime:
+          type: string
+          format: time
+          description: Hora local de inicio para cada sesión.
+        ticketPrice:
+          type: number
+          format: float
+          minimum: 0
+          description: Precio de cada sesión del lote.
+
+    SessionBatchResponse:
+      type: object
+      required: [created, conflicts]
+      properties:
+        created:
+          type: array
+          description: Sesiones creadas correctamente.
+          items:
+            $ref: '#/components/schemas/Session'
+        conflicts:
+          type: array
+          description: Fechas no creadas porque se solapaban con otra sesión.
+          items:
+            $ref: '#/components/schemas/SessionBatchConflict'
+
+    SessionBatchConflict:
+      type: object
+      required: [startTime, endTime, conflictingSessionId]
+      properties:
+        startTime:
+          type: string
+          format: date-time
+          description: Inicio de la sesión que se intentaba programar.
+        endTime:
+          type: string
+          format: date-time
+          description: Fin calculado, incluyendo el tiempo de preparación.
+        conflictingSessionId:
+          type: string
+          description: ID de la sesión existente que causa el solapamiento.
 
   securitySchemes:
     bearerAuth:
