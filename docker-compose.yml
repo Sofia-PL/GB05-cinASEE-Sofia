@@ -1,3 +1,5 @@
+name: cinasee
+
 services:
 
 # ==========================================
@@ -105,6 +107,9 @@ services:
       RABBITMQ_PASSWORD: cinasee
       # El "iss" del token sigue siendo localhost para que lo validen los demás
       JWT_ISSUER: http://localhost:8083/v1/iam
+      # El seed de C1 crea Madrid con este UUID; el staff demo apunta al mismo
+      # cine para que la taquilla y la revisión de solicitudes funcionen.
+      APP_SEED_STAFF_CINEMA_ID: 550e8400-e29b-41d4-a716-446655440001
     restart: unless-stopped
 
 # ==========================================

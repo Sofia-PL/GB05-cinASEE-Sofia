@@ -41,6 +41,7 @@ export default function AdminSolicitudesPage() {
 
   // Modal de asignación directa de rol por ID
   const [modalAsignar, setModalAsignar] = useState(false);
+  const [errorModalAsignar, setErrorModalAsignar] = useState(null);
   const [asignarForm, setAsignarForm] = useState({
     userId: '',
     role: 'STAFF_TAQUILLA',
@@ -118,6 +119,7 @@ export default function AdminSolicitudesPage() {
     e.preventDefault();
     if (!asignarForm.userId) return;
     setGuardandoAsignacion(true);
+    setErrorModalAsignar(null);
     setAviso(null);
     try {
       await asignarRolUsuario(
@@ -137,7 +139,7 @@ export default function AdminSolicitudesPage() {
       setAsignarForm({ userId: '', role: 'STAFF_TAQUILLA', cinemaId: '', cinemaManager: false });
       setRecarga((n) => n + 1);
     } catch (err) {
-      setAviso({ tipo: 'error', texto: `Error al asignar rol: ${err.message}` });
+      setErrorModalAsignar(`Error al asignar rol: ${err.message}`);
     } finally {
       setGuardandoAsignacion(false);
     }
@@ -158,7 +160,7 @@ export default function AdminSolicitudesPage() {
               <button
                 type="button"
                 className="admin-btn admin-btn-primary"
-                onClick={() => setModalAsignar(true)}
+                onClick={() => { setErrorModalAsignar(null); setModalAsignar(true); }}
               >
                 + Asignar Rol por ID
               </button>
@@ -240,6 +242,20 @@ export default function AdminSolicitudesPage() {
                 Modifica directamente el rol de cualquier cuenta introduciendo su identificador de usuario.
               </p>
 
+              {errorModalAsignar && (
+                <div style={{
+                  color: '#991b1b',
+                  background: '#fee2e2',
+                  border: '1px solid #f87171',
+                  borderRadius: '6px',
+                  padding: '10px 14px',
+                  marginBottom: '16px',
+                  fontSize: '0.88rem',
+                }}>
+                  {errorModalAsignar}
+                </div>
+              )}
+
               <form onSubmit={handleAsignarRolDirecto}>
                 <div style={{ marginBottom: '16px' }}>
                   <label className="admin-label" htmlFor="asignar-user-id">Número / ID de Usuario *</label>
@@ -249,7 +265,7 @@ export default function AdminSolicitudesPage() {
                     min="1"
                     className="admin-input"
                     required
-                    placeholder="Ej: 3"
+                    placeholder="Ej: 4"
                     value={asignarForm.userId}
                     onChange={(e) => setAsignarForm({ ...asignarForm, userId: e.target.value })}
                   />

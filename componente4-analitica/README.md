@@ -93,14 +93,14 @@ Ruta base: `http://localhost:8084/api`.
 ### Ocupación
 
 ```bash
-curl "http://localhost:8084/api/metrics/occupancy?cinemaId=1&screenId=2001&dayOfWeek=3&startTime=16:00&endTime=23:00" \
+curl "http://localhost:8084/api/metrics/occupancy?cinemaId=550e8400-e29b-41d4-a716-446655440001&screenId=00000000-0000-4000-8000-000000000201&dayOfWeek=3&startTime=16:00&endTime=23:00" \
   -H "Authorization: Bearer $TOKEN"
 ```
 
 ```json
 {
-  "cinemaId": "550e8400-e29b-41d4-a716-446655440000",
-  "screenId": 2001,
+  "cinemaId": "550e8400-e29b-41d4-a716-446655440001",
+  "screenId": "00000000-0000-4000-8000-000000000201",
   "dayOfWeek": 3,
   "timeRange": "16:00-23:00",
   "totalCapacity": 120,
