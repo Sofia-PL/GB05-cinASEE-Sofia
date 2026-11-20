@@ -436,7 +436,8 @@ paths:
         - Rooms
       summary: Actualizar una sala
       description: >
-        Reemplaza la configuración de una sala. El aforo se calcula automáticamente como filas por columnas.
+        Solo usuarios con rol ADMIN pueden reemplazar la configuración de una sala.
+        El aforo se calcula automáticamente como filas por columnas.
       operationId: updateRoom
       parameters:
         - name: roomId
@@ -468,7 +469,9 @@ paths:
       tags:
         - Rooms
       summary: Eliminar una sala
-      description: No permite eliminar la sala si tiene sesiones no canceladas con inicio futuro.
+      description: >
+        Solo usuarios con rol ADMIN pueden eliminar salas. No permite eliminar la sala
+        si tiene sesiones no canceladas con inicio futuro.
       operationId: deleteRoom
       parameters:
         - name: roomId

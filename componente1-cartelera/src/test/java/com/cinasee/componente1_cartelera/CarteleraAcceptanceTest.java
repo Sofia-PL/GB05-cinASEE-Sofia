@@ -14,9 +14,11 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import tools.jackson.databind.json.JsonMapper;
 
 import java.time.LocalDateTime;
@@ -129,7 +131,7 @@ class CarteleraAcceptanceTest {
                 .build());
 
         mockMvc.perform(put("/api/v1/rooms/room-1").contextPath("/api/v1")
-                        .with(jwt().jwt(token -> token.subject("acceptance-test")))
+                        .with(tokenWithRole("ADMIN"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(roomRequest("cinema-1", "Sala renovada", 12, 14)))
                 .andExpect(status().isOk())
@@ -144,7 +146,7 @@ class CarteleraAcceptanceTest {
         cinemas.put("cinema-1", Cinema.builder().id("cinema-1").build());
 
         mockMvc.perform(put("/api/v1/rooms/missing").contextPath("/api/v1")
-                        .with(jwt().jwt(token -> token.subject("acceptance-test")))
+                        .with(tokenWithRole("ADMIN"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(roomRequest("cinema-1", "Sala nueva", 10, 12)))
                 .andExpect(status().isNotFound());
@@ -161,7 +163,7 @@ class CarteleraAcceptanceTest {
                 .build());
 
         mockMvc.perform(delete("/api/v1/rooms/room-1").contextPath("/api/v1")
-                        .with(jwt().jwt(token -> token.subject("acceptance-test"))))
+                        .with(tokenWithRole("ADMIN")))
                 .andExpect(status().isConflict());
         assertTrue(rooms.containsKey("room-1"));
     }
@@ -177,9 +179,30 @@ class CarteleraAcceptanceTest {
                 .build());
 
         mockMvc.perform(delete("/api/v1/rooms/room-1").contextPath("/api/v1")
-                        .with(jwt().jwt(token -> token.subject("acceptance-test"))))
+                        .with(tokenWithRole("ADMIN")))
                 .andExpect(status().isNoContent());
         assertFalse(rooms.containsKey("room-1"));
+    }
+
+    @Test
+    void nonAdminCannotUpdateOrDeleteRooms() throws Exception {
+        cinemas.put("cinema-1", Cinema.builder().id("cinema-1").build());
+        rooms.put("room-1", Room.builder()
+                .id("room-1")
+                .cinemaId("cinema-1")
+                .name("Sala original")
+                .build());
+
+        mockMvc.perform(put("/api/v1/rooms/room-1").contextPath("/api/v1")
+                        .with(tokenWithRole("CLIENTE_REGISTRADO"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(roomRequest("cinema-1", "Sala modificada", 12, 14)))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(delete("/api/v1/rooms/room-1").contextPath("/api/v1")
+                        .with(tokenWithRole("CLIENTE_REGISTRADO")))
+                .andExpect(status().isForbidden());
+        assertTrue(rooms.containsKey("room-1"));
     }
 
     @Test
@@ -286,5 +309,10 @@ class CarteleraAcceptanceTest {
                   "columnsCount": %d
                 }
                 """.formatted(cinemaId, name, rows, columns);
+    }
+
+    private static RequestPostProcessor tokenWithRole(String role) {
+        return jwt().jwt(token -> token.subject("acceptance-test").claim("role", role))
+                .authorities(new SimpleGrantedAuthority("ROLE_" + role));
     }
 }
